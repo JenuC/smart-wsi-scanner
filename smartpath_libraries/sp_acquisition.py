@@ -160,11 +160,11 @@ class SPAcquisition:
             core.wait_for_system()
             print("Imaging mode set as SHG")
         if mod == 'bf':
-            core.set_property('DCC100', 'DCC100 status', 'On')
-            core.set_property('DCC100', 'ClearOverload', 'Clear')
-            core.wait_for_system()
-            core.set_property('DCC100', 'DCC100 status', 'Off')
-            core.wait_for_system()
+            # core.set_property('DCC100', 'DCC100 status', 'On')
+            # core.set_property('DCC100', 'ClearOverload', 'Clear')
+            # core.wait_for_system()
+            # core.set_property('DCC100', 'DCC100 status', 'Off')
+            # core.wait_for_system()
             # core.set_config('Imaging', 'Camera')
             core.set_property('Shutters-DigitalIODev1', 'State', 0)
             core.set_property('Core', 'Camera', 'QCamera')
@@ -477,6 +477,7 @@ class SPAcquisition:
         show = plt.imshow(np.zeros((config['camera-resolution'][1], config['camera-resolution'][0])))
         acq_id = len(glob.glob(os.path.join(save_path, acq_name+"*")))
         acq_path = os.path.join(save_path, acq_name+"_{}".format(acq_id+1))
+        print(f'acq_path {acq_path}')
         os.makedirs(acq_path, exist_ok=True)
         bg_flag = False
         sp_flag = False
