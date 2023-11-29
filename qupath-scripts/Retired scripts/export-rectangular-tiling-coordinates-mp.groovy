@@ -20,7 +20,7 @@ newTiles = []
 //Store XY coordinates in an array
 
 //Check all annotations. Use .findAll{expression} to select a subset
-annotations = hierarchy.getAnnotationObjects().findAll{it.getPathClass()!=getPathClass("Background")}
+annotations = hierarchy.getAnnotationObjects()
 imageName = GeneralTools.getNameWithoutExtension(getQuPath().getProject().getEntry(imageData).getImageName())
 logger.info(imageName.toString())
 //Ensure the folder to store the csv exists

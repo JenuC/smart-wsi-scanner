@@ -12,7 +12,14 @@ double overlapPercent = 10
 baseDirectory = PROJECT_BASE_DIR
 
 /***********************************************/
+//Name each annotation in the image by its XY centroids
 
+getAnnotationObjects().each{
+
+    it.setName((int)it.getROI().getCentroidX()+"_"+ (int)it.getROI().getCentroidY())
+
+}
+/***********************************************/
 getAnnotationObjects().each{it.setLocked(true)}
 Logger logger = LoggerFactory.getLogger(QuPathGUI.class);
 
@@ -133,7 +140,7 @@ annotations.eachWithIndex{a,i->
     y = bBoxY
     x = bBoxX
     while (y< bBoxY+bBoxH){
-        //In order to serpentine the resutls, there need to be two bounds for X now
+        //In order to serpentine the results, there need to be two bounds for X now
         while ((x <= bBoxX+bBoxW) && (x >= bBoxX-bBoxW*overlapPercent/100)){
 
             def roi = new RectangleROI(x,y,frameWidth,frameHeight, ImagePlane.getDefaultPlane())
