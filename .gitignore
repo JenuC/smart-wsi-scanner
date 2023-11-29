@@ -7,3 +7,6 @@ qupath-projects/
 data/
 *.log
 **/__pycache__/
+fiji/
+*.tiff
+*.pyc

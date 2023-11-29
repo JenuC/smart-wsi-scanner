@@ -143,29 +143,27 @@ class SPAcquisition:
             core.set_focus_device(config['focus-device'])
             focus_z = limit_stage(config['Z-stage-laser'], (config['hard-limit-z'][0], config['hard-limit-z'][1]), default=config['Z-stage-laser'])
             core.set_position(focus_z) #
-            # core.set_config('Imaging', 'LSM')
+            core.set_config('Imaging', 'LSM')
             core.set_property(config['led-device'][0], config['led-device'][1], 0.0)
             core.set_property('Shutters-DigitalIODev1', 'State', 3)
             core.set_property('Core', 'Camera', 'OSc-LSM')
             core.set_property('Core', 'Shutter', 'UniblitzShutter')
             core.set_property('QCamera', 'Color', 'OFF')
-            core.set_property('OSc-LSM', 'LSM-Resolution', config['lsm-resolution'])
+            core.set_property('OSc-LSM', 'LSM-Resolution', str(int(config['lsm-resolution'])))
             core.set_property('OSc-LSM', 'LSM-PixelRateHz', config['lsm-scan-rate'])
             core.set_property('PockelsCell-Dev1ao1', 'Voltage', config['lsm-pc-power'])
-            core.set_property('DCC100', 'DCC100 status', 'On')
-            core.set_property('DCC100', 'ClearOverload', 'Clear')
+            core.set_property("DCCModule1","EnableOutputs","On")
+            core.set_property("DCCModule1","ClearOverloads","Clear")            
             core.wait_for_system()
-            core.set_property('DCC100', 'DCC100 status', 'On')
-            core.set_property('DCC100', 'Connector1GainHV_Percent', config['lsm-pmt-gain']*100)
+            core.set_property("DCCModule1","EnableOutputs","On")
+            core.set_property("DCCModule1","C1_GainHV",config['lsm-pmt-gain']*100)
             core.wait_for_system()
             print("Imaging mode set as SHG")
+
         if mod == 'bf':
-            # core.set_property('DCC100', 'DCC100 status', 'On')
-            # core.set_property('DCC100', 'ClearOverload', 'Clear')
-            # core.wait_for_system()
-            # core.set_property('DCC100', 'DCC100 status', 'Off')
-            # core.wait_for_system()
-            # core.set_config('Imaging', 'Camera')
+            core.set_property("DCCModule1","EnableOutputs","Off")
+            core.wait_for_system()
+            core.set_config('Imaging', 'Camera')
             core.set_property('Shutters-DigitalIODev1', 'State', 0)
             core.set_property('Core', 'Camera', 'QCamera')
             core.set_property('Core', 'Shutter', 'WhiteLED')
@@ -343,7 +341,7 @@ class SPAcquisition:
         e_y = config['slide-box'][3]
         if mag == '20x':
             pixel_size = config['pixel-size-bf-20x']
-            ield_w = config['camera-resolution'][0] * pixel_size
+            field_w = config['camera-resolution'][0] * pixel_size
             field_h = config['camera-resolution'][1] * pixel_size
         elif mag == '4x':
             pixel_size = config['pixel-size-bf-4x']
@@ -600,8 +598,8 @@ class SPAcquisition:
                 show.set_data(pixels)
                 display.display(plt.gcf())
                 display.clear_output(wait=True)
-                ### Use tifffile to write out a tile with metadata?
-                io.imsave(acq_path+'/{}-{}-{}.tiff'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
+                ### Use tifile to write out a tile with metadata?
+                io.imsave(acq_path+'/{}-{}-{}.tif'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
                 tile_count = tile_count + 1
                 sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
                 plt.close('all')
@@ -681,8 +679,8 @@ class SPAcquisition:
                 show.set_data(pixels)
                 display.display(plt.gcf())
                 display.clear_output(wait=True)
-                ### Use tifffile to create tile with metadata?
-                io.imsave(acq_path+'/{}-{}-{}.tiff'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
+                ### Use tifile to create tile with metadata?
+                io.imsave(acq_path+'/{}-{}-{}.tif'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
                 tile_count = tile_count + 1
                 sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
                 plt.close('all')
@@ -695,13 +693,13 @@ class SPAcquisition:
                     background_image = self.bf_20x_bg
                     if self.bf_process_fn is not None: background_image = self.bf_process_fn(background_image)
                 returns['Background image'] = background_image
-                # io.imsave(acq_path+'/bg_img.tiff', img_as_ubyte(background_image))
+                # io.imsave(acq_path+'/bg_img.tif', img_as_ubyte(background_image))
             else:
                 bg_stack= np.stack(bg_stack)
                 median = np.median(bg_stack, axis=0)
                 median = img_as_float(median)
                 returns['Background image'] = median
-                # io.imsave(acq_path+'/bg_img.tiff', img_as_ubyte(median))
+                # io.imsave(acq_path+'/bg_img.tif', img_as_ubyte(median))
         else:
             returns['Background image'] = background_image
         if focus_dive:
@@ -732,13 +730,14 @@ class SPAcquisition:
         config = self.config
         def lsm_hook_fn(event, bridge, event_queue):
             if self.dcc_overload:
+                #TODO : the reseting is not necessary in the new dcc module Jun2023 MAT/JVC
                 print('PMT overloaded! Trying to reset...')
-                core = bridge.get_core()
-                core.set_property('DCC100', 'DCC100 status', 'Off')
+                core = bridge.get_core()                
+                core.set_property("DCCModule1","EnableOutputs","Off")
+                core.set_property("DCCModule1","ClearOverloads","Clear")
                 core.wait_for_system()
-                core.set_property('DCC100', 'DCC100 status', 'On')
-                core.wait_for_system()
-                core.set_property('DCC100', 'Connector1GainHV_Percent', config['lsm-pmt-gain']*100)
+                core.set_property("DCCModule1","EnableOutputs","On")                
+                core.set_property("DCCModule1","C1_GainHV",config['lsm-pmt-gain']*100)
                 core.wait_for_system()
                 self.dcc_overload=False
             return event
@@ -748,10 +747,19 @@ class SPAcquisition:
         config = self.config
         if position_list.shape[1] == 3:
             if z_stack:
-                with Acquisition(save_path, acq_name, self.lsm_process_fn, post_hardware_hook_fn=self.lsm_hook_fn) as acq:
+                with Acquisition(save_path, acq_name#, 
+                                 #self.lsm_process_fn, 
+                                 #post_hardware_hook_fn=self.lsm_hook_fn
+                                 ) as acq:
                     events = multi_d_acquisition_events(xyz_positions=position_list.reshape(-1, 3), 
-                                                        z_start=-int(sample_depth/2), z_end=int(sample_depth/2), z_step=z_step)
+                                                        z_start=-int(sample_depth/2), 
+                                                        z_end=int(sample_depth/2), 
+                                                        z_step=z_step)
+                    print('BEFORE YES')
+                    ################
+                    #print(events)
                     acq.acquire(events)      
+                    print('AFTER NO')
             else:
                 with Acquisition(save_path, acq_name) as acq:
                     events = multi_d_acquisition_events(xyz_positions=position_list.reshape(-1, 3))

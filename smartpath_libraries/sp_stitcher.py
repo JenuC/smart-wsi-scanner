@@ -30,8 +30,9 @@ class SPStitcher:
         ij = self.ij
         config = self.config
         save_path = self.working_dir
-        stitch_folder = os.path.join('data/stitching/tiles', acq_name)
-        out_folder = os.path.join('data/stitching/stitched', acq_name)
+        stitch_folder = os.path.join(r'C:\Users\lociuser\Codes\smart-wsi-scanner\data\stitching\tiles', acq_name)
+        out_folder   = os.path.join(r'C:\Users\lociuser\Codes\smart-wsi-scanner\data\stitching\stitched', acq_name)
+        #print(stitch_folder)
         slide_folder = os.path.join(slide_path, mag)
         os.makedirs(stitch_folder, exist_ok=True)
         os.makedirs(out_folder, exist_ok=True)
@@ -64,10 +65,10 @@ class SPStitcher:
                 sys.stdout.write('\r Processing tiles: {}/{}'.format(pos+1, position_list.shape[0]))
                 io.imsave(stitch_folder+'/{}.tiff'.format(pos), img_as_uint(img), check_contrast=False)
         print('\n Calling ImageJ for stitching, please wait...')
-        temp_channel_folder = 'data/stitching/channel_temp'
+        temp_channel_folder = os.path.join(r'C:\Users\lociuser\Codes\smart-wsi-scanner\data\stitching\channel_temp')
         os.makedirs(temp_channel_folder, exist_ok=True)
         params = {'type': 'Positions from file', 'order': 'Defined by TileConfiguration', 
-                'directory':stitch_folder, 'ayout_file': 'TileConfiguration.txt', 
+                'directory':stitch_folder, 'Layout_file': 'TileConfiguration.txt', 
                 'fusion_method': 'Linear Blending', 'regression_threshold': '0.30', 
                 'max/avg_displacement_threshold':'2.50', 'absolute_displacement_threshold': '3.50', 
                 'compute_overlap':False, 'computation_parameters': 'Save computation time (but use more RAM)', 
@@ -146,7 +147,7 @@ class SPStitcher:
     def convert_slide(self, mag, remove_file=True):
         print('Converting slide to ome.tif')
         #args are [mag,pixel size]
-        
+        #TODO add exceptions when scripts or files are missing
         if mag=='4x':
             print(f'[4,{self.config["pixel-size-bf-4x"]}]')
             args = f'[4,{self.config["pixel-size-bf-4x"]}]'
@@ -154,8 +155,10 @@ class SPStitcher:
             args = f'[20,{self.config["pixel-size-bf-20x"]}]'
         if mag=='mp':
             args = f'[20,{self.config["pixel-size-shg"]}]'
-        script = os.path.join('qupath-projects', 'scripts', 'export-ometif.groovy')       
+        script = os.path.join('qupath-scripts', 'export-ometif.groovy')
+
         image_dirs = glob.glob(os.path.join('data', 'slides', mag, '*.tif'))
+
         for img_dir in image_dirs:
             if img_dir.find("ome") != -1:
                 continue
@@ -182,7 +185,7 @@ run("Z Project...", "projection=[Max Intensity]");
 saveAs("Tiff", outdir);
 close("*");
 """
-
+## the macro reads R,Gand B and outputs a merged RGB file to output folder
 macroRGB = """
 #@ String indir
 #@ String outdir
