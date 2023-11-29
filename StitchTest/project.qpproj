@@ -1,0 +1,24 @@
+{
+  "version": "0.4.3",
+  "createTimestamp": 1700590160735,
+  "modifyTimestamp": 1700590160735,
+  "uri": "file:/C:/Users/lociuser/Codes/smart-wsi-scanner/StitchTest/project.qpproj",
+  "lastID": 1,
+  "images": [
+    {
+      "serverBuilder": {
+        "builderType": "uri",
+        "providerClassName": "qupath.lib.images.servers.bioformats.BioFormatsServerBuilder",
+        "uri": "file:/D:/Documents/slide-scanner/smart-wsi-scannerold/data/slides/4x/1124_bone_test-4x-bf.ome.tif",
+        "args": [
+          "--series",
+          "0"
+        ]
+      },
+      "entryID": 1,
+      "randomizedName": "83b4b988-acd0-4f72-8c52-8cf4ccc694a6",
+      "imageName": "1124_bone_test-4x-bf.ome.tif",
+      "metadata": {}
+    }
+  ]
+}
