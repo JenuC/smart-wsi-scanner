@@ -1,12 +1,12 @@
 .ipynb_checkpoints/
-.vscode/
-*.cpython-38.pyc
-__pycache__/
 QuPath-0.4.3/
 qupath-projects/
 data/
 *.log
-**/__pycache__/
 fiji/
 *.tiff
+*ome.tif
+TileConfiguration.txt
+acquisition-configs/*
 *.pyc
+**/smartpath_libraries/models/__pycache__/*.*
