@@ -1,0 +1,100 @@
+## STEPS
+- import libs
+- init pyimagej pycromanager
+- load config.yaml
+- set the `acq_name` : data will be saved inside `data/acquisition` 
+- variable `slide_box` needs to be set to roughly cover the area of the slide. The default value is `[-1000, 2000, 26000, 24000]`
+- point background as `brightfield_background_fname`
+- Operation
+    - Load bkg images
+    - Start SpAcq Class -init with Pycromanager
+    - SPStitcher -init with PyimageJ and QuPath
+- Working
+    - sp_acq.update_slide_box(slide_box) ,
+    - position_list_4x = sp_acq.generate_grid(mag='4x', overlap=50)
+    - sp_acq.position_list_4x = position_list_4x
+- BF Downsampler Hook
+    - from skimage.transform import rescale
+    - downsampler = lambda x: rescale(x, 0.5, order=1, channel_axis=-1)
+    - sp_acq.bf_process_fn = downsampler
+- BF imaging
+	- sp_acq.switch_objective(mag='4x')
+	- sp_acq.switch_mod(mod='bf')
+Focus : last_img = sp_acq.live(mod='bf', flip_channel=True)
+	- sp_acq.update_focus_presets(mag='4x', mod='bf') # update focus preset
+	- sp_acq.config['autofocus-speed'] = 4
+	- core.set_auto_shutter(False)
+	- core.set_shutter_open(True)
+Scan : 
+	results_4x = sp_acq.whole_slide_bf_scan(
+		save_path, 
+		acq_name_4x,	position_list_4x.reshape(position_list_4x.shape[0]*position_list_4x.shape[1], -1), 
+		mag='4x',
+		focus_dive=True,
+		estimate_background=False,
+		)	
+- Update XYZ for 4x 
+		- 	results_4x['Position list'] = position_list_4x
+			sp_acq.z_list_4x = results_4x['Z positions']
+			with open(path.join(save_path, acq_name_4x+'.pkl'), 'wb') as f:
+				pickle.dump(results_4x, f)
+	
+-Stitch:
+		-### perform the stitching
+		position_list=sp_acq.position_list_4x.reshape(sp_acq.position_list_4x.shape[0]*sp_acq.position_list_4x.shape[1], -1)
+		from IPython.utils import io as ipio
+		with ipio.capture_output() as captured:
+			sp_sti.stitch_bf(
+				acq_name_4x,
+				mag='4x',
+				position_list=position_list,
+				flip_y=True,
+				correction=False, # this should be set `True` if the default background image was not given during the acquisition
+				background_image=None # this should be given as `loaded_results_4x['Background image']` `correction` is `True`
+				)
+		
+		sp_sti.convert_slide(mag='4x')
+		sp_sti.clean_folders(acq_name_4x)
+	
+- Draw annotations using QuPath
+	pos lists in  :`qupath-projects/mp-tiles/` `qupath-projects/20x-tiles/`
+	filenames start with : [acq_name]-4x-bf-[ROI_name]
+	
+- 20x
+	- sp_acq.switch_mod(mod='bf') 
+	- sp_acq.switch_objective(mag='20x')
+	- Focus : last_img = sp_acq.live(mod='bf', flip_channel=True)
+	
+	
+	
+	
+	
+	
+	
+	
+	
+Setting Up QuPath Project:
+	Create a new empty folder for your project.
+	Drag the folder into an open QuPath window.
+	Confirm the project name at the top of the "Project" tab.
+Adding Images:
+	Drag and drop images (acquired in lower resolution, e.g., 4x) into the QuPath project.
+	Adjust image type if needed (especially if images are too dark).
+Viewing Images:
+	Double-click on an image in the Project tab to open it in the Viewer.
+Creating Annotations:
+	Use tools like Wand, Brush, and Polygon for manual annotation.
+	Explore pixel classifier and thresholder for automated detection.
+	For TMAs, use the TMA dearrayer; adjust diameter and perform manual annotations if necessary.
+Exporting Annotations for Higher Resolution:
+	Run the "export-rectangular-tiling-coordinates" script after annotating.
+	Use "naming_annotations_centroid" script for naming if multiple annotations in one image.
+	For TMAs, use "create-TMA-annotations" to convert TMA grid into individual TMA core annotations.
+Customizing Export:
+	Specify output directory and overlap % for stitching in the export script.
+	If the system is recalibrated, adjust parameters in "export-rectangular-tiling-coordinates" script.
+	Previewing Tiles:
+	After running scripts, if "createTiles" is set to true, view locations where each microscope image will be taken.
+Toggle Detection Boxes:
+	Toggle detection boxes using the 'D' key when the Viewer/Image is selected.
+	For additional details and resources, refer to QuPath documentation for	Annotation tools 	Pixel classification 	Thresholding
