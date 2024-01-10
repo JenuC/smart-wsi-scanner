@@ -1,7 +1,7 @@
 import os, glob, shutil, sys, copy
 from pycromanager import Dataset
-from skimage import io, img_as_float, img_as_uint, color, transform, exposure
-import imagej
+from skimage import io,  img_as_uint, color, transform
+#import imagej
 import numpy as np
 from .image_utils import white_balance, flat_field
 import subprocess
