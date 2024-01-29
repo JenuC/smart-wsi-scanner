@@ -10,3 +10,4 @@ TileConfiguration.txt
 acquisition-configs/*
 *.pyc
 **/smartpath_libraries/models/__pycache__/*.*
+Transfer qp scope/Agnes_PnPData_361_50_3600dpi.TIF
