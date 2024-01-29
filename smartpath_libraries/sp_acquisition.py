@@ -467,9 +467,12 @@ class SPAcquisition:
         """
         config = self.config
         core = self.core
-        fig = plt.figure(figsize=(8, 6))
-        plt.axis("off")
-        show = plt.imshow(np.zeros((config['camera-resolution'][1], config['camera-resolution'][0])))
+        plot_on = False
+        if plot_on:
+            fig = plt.figure(figsize=(8, 6))
+            plt.axis("off")
+            show = plt.imshow(np.zeros((config['camera-resolution'][1], config['camera-resolution'][0])))
+
         acq_id = len(glob.glob(os.path.join(save_path, acq_name+"*")))
         acq_path = os.path.join(save_path, acq_name+"_{}".format(acq_id+1))
         print(f'acq_path {acq_path}')
@@ -592,14 +595,15 @@ class SPAcquisition:
                     pixels = white_balance(pixels, background_image)
                     pixels = flat_field(pixels, bg_img)
                     
-                show.set_data(pixels)
-                display.display(plt.gcf())
-                display.clear_output(wait=True)
+                if plot_on:
+                    show.set_data(pixels)
+                    display.display(plt.gcf())
+                    display.clear_output(wait=True)
                 ### Use tifile to write out a tile with metadata?
                 io.imsave(acq_path+'/{}-{}-{}.tif'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
                 tile_count = tile_count + 1
                 sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
-                plt.close('all')
+                #plt.close('all')
             
         if position_list.shape[1] == 2:
             tile_count = 0
@@ -673,14 +677,16 @@ class SPAcquisition:
                     pixels = white_balance(pixels, background_image)
                     pixels = flat_field(pixels, bg_img)
                     
-                show.set_data(pixels)
-                display.display(plt.gcf())
-                display.clear_output(wait=True)
+                if plot_on:
+                    show.set_data(pixels)
+                    display.display(plt.gcf())
+                    display.clear_output(wait=True)
                 ### Use tifile to create tile with metadata?
                 io.imsave(acq_path+'/{}-{}-{}.tif'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
                 tile_count = tile_count + 1
                 sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
-                plt.close('all')
+                if plot_on:
+                    plt.close('all')
         if estimate_background:
             if len(bg_stack)==0:
                 if mag=='4x':

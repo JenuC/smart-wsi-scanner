@@ -9,7 +9,7 @@ import pathlib
 import shutil
 import sys
 
-print(sys.path)
+#print(sys.path)
 cwd = os.getcwd()
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
 
@@ -20,13 +20,14 @@ if len(sys.argv) > 2:
 else:
     print("No arguments passed, using default values")    
     self_filename = r'C:\Users\lociuser\Codes\smart-wsi-scanner\minimal_qupathrunner.py'
-    projectsFolderPath =  r'D:\ImageAnalysis\slides' 
+    #projectsFolderPath =  r'D:\ImageAnalysis\slides' 
+    projectsFolderPath =  r'C:\Users\lociuser\Codes\MikeN\data\slides'
     sampleLabel = 'First_Test'
     scan_type = '4x_bf_1' 
     annotations  = 'null'
     bounding_box= '20,25,30,35'
 
-if annotations:
+if annotations != "null":
     pass
 else:
 
@@ -34,6 +35,7 @@ else:
         core = Core()
         studio = Studio()
         core.set_timeout_ms(20000)
+        print("Pycromanager loaded successfully")
         return core, studio
 
 
@@ -48,7 +50,8 @@ else:
     ## User configuration block
     save_path = os.path.join(projectsFolderPath,"acquisition") #"data/acquisition"
 
-    slide_box = [5000, 9000, 9000, 14000]  # [bottom left corner, and top right corner]
+    #slide_box = [5000, 9000, 9000, 14000]  # [bottom left corner, and top right corner]
+    slide_box = [25000, 16000, 28000, 20000] ## for the panc #360-50 slide loaded on 1/11/2024
     brightfield_4x_background_fname = (
         "data/presets/BG_4x.tiff"  # give a default 4x background image
     )
@@ -57,7 +60,7 @@ else:
     )
 
     core, studio = init_pycromanager()
-
+    
     sp_acq = SPAcquisition(
         config=config,
         mmcore=core,
@@ -83,6 +86,7 @@ else:
     core.set_auto_shutter(False)
     core.set_shutter_open(True)
 
+    print("starting Acquisition")
     results_4x = sp_acq.whole_slide_bf_scan(
         save_path,
         acq_name,
@@ -157,8 +161,10 @@ else:
         )
 
     qupath_stitching_folder = os.path.join(projectsFolderPath,sampleLabel,scan_type)
+    print(f"copying from \n{stitchfolder_path} \t to \n{qupath_stitching_folder}")
+
     shutil.copytree(stitchfolder_path,
-                    qupath_stitching_folder)
+                    qupath_stitching_folder,dirs_exist_ok=True)
 
 
     print("Finished saving tiles for stitching at", stitchfolder_path)
