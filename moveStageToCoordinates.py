@@ -26,9 +26,11 @@ if len(sys.argv) == 3: # 55.22  22.33
         Y = float(y)       
         config = {
         'hard-limit-z' : [-8500.0, 17000.0],
-        'hard-limit-x' : [-26000, 13000],     # X 40 cm,
+        'hard-limit-x' : [0,40000.0],           # 40
+        #v2 'hard-limit-x' : [-26000, 13000],   # X 40 cm,
         #v1 hard-limit-x=[-5000.0, 40000.0],  # X 45 cm
-        'hard-limit-y' : [-17600,3500] ,      # Y 20 cm,
+        'hard-limit-y' : [0,30000.0] ,      # 30
+        #v1 hard-limit-y: [-17600,3500] ,    # Y 20 cm,
         #v1 hard-limit-y: [-4200.0, 25000.0], # Y 30 cm, 
         #v0 hard-limit-y: (-2200, 19000.0)    # Y 21 cm, version 0.0
         'hard-limit-f' : [-19000, 0,],
