@@ -10,6 +10,10 @@ import shutil
 import sys
 import re
 
+# TODO change log entirely to json scheme within folde
+# TODO change debugmode printing to logging (not sure std pipe can handle log)
+debug_mode=1 # 0 OFF 1 WARN 2 DEBUG 
+
 #print(sys.path)
 cwd = os.getcwd()
 os.chdir(os.path.dirname(os.path.realpath(__file__)))
@@ -35,17 +39,17 @@ def simulate_4_tiles(core, delta_xy = 500.0):
                     [X+delta_xy, Y],
                     [X+delta_xy, Y+delta_xy], 
                     [X, Y+delta_xy]])
-    coordinates = np.array(coordinates)
+    #coordinates = np.array(coordinates)
     return coordinates
 
 
-
-
 if len(sys.argv) == 5:  
-    print("Arguments passed, using them", sys.argv)  
+    if debug_mode>0:
+        print("QuPath: Arguments passed, using them", sys.argv)  
     self_filename, projectsFolderPath, sampleLabel, scan_type, region = sys.argv
 else:
-    print("Incorrect number of arguments using default values")    
+    if debug_mode>0:
+        print("QuPath: Incorrect number of arguments using default values")    
     self_filename = r'C:\Users\lociuser\Codes\smart-wsi-scanner\minimal_qupathrunner.py'
     projectsFolderPath =  r'C:\Users\lociuser\Codes\MikeN\data\slides'
     sampleLabel = 'First_Test3'
@@ -60,7 +64,7 @@ def init_pycromanager():
     core = Core()
     studio = Studio()
     core.set_timeout_ms(20000)
-    print("Pycromanager loaded successfully")
+    print("QuPath: Pycromanager loaded successfully")
     return core, studio
 
 
@@ -71,8 +75,8 @@ lsm_pixel_size_base = config["pixel-size-shg-base"]
 bf_4x_pixel_size_base = config["pixel-size-bf-4x"]
 bf_20x_pixel_size_base = config["pixel-size-bf-20x"]
 camera_resolution_base = config["camera-resolution"]
-
-## User configuration block
+if debug_mode>1:
+    print("QuPath: Loaded Config File")
 
 
 brightfield_4x_background_fname = (
@@ -83,6 +87,8 @@ brightfield_20x_background_fname = (
 )
 
 core, studio = init_pycromanager()
+if debug_mode>1:
+    print("QuPath: Pycromanager Initialized")
 
 if core.is_sequence_running():
     studio.live().set_live_mode(False)
@@ -91,8 +97,11 @@ qupath_project_folder = os.path.join(projectsFolderPath, sampleLabel)
 path_to_TileConfiguration = os.path.join(qupath_project_folder, scan_type, region, "TileConfiguration_transformed.txt") 
 if os.path.exists(path_to_TileConfiguration):
     coordinates = read_TileConfiguration_coordinates(path_to_TileConfiguration)
+    if debug_mode>0:
+        print("QuPath: Read TileConfiguration Coordinates")
 else:
-    print("TileConfiguration file not found, simulating 4 tiles")
+    if debug_mode>0:
+        print("QuPath: TileConfiguration file not found, simulating 4 tiles")
     coordinates = simulate_4_tiles(core, delta_xy = 500.0)
 
 save_path = os.path.join(qupath_project_folder,scan_type) #"data/acquisition"
@@ -106,6 +115,8 @@ sp_acq = SPAcquisition(
     bf_4x_bg=io.imread(brightfield_4x_background_fname),
     bf_20x_bg=io.imread(brightfield_20x_background_fname),
 )
+if debug_mode>0:
+    print("QuPath: Loaded settings to MM2")
 
 config['Z-stage-4x'] = 0.0
 config['hard-limit-x'] = [0,40000.0]
@@ -130,6 +141,9 @@ for x0,y0 in coordinates:
 
 coordinates_within_limits = coordinates_within_limits_y and coordinates_within_limits_x
 
+if debug_mode>0:
+    print(f"QuPath: Coordinates within limits {coordinates_within_limits}")
+
 fov_x = config["pixel-size-bf-4x"] * 1392  
 fov_y = config["pixel-size-bf-4x"] * 1040  
 coordinates[:,1] -= fov_y
@@ -143,7 +157,8 @@ core.set_shutter_open(True)
 core.set_auto_shutter(False)
 core.set_shutter_open(True)
 
-print("starting Acquisition")
+if debug_mode>0:
+    print("QuPath: Starting Acquisition")
 if coordinates_within_limits:
     results_4x = sp_acq.whole_slide_bf_scan(
         save_path,
@@ -156,7 +171,8 @@ if coordinates_within_limits:
 
     acq_id = len(glob.glob(os.path.join(save_path, acq_name + "*")))
     acq_path = os.path.join(save_path, acq_name + "_{}".format(acq_id))
-    print("Saved files to {}".format(acq_path))
+    if debug_mode>0:
+        print(f"QuPath: Saved files to {acq_path}")
 
     position_list = coordinates
     if position_list.ndim == 3:
@@ -181,7 +197,9 @@ if coordinates_within_limits:
             x = int(position_list[pos][0] / pixel_size)
             y = int(position_list[pos][1] / pixel_size)
             print("{}.tif; ; ({}, {})".format(pos, x, y), file=text_file)
-    
+    if debug_mode>0:
+        print(f"QuPath: Saved new TileConfiguration.txt to {stitchfolder_path}")
+
     for pos in range(len(image_list)):
         fn = image_list[pos]
         fname = pathlib.Path(fn).name
@@ -212,19 +230,22 @@ if coordinates_within_limits:
             img_as_uint(img),
             check_contrast=False,
         )
-
     qupath_stitching_folder = os.path.join(projectsFolderPath,sampleLabel,scan_type,region)
-    print(f"copying from \n{stitchfolder_path} \t to \n{qupath_stitching_folder}")
+    if debug_mode>0:
+        print("QuPath: Stripping Metadata For stitching ")
+        print(f"QuPath: copying from \n{stitchfolder_path} \t to \n{qupath_stitching_folder}")
 
     shutil.copytree(stitchfolder_path,
                     qupath_stitching_folder,dirs_exist_ok=True)
 
     shutil.rmtree(stitchfolder_path)
-
-    print("Finished saving tiles for stitching at", stitchfolder_path)
+    if debug_mode>0:
+        print(f"QuPath: Finished saving tiles for stitching at {stitchfolder_path}")
     os.chdir(cwd)
 core._close()
 studio._close()
 del studio
 del core
+if debug_mode>0:
+    print(f"QuPath: Pycromanager Acqusition Task Completed")
 

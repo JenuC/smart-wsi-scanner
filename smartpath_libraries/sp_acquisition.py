@@ -420,7 +420,8 @@ class SPAcquisition:
                     print("Is background")
                     return drift_origin, pixels, bg_flag # TODO: return center z instead of top
             img_gray = color.rgb2gray(pixels)
-            sys.stdout.write("\r Diving focus at " + str(step))
+            #sys.stdout.write("\r Diving focus at " + str(step))
+            print(f"QuPath: Diving Focus at {step}")
             if method == 'entropy':
                 score = shannon_entropy(img_gray)
             if method == 'edge':
@@ -450,14 +451,13 @@ class SPAcquisition:
         else:
             return focus_z+offset, None, False 
         
-    
     def whole_slide_bf_scan(self, 
             save_path, 
             acq_name, 
             position_list, 
             mag='4x', 
             estimate_background=True, 
-            focus_dive=True
+            focus_dive=True, 
         ):
         """
             this function conducts a BF scan at 4x or 20x magnification.
@@ -475,7 +475,7 @@ class SPAcquisition:
 
         acq_id = len(glob.glob(os.path.join(save_path, acq_name+"*")))
         acq_path = os.path.join(save_path, acq_name+"_{}".format(acq_id+1))
-        print(f'acq_path {acq_path}')
+        print(f'QuPath: Acq_path {acq_path}')
         os.makedirs(acq_path, exist_ok=True)
         bg_flag = False
         sp_flag = False
@@ -495,12 +495,14 @@ class SPAcquisition:
             if background_image is None:
                 raise ValueError('Background image not set nor to be estimated.')
             bg_img = white_balance(copy.deepcopy(background_image), copy.deepcopy(background_image))
-            
+ 
         if mag == '4x':
             pos_z = config['Z-stage-4x']
         elif mag == '20x':
             pos_z = config["Z-stage-20x"]
-            
+        else:
+            print("UNKNOWN MAGNIFICATION: CANT SET Z POSITION FROM CONFIG")
+                
         support_points = [(99999999, 99999999)] # dummy support point
         support_focus = [pos_z]
         
@@ -602,7 +604,8 @@ class SPAcquisition:
                 ### Use tifile to write out a tile with metadata?
                 io.imsave(acq_path+'/{}-{}-{}.tif'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
                 tile_count = tile_count + 1
-                sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
+                #sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
+                print(f"QuPath: {tile_count}/{position_list.shape[0]} tiles done")
                 #plt.close('all')
             
         if position_list.shape[1] == 2:
@@ -672,7 +675,8 @@ class SPAcquisition:
                         redive_flag=True
                         bg_stack.append(pixels)
                     else:
-                        redive_flag=False                
+                        redive_flag=False    
+                                    
                 if background_image is not None and not estimate_background:
                     pixels = white_balance(pixels, background_image)
                     pixels = flat_field(pixels, bg_img)
@@ -684,7 +688,8 @@ class SPAcquisition:
                 ### Use tifile to create tile with metadata?
                 io.imsave(acq_path+'/{}-{}-{}.tif'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
                 tile_count = tile_count + 1
-                sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
+                #sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
+                print(f"QuPath: {tile_count}/{position_list.shape[0]} tiles done")
                 if plot_on:
                     plt.close('all')
         if estimate_background:
