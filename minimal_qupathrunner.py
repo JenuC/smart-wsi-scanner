@@ -5,14 +5,14 @@ from skimage import io, img_as_uint, transform
 import os
 import numpy as np
 import glob
-import pathlib
+#import pathlib
 import shutil
 import sys
 import re
 
 # TODO change log entirely to json scheme within folde
 # TODO change debugmode printing to logging (not sure std pipe can handle log)
-debug_mode=1 # 0 OFF 1 WARN 2 DEBUG 
+debug_mode = 1 # 0 OFF 1 WARN 2 DEBUG 
 
 #print(sys.path)
 cwd = os.getcwd()
@@ -187,9 +187,7 @@ if coordinates_within_limits:
     if not os.path.exists(stitchfolder_path):
         os.mkdir(stitchfolder_path)
 
-    assert len(position_list) == len(
-        image_list
-    ), "Number of images does not match number of positions"
+#    assert len(position_list) == len( image_list ), "Number of images does not match number of positions"
 
     with open(os.path.join(stitchfolder_path, "TileConfiguration.txt"), "w") as text_file:
         print("dim = {}".format(2), file=text_file)
@@ -197,15 +195,19 @@ if coordinates_within_limits:
             x = int(position_list[pos][0] / pixel_size)
             y = int(position_list[pos][1] / pixel_size)
             print("{}.tif; ; ({}, {})".format(pos, x, y), file=text_file)
+
     if debug_mode>0:
         print(f"QuPath: Saved new TileConfiguration.txt to {stitchfolder_path}")
+        print(f"QuPath: tif-files in acq folder :{len(image_list)}")
+        if debug_mode>1:
+            print(f"QuPath: Image List     :{image_list}   ")
+            #print(f"QuPath: Position List  :{position_list}")
 
     for pos in range(len(image_list)):
+        
         fn = image_list[pos]
-        fname = pathlib.Path(fn).name
-
         img = io.imread(fn)
-
+        
         correction = False
         rotate = False
         flip_y = True
@@ -224,12 +226,20 @@ if coordinates_within_limits:
         if flip_x:
             img = img[:, ::-1]
 
-    ##TODO: replace scikit iosave with tifffile with metadata
+        if debug_mode>1:
+            print(f"QuPath: Moving {pos}.tif to {stitchfolder_path}")
+
+        save_filename =os.path.join(stitchfolder_path , f"{pos}.tif")
+
+        ##TODO: replace scikit iosave with tifffile with metadata
         io.imsave(
-            stitchfolder_path + "/{}.tif".format(pos),
+            save_filename,
             img_as_uint(img),
             check_contrast=False,
         )
+        if debug_mode>1:
+            print(f"QuPath: Saved: {save_filename}")
+
     qupath_stitching_folder = os.path.join(projectsFolderPath,sampleLabel,scan_type,region)
     if debug_mode>0:
         print("QuPath: Stripping Metadata For stitching ")
@@ -247,5 +257,5 @@ studio._close()
 del studio
 del core
 if debug_mode>0:
-    print(f"QuPath: Pycromanager Acqusition Task Completed")
+    print("QuPath: Pycromanager Acqusition Task Completed")
 

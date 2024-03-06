@@ -12,7 +12,7 @@ from skimage.filters import  sobel
 from skimage.measure import shannon_entropy
 import scipy
 import pandas as pd
-from tqdm import tqdm
+#from tqdm import tqdm
 
 class SPAcquisition:
     def __init__(self, 
@@ -428,7 +428,7 @@ class SPAcquisition:
                 score = np.mean(sobel(img_gray))
             scores.append(score)
             positions.append(position_z)
-            print('Score: {}, Position {}'.format(score, position_z))
+            #print(f'QuPath: Autofocus Score: {score:.3f}, Position {position_z:.1f}')
         scores_array = np.asarray(scores)
         positions_array = np.asarray(positions) 
         new_length = len(positions) * 100
@@ -510,7 +510,7 @@ class SPAcquisition:
             tile_count = 0
             z_positions=np.ones(position_list.shape[0]) * core.get_position()
             core.set_focus_device(config['focus-device'])
-            for pos in tqdm(range(position_list.shape[0])):
+            for pos in range(position_list.shape[0]):
                 z_pos = position_list[pos, 2]
                 x_pos = position_list[pos, 0]
                 y_pos = position_list[pos, 1]
@@ -612,7 +612,7 @@ class SPAcquisition:
             tile_count = 0
             core.set_focus_device(config['focus-device'])
             z_positions=np.ones(position_list.shape[0]) * core.get_position()
-            for pos in tqdm(range(position_list.shape[0])):
+            for pos in range(position_list.shape[0]):
                 x_pos = position_list[pos, 0]
                 y_pos = position_list[pos, 1]
                 
