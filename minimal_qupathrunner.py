@@ -144,16 +144,16 @@ coordinates_within_limits = coordinates_within_limits_y and coordinates_within_l
 if debug_mode>0:
     print(f"QuPath: Coordinates within limits {coordinates_within_limits}")
 
-fov_x = config["pixel-size-bf-4x"] * 1392  
-fov_y = config["pixel-size-bf-4x"] * 1040  
-coordinates[:,1] -= fov_y
-coordinates[:,0] += fov_x/4
+#fov_x = config["pixel-size-bf-4x"] * 1392  
+#fov_y = config["pixel-size-bf-4x"] * 1040  
+#coordinates[:,1] -= fov_y
+#coordinates[:,0] += fov_x/4
 
 sp_acq.config[
     "autofocus-speed"
 ] = 4  # default is 4 ## `1-6`, the larger the faster, but potentially worse autofocusing resuls.
 
-core.set_shutter_open(True)
+
 core.set_auto_shutter(False)
 core.set_shutter_open(True)
 
@@ -168,7 +168,7 @@ if coordinates_within_limits:
         focus_dive=True,
         estimate_background=False,
     )
-
+    core.set_auto_shutter(True)
     acq_id = len(glob.glob(os.path.join(save_path, acq_name + "*")))
     acq_path = os.path.join(save_path, acq_name + "_{}".format(acq_id))
     if debug_mode>0:
@@ -192,8 +192,8 @@ if coordinates_within_limits:
     with open(os.path.join(stitchfolder_path, "TileConfiguration.txt"), "w") as text_file:
         print("dim = {}".format(2), file=text_file)
         for pos in range(position_list.shape[0]):
-            x = int(position_list[pos][0] / pixel_size)
-            y = int(position_list[pos][1] / pixel_size)
+            x = float(position_list[pos][0]) #int(position_list[pos][0] / pixel_size)
+            y = float(position_list[pos][1]) #int(position_list[pos][1] / pixel_size)
             print("{}.tif; ; ({}, {})".format(pos, x, y), file=text_file)
 
     if debug_mode>0:
@@ -252,6 +252,7 @@ if coordinates_within_limits:
     if debug_mode>0:
         print(f"QuPath: Finished saving tiles for stitching at {stitchfolder_path}")
     os.chdir(cwd)
+
 core._close()
 studio._close()
 del studio
