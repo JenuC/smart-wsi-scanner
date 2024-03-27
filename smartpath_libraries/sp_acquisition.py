@@ -602,7 +602,7 @@ class SPAcquisition:
                     display.display(plt.gcf())
                     display.clear_output(wait=True)
                 ### Use tifile to write out a tile with metadata?
-                io.imsave(acq_path+'/{}-{}-{}.tif'.format(pos, bg_flag, sp_flag), img_as_ubyte(pixels), check_contrast=False)
+                io.imsave(f'{acq_path}/{pos}-{bg_flag}-{sp_flag}.tif', img_as_ubyte(pixels), check_contrast=False)
                 tile_count = tile_count + 1
                 #sys.stdout.write('\r {}/{} tiles done'.format(tile_count, position_list.shape[0]))
                 print(f"QuPath: {tile_count}/{position_list.shape[0]} tiles done")
