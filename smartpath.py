@@ -50,7 +50,7 @@ class sp_microscope_settings:
 
 
 @dataclass
-class sp_position:
+class sp_stage_position:
     x: float
     y: float
     z: float = field(default=None)
@@ -69,7 +69,6 @@ class sp_position:
 
 
 class smartpath:
-
     def __init__(self):
         pass
 
@@ -86,7 +85,7 @@ class smartpath:
         return str
 
     @staticmethod
-    def _mm_object_to_list(name):
+    def jvo_list(name):
         return [name.get(i) for i in range(name.size())]
 
     @staticmethod
@@ -96,14 +95,14 @@ class smartpath:
         as a dictionary
         """
         device_dict = {}
-        for device_name in smartpath._mm_object_to_list(core.get_loaded_devices()):
+        for device_name in smartpath.jvo_list(core.get_loaded_devices()):
             device_property_names = core.get_device_property_names(device_name)
-            property_names = smartpath._mm_object_to_list(device_property_names)
+            property_names = smartpath.jvo_list(device_property_names)
             prop_dict = {}
             for prop in property_names:
                 if scope == "allowed":
                     values = core.get_allowed_property_values(device_name, prop)
-                    prop_dict.update({f"{prop}": smartpath._mm_object_to_list(values)})
+                    prop_dict.update({f"{prop}": smartpath.jvo_list(values)})
                 elif scope == "used":
                     values = core.get_property(device_name, prop)
                     prop_dict.update({f"{prop}": values})
@@ -115,7 +114,7 @@ class smartpath:
     @staticmethod
     def _compare_dicts(d1, d2):
         """
-        Adapted version from cpython unit-test
+        Adapted from cpython unit-test
         https://stackoverflow.com/questions/12956957/print-diff-of-python-dictionaries
         https://github.com/python/cpython/blob/01fd68752e2d2d0a5f90ae8944ca35df0a5ddeaa/Lib/unittest/case.py#L1091
         """
@@ -166,14 +165,14 @@ class smartpath:
 
     @staticmethod
     def get_current_position(core):
-        current_pos = sp_position(
+        current_pos = sp_stage_position(
             core.get_x_position(), core.get_y_position(), core.get_position()
         )
         return current_pos
 
     @staticmethod
     def move_stage_to_position(
-        core: Core, position: sp_position, settings: sp_microscope_settings
+        core: Core, position: sp_stage_position, settings: sp_microscope_settings
     ):
         if position.f or position.o:
             if position.o != smartpath.get_current_position(core).o:
@@ -261,7 +260,7 @@ class smartpath:
         try:
             scores = []
             for step_number in range(nsteps):
-                new_pos = sp_position(
+                new_pos = sp_stage_position(
                     current_pos.x, current_pos.y, current_pos.z + steps[step_number]
                 )
                 smartpath.move_stage_to_position(new_pos, settings, core)

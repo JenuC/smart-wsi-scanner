@@ -1,0 +1,5 @@
+[tool.ruff]
+line-length = 100
+extend-select = ["C4", "NPY", "PD", "SIM", "TCH"]
+ignore = ["E501"]
+show-fixes = true
