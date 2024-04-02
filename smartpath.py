@@ -9,8 +9,7 @@ from dataclasses import dataclass, field
 ## is_background and autofocus
 from skimage import color
 
-# from skimage.util import view_as_windows, crop
-# from skimage import img_as_float, exposure
+# from skimage.util import view_as_windows, crop, img_as_float, exposure
 ## autofocus
 from skimage.filters import sobel
 
@@ -19,7 +18,7 @@ from skimage.filters import sobel
 import scipy.interpolate
 
 ## background image
-import tifffile as tf
+# import tifffile as tf
 
 ## metadata
 import difflib
@@ -71,12 +70,12 @@ class sp_position:
 
 class smartpath:
 
-    def __init__(self, core):
-        self.core = core
+    def __init__(self):
+        pass
 
-    def get_mm_metadata_string(self, pretty_print=False):
-
-        device_dict = self.get_device_properties(self.core)
+    @staticmethod
+    def get_mm_metadata_string(core, pretty_print=False):
+        device_dict = smartpath.get_device_properties(core)
         if pretty_print:
             return pprint.pformat(device_dict)
 
@@ -141,8 +140,7 @@ class smartpath:
                 print(k)
 
     @staticmethod
-    def is_coordinate_in_range(settings, position) -> bool:
-
+    def is_position_in_range(settings, position) -> bool:
         _within_ylimit = _within_xlimit = False
         if settings.x_range[0] < position.x < settings.x_range[1]:
             _within_xlimit = True
@@ -174,13 +172,16 @@ class smartpath:
         return current_pos
 
     @staticmethod
-    def move_to_position(
-        position: sp_position, settings: sp_microscope_settings, core: Core
+    def move_stage_to_position(
+        core: Core, position: sp_position, settings: sp_microscope_settings
     ):
-
         if position.f or position.o:
-            warnings.warn(" F and O stage movements are not implemented yet")
-            return 0
+            if position.o != smartpath.get_current_position(core).o:
+                warnings.warn(" O stage movements are not implemented as positions")
+                return 0
+            if position.f != smartpath.get_current_position(core).o:
+                warnings.warn(" F stage movements are not implemented are positions")
+                return 0
 
         if not position.x:
             position.x = smartpath.get_current_position(core).x
@@ -190,19 +191,16 @@ class smartpath:
             position.z = smartpath.get_current_position(core).z
 
         # check position in range
-        if smartpath.is_coordinate_in_range(settings, position):
-
+        if smartpath.is_position_in_range(settings, position):
             # verify focus device: bcs user can change it to F mode
             if core.get_focus_device() != settings.focus_device:
                 warnings.warn(f" Changing focus device {core.get_focus_device()}")
                 core.set_focus_device(settings.focus_device)
-
             # movement
             core.set_position(position.z)
             core.set_xy_position(position.x, position.y)
             core.wait_for_device(core.get_xy_stage_device())
             core.wait_for_device(core.get_focus_device())
-
         else:
             print(" Movement Cancelled ")
 
@@ -242,15 +240,15 @@ class smartpath:
 
     @staticmethod
     def autofocus(
-        core,
+        core: Core,
         settings: sp_microscope_settings,
-        nsteps=5,
-        search_range=45,
-        interp_strength=100,
+        nsteps: int = 5,
+        search_range: float = 45.0,
+        interp_strength: int = 100,
         interp_kind="quadratic",
         score_metric=sobel,
-        pop_a_plot=False,
-        move_stage_to_estimate=True,
+        pop_a_plot: bool = False,
+        goto_new_focus=True,
     ):
         """
         score metric options : shannon_entropy, sobel
@@ -266,12 +264,12 @@ class smartpath:
                 new_pos = sp_position(
                     current_pos.x, current_pos.y, current_pos.z + steps[step_number]
                 )
-                smartpath.move_to_position(new_pos, settings, core)
+                smartpath.move_stage_to_position(new_pos, settings, core)
                 # print(smartpath.get_current_position(core))
                 img, tags = smartpath.snap(core)
                 img_gray = color.rgb2gray(img)
                 score = score_metric(img_gray)
-                if score.ndim == 2:
+                if score.ndim != 1:
                     score = np.mean(score)
                 scores.append(score)
             # interpolation
@@ -289,19 +287,18 @@ class smartpath:
                 plt.xlabel("Z-axis")
                 plt.title(f"X,Y = ({current_pos.x:.1f} , {current_pos.y:.1f})")
 
-            if move_stage_to_estimate:
+            if goto_new_focus:
                 new_pos = current_pos
                 new_pos.z = new_z
-                smartpath.move_to_position(new_pos, settings, core)
+                smartpath.move_stage_to_position(new_pos, settings, core)
                 return new_z
                 # core.set_position(new_z)
         except Exception as e:
-            smartpath.move_to_position(current_pos, settings, core)
+            smartpath.move_stage_to_position(current_pos, settings, core)
             return e
 
     @staticmethod
     def white_balance(img=None, img_background=None, gain=1.0):
-
         white_balance_profiles = {
             "4x_binLi_Jul2021": [0.927, 1.0, 0.947],
             "20x_binLi_May2022": [1.0, 0.989, 0.803],
