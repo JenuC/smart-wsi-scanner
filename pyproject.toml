@@ -3,3 +3,13 @@ line-length = 100
 extend-select = ["C4", "NPY", "PD", "SIM", "TCH"]
 ignore = ["E501"]
 show-fixes = true
+
+[tool.flake8]
+    exclude = ".venv"
+    max-complexity = 10
+    max-line-length = 100
+    extend-ignore = """
+        W503,
+        E203,
+        E701,
+    """
