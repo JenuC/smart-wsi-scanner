@@ -64,7 +64,7 @@ class sp_camm_stage(sp_stage_settings):
     f_stage: str = field(default="ZStage:F:32")
     xlimit: _limits = _limits(0, 40000.0)
     ylimit: _limits = _limits(0, 30000.0)
-    zlimit: _limits = _limits(-10600.0, 0)
+    zlimit: _limits = _limits(-10600.0, 100)
     flimit: _limits = _limits(-18000.0, 0)
 
 
@@ -103,6 +103,7 @@ class sp_imaging_mode:
 class sp_camm_imaging_mode(sp_imaging_mode):
     z: float = field(default=None)
     f: float = field(default=None)
+    o: str = field(default=None)
 
 
 class loci_instruments:
@@ -145,15 +146,18 @@ class loci_instruments:
 
     @property
     def CAMM_4X_BF(self):
-        return sp_camm_imaging_mode("4x BrightField", 1.105, 3570, -1000)
+        return sp_camm_imaging_mode("4x BrightField", 1.105, -9.2, -3200, "Position-2")
 
     @property
     def CAMM_20X_BF(self):
-        return sp_camm_imaging_mode("20x BrightField", 0.222, -6980, -15800)
+        return sp_camm_imaging_mode(
+            "20x BrightField", 0.222, -10502, -13350, "Position-1"
+        )
 
     @property
     def CAMM_20X_MPM(self):
-        return sp_camm_imaging_mode("20x MPM", 1.105, -6640, -18500)
+        return sp_camm_imaging_mode("20x MPM", 1.105, -10160, -16000, "Position-1")
+        # f used to be  bf-15800 shg-18500
 
 
 camm_ = loci_instruments()
@@ -473,5 +477,3 @@ class smartpath:
 
         img_wb = img.astype(np.float64) * gain / [r1, g1, b1]
         return np.clip(img_wb, 0, 255).astype(np.uint8)
-
-
