@@ -103,7 +103,7 @@ class sp_imaging_mode:
 class sp_camm_imaging_mode(sp_imaging_mode):
     z: float = field(default=None)
     f: float = field(default=None)
-    o: str = field(default=None)
+    objective_position_label: str = field(default=None)
 
 
 class loci_instruments:
@@ -146,17 +146,17 @@ class loci_instruments:
 
     @property
     def CAMM_4X_BF(self):
-        return sp_camm_imaging_mode("4x BrightField", 1.105, -9.2, -3200, "Position-2")
+        return sp_camm_imaging_mode("4X BrightField", 1.105, -9.2, -3200, "Position-2")
 
     @property
     def CAMM_20X_BF(self):
         return sp_camm_imaging_mode(
-            "20x BrightField", 0.222, -10502, -13350, "Position-1"
+            "20X BrightField", 0.222, -10502, -13350, "Position-1"
         )
 
     @property
     def CAMM_20X_MPM(self):
-        return sp_camm_imaging_mode("20x MPM", 1.105, -10160, -16000, "Position-1")
+        return sp_camm_imaging_mode("20X MPM", 1.105, -10160, -16000, "Position-1")
         # f used to be  bf-15800 shg-18500
 
 
@@ -356,6 +356,43 @@ class smartpath:
 
         else:
             print(" Movement Cancelled ")
+
+    @staticmethod
+    def swap_objective_lens(
+        core: Core,
+        camm: sp_microscope_settings,
+        desired_imaging_mode: sp_camm_imaging_mode,
+    ):
+        """ " 4x->20x moves O first, then Z
+        and
+        20x->4x moves z first"""
+
+        current_slider_position = core.get_property(*camm.obj_slider)
+        if desired_imaging_mode.objective_position_label != current_slider_position:
+
+            if desired_imaging_mode.name.startswith("4X"):
+                core.set_focus_device(camm.stage.z_stage)
+                core.set_position(desired_imaging_mode.z)
+                core.wait_for_device(camm.stage.z_stage)
+                core.set_property(
+                    *camm.obj_slider, desired_imaging_mode.objective_position_label
+                )
+                core.set_focus_device(camm.stage.f_stage)
+                core.set_position(desired_imaging_mode.f)
+                core.wait_for_system()
+            if desired_imaging_mode.name.startswith("20X"):
+                core.set_property(
+                    *camm.obj_slider, desired_imaging_mode.objective_position_label
+                )
+                core.wait_for_device(camm.obj_slider[0])
+                core.set_focus_device(camm.stage.z_stage)
+                core.set_position(desired_imaging_mode.z)
+                core.set_focus_device(camm.stage.f_stage)
+                core.set_position(desired_imaging_mode.f)
+                core.wait_for_system()
+
+            core.set_focus_device(camm.stage.z_stage)
+            camm.imaging_mode = desired_imaging_mode
 
     @staticmethod
     def snap(
