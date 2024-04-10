@@ -94,7 +94,7 @@ if core.is_sequence_running():
 
 qupath_project_folder = os.path.join(projectsFolderPath, sampleLabel)
 path_to_TileConfiguration = os.path.join(
-    qupath_project_folder, scan_type, region, "TileConfiguration_transformed.txt"
+    qupath_project_folder, scan_type, region, "TileConfiguration.txt"
 )
 if os.path.exists(path_to_TileConfiguration):
     coordinates = read_TileConfiguration_coordinates(path_to_TileConfiguration)
@@ -194,7 +194,7 @@ if coordinates_within_limits:
     #    assert len(position_list) == len( image_list ), "Number of images does not match number of positions"
 
     with open(
-        os.path.join(stitchfolder_path, "TileConfiguration.txt"), "w"
+        os.path.join(stitchfolder_path, "TileConfiguration2.txt"), "w"
     ) as text_file:
         print("dim = {}".format(2), file=text_file)
         for pos in range(position_list.shape[0]):
