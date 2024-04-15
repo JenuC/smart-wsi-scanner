@@ -18,6 +18,7 @@ from scipy.spatial.distance import cdist
 
 
 import uuid
+import pathlib
 
 
 class smartpath_qpscope:
@@ -219,3 +220,34 @@ class smartpath_qpscope:
         for k in set([key.split("-")[0] for key in tags]):
             dx.update({k: {key: tags[key] for key in tags if key.startswith(k)}})
         return dx
+
+
+class qpscope_project:
+    def __init__(
+        self,
+        projectsFolderPath: str = r"C:\Users\lociuser\Codes\MikeN\data\slides",
+        sampleLabel: str = "2024_04_09_4",
+        scan_type: str = "20x_bf_2",
+        region: str = "1479_4696",
+        tile_config: str = "TileConfiguration.txt",
+    ):
+        self.path_tile_configuration = pathlib.Path(
+            projectsFolderPath, sampleLabel, scan_type, region, tile_config
+        )
+        if self.path_tile_configuration.exists():
+            self.path_qp_project = pathlib.Path(projectsFolderPath, sampleLabel)
+            self.path_output = pathlib.Path(
+                projectsFolderPath, sampleLabel, scan_type, region
+            )  # "data/acquisition"
+            self.acq_id = sampleLabel + "_ST_" + scan_type
+        else:
+            self.path_qp_project = "undefined"
+            self.path_output = "undefined"
+            self.acq_id = "undefined" + "_ScanType_" + "undefined"
+
+    @staticmethod
+    def uid():
+        return uuid.uuid1().urn[9:]
+
+    def __repr__(self):
+        return f"qupath project :{self.path_qp_project} \n tif files : {self.path_output} \n acq_id:{self.acq_id}"
