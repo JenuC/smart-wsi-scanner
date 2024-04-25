@@ -9,12 +9,12 @@ qp = smartpath_qpscope()
 ## checks what is current
 
 if core.get_property(*camm.obj_slider) == camm_.CAMM_20X_BF.objective_position_label:
-    camm.imaging = camm_.CAMM_20X_BF
+    camm.imaging_mode = camm_.CAMM_20X_BF
 if core.get_property(*camm.obj_slider) == camm_.CAMM_4X_BF.objective_position_label:
-    camm.imaging = camm_.CAMM_4X_BF
+    camm.imaging_mode = camm_.CAMM_4X_BF
 ## TODO: implement CAMM_20x_MPM/BF update from Core Camera and move lamp to that section
 if core.get_property(*camm.obj_slider) == camm_.CAMM_20X_MPM.objective_position_label:
-    camm.imaging = camm_.CAMM_20X_BF
+    camm.imaging_mode = camm_.CAMM_20X_BF
 
 
 if len(sys.argv) == 2:

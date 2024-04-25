@@ -1,6 +1,8 @@
 from smartpath import *
 from smartpath_qpscope import *
 import sys
+import os
+
 
 sp = smartpath(core)
 qp = smartpath_qpscope()
@@ -16,11 +18,11 @@ else:
     # TODO may change to universal centroid_index naming
 
 if core.get_property(*camm.obj_slider) == camm_.CAMM_20X_BF.objective_position_label:
-    camm.imaging = camm_.CAMM_20X_BF
+    camm.imaging_mode = camm_.CAMM_20X_BF
 if core.get_property(*camm.obj_slider) == camm_.CAMM_4X_BF.objective_position_label:
-    camm.imaging = camm_.CAMM_4X_BF
+    camm.imaging_mode = camm_.CAMM_4X_BF
 if core.get_property(*camm.obj_slider) == camm_.CAMM_20X_MPM.objective_position_label:
-    camm.imaging = camm_.CAMM_20X_BF
+    camm.imaging_mode = camm_.CAMM_20X_BF
 
 
 swap_lens = False
@@ -46,11 +48,12 @@ q = qpscope_project(
     tile_config="TileConfiguration.txt",
 )
 
-print(q.path_tile_configuration)
+print("QP: Input TileConfig:", q.path_tile_configuration)
 positions = qp.read_TileConfiguration_coordinates(q.path_tile_configuration)
-print(len(positions))
+print("QP: Number of tile positions:", len(positions))
 suffix_length = "06"
 af_position_indices = qp.get_autofocus_positions(positions, camm, 3)
+
 qp.scan_using_positions(
     sp,
     camm,
@@ -62,13 +65,22 @@ qp.scan_using_positions(
     suffix_length=suffix_length,
 )
 
-## overwrite current tileconfig file
-# new_tile_config = str(q.path_tile_configuration)[:-4] + "2.txt"
-new_tile_config = q.path_tile_configuration
 
+os.rename(
+    q.path_tile_configuration, str(q.path_tile_configuration).replace(".txt", "QP.txt")
+)
 
+## writing new tileconfig with filenames = file_id / id1
+new_tile_config = str(q.path_tile_configuration)
 qp.write_tileconfig(
     positions=positions,
+    tileconfig_path=new_tile_config,
+    id1=q.acq_id,
+)
+## writing tileconfig for gridstitcher with 1micron pixelsize
+new_tile_config = str(q.path_tile_configuration)[:-4] + "GS.txt"
+qp.write_tileconfig(
+    positions=[k / camm.imaging_mode.pixelsize for k in positions],
     tileconfig_path=new_tile_config,
     id1=q.acq_id,
 )

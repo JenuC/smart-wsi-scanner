@@ -162,7 +162,7 @@ class smartpath_qpscope:
 
             smartpath_qpscope.ome_writer(
                 filename=os.path.join(save_folder, file_id + ".tif"),
-                pixel_size=camm.imaging_mode.pixelsize,
+                pixel_size_um=camm.imaging_mode.pixelsize,
                 data=np.flipud(sp.white_balance(img)),
             )
 
@@ -200,7 +200,7 @@ class smartpath_qpscope:
                 )
 
     @staticmethod
-    def ome_writer(filename: str, pixel_size: float, data: np.array):
+    def ome_writer(filename: str, pixel_size_um: float, data: np.array):
         with tf.TiffWriter(
             filename,
             # bigtiff=True
@@ -213,7 +213,7 @@ class smartpath_qpscope:
             }
             tif.write(
                 data,
-                resolution=(1e4 / pixel_size, 1e4 / pixel_size),
+                resolution=(1e4 / pixel_size_um, 1e4 / pixel_size_um),
                 **options,
             )
 
