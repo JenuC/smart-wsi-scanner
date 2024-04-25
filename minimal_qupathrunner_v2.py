@@ -24,8 +24,20 @@ if core.get_property(*camm.obj_slider) == camm_.CAMM_20X_MPM.objective_position_
     camm.imaging = camm_.CAMM_20X_BF
 
 
-q = qpscope_project()
-q.path_tile_configuration
+swap_lens = False
+# TODO :
+if swap_lens:
+    if scan_type.upper().startswith("20X"):
+        sp.swap_objective_lens(core, camm, camm_.CAMM_20X_BF)
+        core.set_property(*camm.lamp, 4)
+        print("QP: moved to 20X")
+    elif scan_type.upper().startswith("4X"):
+        sp.swap_objective_lens(core, camm, camm_.CAMM_4X_BF)
+        print("QP: moved to 4X")
+        core.set_property(*camm.lamp, 2)
+    else:
+        print(f"{scan_type}", file=sys.stderr)
+
 
 q = qpscope_project(
     projectsFolderPath=projectsFolderPath,
