@@ -49,7 +49,7 @@ q = qpscope_project(
 print(q.path_tile_configuration)
 positions = qp.read_TileConfiguration_coordinates(q.path_tile_configuration)
 print(len(positions))
-
+suffix_length = "06"
 af_position_indices = qp.get_autofocus_positions(positions, camm, 3)
 qp.scan_using_positions(
     sp,
@@ -59,4 +59,16 @@ qp.scan_using_positions(
     id1=q.acq_id,
     core=core,
     autofocus_indices=af_position_indices,
+    suffix_length=suffix_length,
+)
+
+## overwrite current tileconfig file
+# new_tile_config = str(q.path_tile_configuration)[:-4] + "2.txt"
+new_tile_config = q.path_tile_configuration
+
+
+qp.write_tileconfig(
+    positions=positions,
+    tileconfig_path=new_tile_config,
+    id1=q.acq_id,
 )

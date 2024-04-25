@@ -158,6 +158,8 @@ class smartpath_qpscope:
                 _ = sp.autofocus(core=core, settings=camm)
             img, tags = sp.snap(core)
             file_id = f"{id1}_{ix:{suffix_length}}"
+            # file_id = f"{ix:{suffix_length}}"
+
             smartpath_qpscope.ome_writer(
                 filename=os.path.join(save_folder, file_id + ".tif"),
                 pixel_size=camm.imaging_mode.pixelsize,
@@ -190,6 +192,7 @@ class smartpath_qpscope:
             print("dim = {}".format(2), file=text_file)
             for ix, pos in enumerate(positions):
                 file_id = f"{id1}_{ix:{suffix_length}}"
+                # file_id = f"{ix:{suffix_length}}"
                 x, y = pos
                 print(
                     f"{file_id}.tif; ; ({x/ pixel_size:.3f}, {y/ pixel_size:.3f})",
