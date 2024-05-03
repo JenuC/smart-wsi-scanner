@@ -66,9 +66,18 @@ class sp_camm_stage(sp_stage_settings):
     ylimit: _limits = _limits(0, 30000.0)
     zlimit: _limits = _limits(-10600.0, 100)
     flimit: _limits = _limits(-18000.0, 0)
-
+    vendor: "ASI"
 
 @dataclass
+class sp_ppm_stage(sp_stage_settings):
+    z_stage: str = field(default="ZStage")
+    xlimit: _limits = _limits(33000,-21000)
+    ylimit: _limits = _limits(-8000, 11000)
+    zlimit: _limits = _limits(-10600.0, 100)
+    flimit: _limits = _limits(-18000.0, 0)
+    vendor: "Prior"
+
+@dataclassW
 class sp_objective_lens:
     """
     See https://www.microscope.healthcare.nikon.com/products/optics/selector
