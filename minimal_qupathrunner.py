@@ -54,6 +54,12 @@ print("QP: Number of tile positions:", len(positions))
 suffix_length = "06"
 af_position_indices = qp.get_autofocus_positions(positions, camm, 3)
 
+## ADDED BY MIKE 20240502
+#camm.stage.zlimit.high = 500
+camm.stage.zlimit.low = -11000
+camm.stage.xlimit.high = 45000
+camm.stage.xlimit.low = 11500
+
 qp.scan_using_positions(
     sp,
     camm,
@@ -69,6 +75,8 @@ qp.scan_using_positions(
 os.rename(
     q.path_tile_configuration, str(q.path_tile_configuration).replace(".txt", "QP.txt")
 )
+
+
 
 ## writing new tileconfig with filenames = file_id / id1
 new_tile_config = str(q.path_tile_configuration)
