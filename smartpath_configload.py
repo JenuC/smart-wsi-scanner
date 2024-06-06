@@ -13,13 +13,13 @@ def create_dataclass(name, data):
     for key, value in data.items():
         if isinstance(value, dict):
             # Recursively create nested data classes for nested dictionaries
-            print(value)
+            # print(value)
             nested_class = create_dataclass(key.capitalize(), value)
             fields.append((key, nested_class))
         else:
             fields.append((key, type(value)))
     DataClass = make_dataclass(name, fields)
-    print(DataClass)
+    # print(DataClass)
     return DataClass
 
 
@@ -44,3 +44,4 @@ yaml_data = read_yaml_file("schema_CAMM.yml")
 camm_stage = yaml_to_dataclass(yaml_data)
 # print(camm_stage)
 # print(camm_stage.Stage.ylimit.low)
+print(*camm_stage.obj_slider)

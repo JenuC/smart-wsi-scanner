@@ -1,0 +1,46 @@
+stage:
+  zstage: 'ZStage:Z:32'
+  fstage: 'ZStage:F:32'
+  xlimit:
+    low: 0
+    high: 40000
+  ylimit:
+    low: 0
+    high: 30000
+  zlimit:
+    low: -10600
+    high: 100
+  flimit:
+    low: -18000
+    high: 0
+  vendor: ASI
+objectiveLens: loci-20xNikon
+imagingMode:
+  20x_BF:
+    pixelOffset:
+      x: -600
+      y: 10
+    stageoffset:
+      z: 0
+      f: 0
+    objectivePositionLabel: 1
+    lampIntensity: 4
+  20X_MPM:
+    pixelOffset:
+      x: -580
+      y: -280
+    stageoffset:
+    z: 0
+    f: 0
+  objectivePositionLabel: 2
+  lampIntensity: 5
+
+lamp:
+  - LED-Dev1ao0
+  - Voltage
+objectiveSlider:
+  - Turret:O:35
+  - Label
+slideSize:
+  x: 40000
+  y: 20000
