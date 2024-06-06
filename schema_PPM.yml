@@ -1,0 +1,22 @@
+
+Stage:
+  z_stage:
+    "ZStage"
+  xlimit: 
+    low: 33000.0 
+    high: -21000.0
+  ylimit: 
+    low: -8000.0  
+    high: 11000.0
+  zlimit: 
+    low: 0.0
+    high: 0.0
+  vendor:
+    "Prior"
+
+
+ImagingMode:
+    z: 0.0
+    f: 0.0
+    objective_position_label: 'manual'
+

@@ -1,0 +1,36 @@
+
+
+Stage:
+    xlimit:
+        low: 0.0
+        high: 1.0
+    ylimit:
+        low: 0.0
+        high: 1.0
+    zlimit:
+        low: 0.0
+        high: 1.0
+    vendor:
+        "Stage_manufacturer"
+
+Detector:
+    width:
+        0.0
+    height:
+        0.0
+
+ImagingMode:
+    name:
+        "Multiphoton"
+    pixelsize:
+        1.0
+
+ObjectiveLens:
+    # See https://www.microscope.healthcare.nikon.com/products/optics/selector
+    name: str
+    magnification: 1.0
+    NA: 1.0
+    WD: 170.0 #um
+    description: nil
+    manufacturer_id: nil
+

@@ -1,0 +1,39 @@
+    
+Stage:
+  z_stage:
+    "ZStage:Z:32"
+  f_stage: 
+    "ZStage:F:32"
+  xlimit: 
+    low: 0 
+    high: 40000.0
+  ylimit: 
+    low: 0 
+    high: 30000.0
+  zlimit: 
+    low: -10600.0
+    high: 100
+  flimit: 
+    low: -18000.0
+    high: 0
+  vendor:
+    "ASI"
+
+ImagingMode:
+    z: 0.0
+    f: 0.0
+    objective_position_label: nil
+
+lamp: ["LED-Dev1ao0","Voltage"]
+obj_slider: ["Turret:O:35", "Label"]
+
+slide_size: [40000.0, 20000.0]
+  # (width, height) (70000, -20000)
+
+CAMM_20X_BF_XYoffset: [-600, 10]
+  # 4x + this value to 20x // (-590, 74)
+CAMM_20X_MPM_XYoffset: [-580, -280]
+  # 4x + this value to shg // (-580, -172)
+
+CAMM_4X_BF_lampintensity: 4.0
+CAMM_20X_BF_lampintensity: 5.0
