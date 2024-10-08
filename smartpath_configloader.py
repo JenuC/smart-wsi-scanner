@@ -12,14 +12,13 @@ def create_dataclass(name, data):
     fields = []
     for key, value in data.items():
         if isinstance(value, dict):
-            # Recursively create nested data classes for nested dictionaries
-            # print(value)
+            # Recursively nested data classes for nested dictionaries
             nested_class = create_dataclass(key.capitalize(), value)
             fields.append((key, nested_class))
         else:
             fields.append((key, type(value)))
+    #print(name,fields)
     DataClass = make_dataclass(name, fields)
-    # print(DataClass)
     return DataClass
 
 
@@ -39,9 +38,10 @@ def yaml_to_dataclass(yaml_data):
     instance = instantiate_dataclass(DataClass, yaml_data)
     return instance
 
+def load_config(configfile):    
+    return yaml_to_dataclass(read_yaml_file(configfile))
 
-yaml_data = read_yaml_file("schema_CAMM.yml")
-camm_stage = yaml_to_dataclass(yaml_data)
-# print(camm_stage)
-# print(camm_stage.Stage.ylimit.low)
-print(*camm_stage.obj_slider)
+#camm = yaml_to_dataclass(read_yaml_file("./config/config_CAMM.yml"))
+#ppm = yaml_to_dataclass(read_yaml_file("./config/config_PPM.yml"))
+#rsc = yaml_to_dataclass(read_yaml_file("./config/resources_LOCI.yml"))
+        
