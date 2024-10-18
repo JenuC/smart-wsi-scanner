@@ -1,9 +1,7 @@
 from smartpath import *
+from smartpath_config import *
 from smartpath_qpscope import *
 import sys
-
-sp = smartpath(core)
-qp = smartpath_qpscope()
 
 if len(sys.argv) == 5:
     self_filename, projectsFolderPath, sampleLabel, scan_type, region = sys.argv
@@ -15,27 +13,22 @@ else:
     region = "bounds"  # or a centroid from the qupath annotation. eg "2012-2323"
     # TODO may change to universal centroid_index naming
 
-if core.get_property(*camm.obj_slider) == camm_.CAMM_20X_BF.objective_position_label:
-    camm.imaging = camm_.CAMM_20X_BF
-if core.get_property(*camm.obj_slider) == camm_.CAMM_4X_BF.objective_position_label:
-    camm.imaging = camm_.CAMM_4X_BF
-if core.get_property(*camm.obj_slider) == camm_.CAMM_20X_MPM.objective_position_label:
-    camm.imaging = camm_.CAMM_20X_BF
+sp = smartpath(core)
+qp = smartpath_qpscope()    
 
 
-swap_lens = False
-# TODO :
-if swap_lens:
-    if scan_type.upper().startswith("20X"):
-        sp.swap_objective_lens(core, camm, camm_.CAMM_20X_BF)
-        core.set_property(*camm.lamp, 4)
-        print("QP: moved to 20X")
-    elif scan_type.upper().startswith("4X"):
-        sp.swap_objective_lens(core, camm, camm_.CAMM_4X_BF)
-        print("QP: moved to 4X")
-        core.set_property(*camm.lamp, 2)
-    else:
-        print(f"{scan_type}", file=sys.stderr)
+yaml_data = read_yaml_file(r'./smartpath_configurations/config_CAMM.yml')
+camm_ = yaml_to_dataclass(yaml_data)
+yaml_data = read_yaml_file(r'./smartpath_configurations/resources_LOCI.yml')
+loci_ = yaml_to_dataclass(yaml_data)
+
+camm = sp_camm_settings(stage = camm_.stage)
+
+
+if core.get_property(*camm_.objectiveSlider) == camm_.imagingMode.BF_20X.objectivePositionLabel:
+    camm.imaging_mode = camm_.imagingMode.BF_20X
+if core.get_property(*camm_.objectiveSlider) == camm_.imagingMode.BF_4X.objectivePositionLabel:
+    camm.imaging_mode = camm_.imagingMode.BF_4X
 
 
 q = qpscope_project(

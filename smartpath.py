@@ -4,7 +4,7 @@ import warnings
 # used for mm-pix.tags
 from collections import OrderedDict
 import matplotlib.pyplot as plt
-from dataclasses import dataclass, field
+
 
 # is_background and autofocus
 from skimage import color
@@ -16,7 +16,7 @@ from skimage.filters import sobel
 
 # white balance
 import scipy.interpolate
-
+from smartpath_config import sp_microscope_settings, sp_position, sp_imaging_mode
 
 # flat-field
 # from skimage.util import view_as_windows, crop, img_as_float, exposure
@@ -27,7 +27,7 @@ import scipy.interpolate
 # metadata
 import difflib
 import pprint
-from dataclasses import asdict, fields
+
 from pycromanager import Core, Studio
 
 
@@ -39,189 +39,6 @@ def init_pycromanager():
 
 
 core, studio = init_pycromanager()
-
-
-@dataclass
-class _limits:
-    low: float
-    high: float
-
-    def __post_init__(self):
-        if self.low > self.high:
-            self.low, self.high = self.high, self.low
-
-
-@dataclass
-class sp_stage_settings:
-    xlimit: _limits = field(default=None)
-    ylimit: _limits = field(default=None)
-    zlimit: _limits = field(default=None)
-
-
-@dataclass
-class sp_camm_stage(sp_stage_settings):
-    z_stage: str = field(default="ZStage:Z:32")
-    f_stage: str = field(default="ZStage:F:32")
-    xlimit: _limits = _limits(0, 40000.0)
-    ylimit: _limits = _limits(0, 30000.0)
-    zlimit: _limits = _limits(-10600.0, 100)
-    flimit: _limits = _limits(-18000.0, 0)
-    vendor: str = "ASI"
-
-
-@dataclass
-class sp_ppm_stage(sp_stage_settings):
-    z_stage: str = field(default="ZStage")
-    xlimit: _limits = _limits(33000, -21000)
-    ylimit: _limits = _limits(-8000, 11000)
-    zlimit: _limits = _limits(-10600.0, 100)
-    flimit: _limits = _limits(-18000.0, 0)
-    vendor: str = "Prior"
-
-
-@dataclass
-class sp_objective_lens:
-    """
-    See https://www.microscope.healthcare.nikon.com/products/optics/selector
-    """
-
-    name: str
-    magnification: float
-    NA: float
-    WD: float = field(default=None)
-    description: str = field(default=None)
-    manufacturer_id: str = field(default=None)
-
-
-# TODO: camera features
-@dataclass
-class sp_detector:
-    """Placeholder for detector variables used in operation
-    : resolution, binning etc
-    """
-
-    width: int = field(default=None)
-    height: int = field(default=None)
-
-
-@dataclass
-class sp_imaging_mode:
-    name: str = field(default=None)
-    pixelsize: float = field(default=None)
-
-
-@dataclass
-class sp_camm_imaging_mode(sp_imaging_mode):
-    z: float = field(default=None)
-    f: float = field(default=None)
-    objective_position_label: str = field(default=None)
-
-
-class loci_instruments:
-    def __init__(self):
-        pass
-
-    @property
-    def lens_20x(self):
-        return sp_objective_lens(
-            name="20x",
-            magnification=20,
-            NA=0.75,
-            WD=0.8,
-            description="CFI Plan Apochromat Lambda D 20X, 0.75",
-            manufacturer_id="MRD70270",
-        )
-
-    @property
-    def lens_4x(self):
-        return sp_objective_lens(
-            name="4x",
-            magnification=4,
-            NA=0.2,
-            WD=20,
-            description="CFI Plan Apochromat Lambda D 4X",
-            manufacturer_id="MRD70040",
-        )
-
-    @property
-    def camera_QCAM(self):
-        return sp_detector(1392, 1040)
-
-    @property
-    def camera_OSc(self):
-        return sp_detector(512, 512)
-
-    @property
-    def stage_ASI(self):
-        return sp_camm_stage()
-
-    @property
-    def CAMM_4X_BF(self):
-        return sp_camm_imaging_mode("4X BrightField", 1.105, -9.2, -3200, "Position-2")
-
-    @property
-    def CAMM_20X_BF(self):
-        return sp_camm_imaging_mode(
-            "20X BrightField", 0.222, -10502, -13350, "Position-1"
-        )
-
-    @property
-    def CAMM_20X_MPM(self):
-        return sp_camm_imaging_mode("20X MPM", 1.105, -10160, -16000, "Position-1")
-        # f used to be  bf-15800 shg-18500
-
-
-camm_ = loci_instruments()
-
-
-@dataclass
-class sp_microscope_settings:
-    stage: sp_stage_settings = field(default=None)
-    lens: sp_objective_lens = field(default=None)
-    detector: sp_detector = field(default=None)
-    imaging_mode: sp_imaging_mode = field(default=None)
-
-
-@dataclass
-class sp_camm_settings(sp_microscope_settings):
-    lamp: tuple = field(default=("LED-Dev1ao0", "Voltage"))
-    obj_slider: tuple = field(default=("Turret:O:35", "Label"))
-    slide_size: tuple = field(
-        default=(40000.0, 20000.0)
-    )  # (width, height) (70000, -20000)
-    CAMM_20X_BF_XYoffset: tuple = field(
-        default=(-600, 10)
-    )  # 4x + this value to 20x // (-590, 74)
-    CAMM_20X_MPM_XYoffset: tuple = field(
-        default=(-580, -280)
-    )  # 4x + this value to shg // (-580, -172)
-    CAMM_4X_BF_lampintensity: float = field(default=4)
-    CAMM_20X_BF_lampintensity: float = field(default=5)
-
-
-camm = sp_camm_settings(
-    stage=camm_.stage_ASI,
-    lens=camm_.lens_4x,
-    detector=camm_.camera_QCAM,
-    imaging_mode=camm_.CAMM_4X_BF,
-)
-
-
-@dataclass
-class sp_position:
-    x: float
-    y: float
-    z: float = field(default=None)
-
-    def __repr__(self):
-        kws_values = [
-            f"{key}={value:.1f}" for key, value in self.__dict__.items() if value
-        ]
-        kws_none = [
-            f"{key}={value!r}" for key, value in self.__dict__.items() if not value
-        ]
-        kws = kws_values + kws_none
-        return f"{type(self).__name__}({', '.join(kws)})"
 
 
 class smartpath:
@@ -306,7 +123,7 @@ class smartpath:
 
     @staticmethod
     def is_coordinate_in_range(
-        settings: sp_microscope_settings, position: sp_position
+        settings, position  #: sp_microscope_settings,  #: sp_position
     ) -> bool:
         _within_ylimit = _within_xlimit = False
 
@@ -372,7 +189,7 @@ class smartpath:
     def swap_objective_lens(
         core: Core,
         camm: sp_microscope_settings,
-        desired_imaging_mode: sp_camm_imaging_mode,
+        desired_imaging_mode: sp_imaging_mode,
     ):
         """ " 4x->20x moves O first, then Z
         and
@@ -432,7 +249,9 @@ class smartpath:
                 if flip_channel:
                     pixels = np.flip(pixels, 2)
                 if background_correction:
-                    pixels = smartpath.background_correction(pixels)
+                    pass
+                    # pixels = smartpath.background_correction(pixels)
+
             else:
                 pixels = np.reshape(
                     tagged_image.pix, newshape=[tags["Height"], tags["Width"]]
