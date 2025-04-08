@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 from dataclasses import make_dataclass
+from typing import Dict, Type, Optional
 import yaml
+import os
+from pathlib import Path
 
 
 ## property constraints
@@ -129,3 +132,47 @@ def yaml_to_dataclass(yaml_data):
     DataClass = create_dataclass("DataClass", yaml_data)
     instance = instantiate_dataclass(DataClass, yaml_data)
     return instance
+
+
+class ConfigManager:
+    """Manages microscope configurations and presets"""
+    
+    def __init__(self, config_dir: str = None):
+        if config_dir is None:
+            # Use the submodule path by default
+            package_dir = Path(__file__).parent
+            self.config_dir = package_dir / "configurations"
+        else:
+            self.config_dir = Path(config_dir)
+            
+        self._configs: Dict[str, Type[sp_microscope_settings]] = {}
+        self._load_configs()
+        
+    def _load_configs(self) -> None:
+        """Load all configuration files from config directory"""
+        if not self.config_dir.exists():
+            raise FileNotFoundError(f"Configuration directory not found: {self.config_dir}")
+            
+        for file in self.config_dir.glob("*.yml"):
+            config_name = file.stem
+            self._configs[config_name] = self.load_config(str(file))
+                
+    def load_config(self, config_path: str) -> Type[sp_microscope_settings]:
+        """Load a single configuration file"""
+        data = read_yaml_file(config_path)
+        return yaml_to_dataclass(data)
+        
+    def get_config(self, name: str) -> Optional[Type[sp_microscope_settings]]:
+        """Get configuration by name"""
+        return self._configs.get(name)
+        
+    def save_config(self, name: str, config: sp_microscope_settings) -> None:
+        """Save configuration to file"""
+        config_path = self.config_dir / f"{name}.yml"
+        with open(config_path, 'w') as f:
+            yaml.dump(config.__dict__, f)
+        self._configs[name] = config
+        
+    def list_configs(self) -> list:
+        """List all available configurations"""
+        return list(self._configs.keys())
