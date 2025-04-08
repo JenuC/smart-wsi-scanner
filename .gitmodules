@@ -1,0 +1,3 @@
+[submodule "smart_wsi_scanner/configurations"]
+	path = smart_wsi_scanner/configurations
+	url = https://github.com/JenuC/smartpath_configurations.git
