@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
 authors = [
-    { name = "Mike Nelson", email = "msnelson8@wisc.edu" }
-    { name = "Bin Li", email = "bli346@wisc.edu" }
+    { name = "Mike Nelson", email = "msnelson8@wisc.edu" },
+    { name = "Bin Li", email = "bli346@wisc.edu" },
     { name = "Jenu Chacko", email = "jenu.chacko@wisc.edu" }
 ]
 dependencies = [

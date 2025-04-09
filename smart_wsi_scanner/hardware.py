@@ -81,7 +81,7 @@ class PycromanagerHardware(MicroscopeHardware):
         if self.core.get_property("Core", "Camera") == "QCamera":
             if self.core.get_property("QCamera", "Color") == "ON":
                 pixels = np.reshape(tagged_image.pix, 
-                                  newshape=[tags["Height"], tags["Width"], 4])
+                                newshape=[tags["Height"], tags["Width"], 4])
                 pixels = pixels[:, :, 0:3]  # Remove alpha
                 pixels = np.flip(pixels, 2)  # Flip channels
                 return pixels, tags

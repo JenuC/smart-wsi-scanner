@@ -16,7 +16,7 @@ from skimage.filters import sobel
 
 # white balance
 import scipy.interpolate
-from smartpath_config import sp_microscope_settings, sp_position, sp_imaging_mode
+from smart_wsi_scanner.config import sp_microscope_settings, sp_position, sp_imaging_mode
 
 # flat-field
 # from skimage.util import view_as_windows, crop, img_as_float, exposure
@@ -37,6 +37,31 @@ def init_pycromanager():
     core.set_timeout_ms(20000)
     return core, studio
 
+def is_mm_running() -> bool:
+    """Check if Micro-Manager is running as a Windows executable."""
+    import platform
+    import psutil
+
+    if platform.system() != "Windows":
+        return False
+
+    for proc in psutil.process_iter(['name']):
+        try:
+            if "ImageJ.exe" in proc.info['name'] or "Micro-Manager" in proc.info['name']:
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return False
+
+def init_pycromanager():
+    if not is_mm_running():
+        #raise RuntimeError()
+        print("Micro-Manager is not running. Please start Micro-Manager before initializing.")
+        return None,None
+    core = Core()
+    studio = Studio() 
+    core.set_timeout_ms(20000)
+    return core, studio
 
 core, studio = init_pycromanager()
 
