@@ -1,0 +1,82 @@
+
+# CAMM: lamp, objectiveSlider, stage, slideSize, imagingMode
+lamp:
+  - LED-Dev1ao0
+  - Voltage
+
+objectiveSlider:
+  - Turret:O:35
+  - Label
+
+slideSize:
+  width: 40000
+  height: 20000
+  # (70000, -20000)
+  
+stage:
+  zstage: 'ZStage:Z:32'
+  fstage: 'ZStage:F:32'
+  xlimit:
+    low: 0
+    high: 40000
+  ylimit:
+    low: 0
+    high: 30000
+  zlimit:
+    low: -10700
+    high: 100
+  flimit:
+    low: -18000
+    high: 0
+  vendor: ASI
+  ID: LOCI-Stage-001
+
+imagingMode:
+
+  BF_4X:
+    name: 4X Brightfield
+    description: LSM Imaging with 20x lens
+    isLSM : false
+    pixelSize_um : 1.105
+    pixelOffset:
+      x: 0
+      y: 0
+    z: -9.2,
+    f: -3200,
+    objectivePositionLabel: "Position-2"
+    lampIntensity_V: 4
+    objectiveLens: LOCI-4x-001
+    detector: LOCI-CAMERA-001
+
+
+  BF_20X:
+    name: 20X Brightfield
+    description: LSM Imaging with 20x lens
+    isLSM : false
+    pixelSize_um : 0.222
+    z: -10502,
+    f: -13350,
+    pixelOffset:
+      x: -600
+      y: 10
+    objectivePositionLabel: "Position-1"
+    lampIntensity_V: 5
+    objectiveLens: LOCI-20x-001
+    detector: LOCI-CAMERA-001
+    
+    
+  MPM_20X:
+    name: 20X LSM MP
+    description: LSM Imaging with 20x lens
+    isLSM: true    
+    pixelSize_um : ~
+    pixelOffset:
+      x: -580
+      y: -280
+    z: -10502
+    f: -13350 
+    objectivePositionLabel: "Position-1"
+    lampIntensity_V: 5
+    objectiveLens: LOCI-20x-001
+    detector: LOCI-PMT-001
+    
