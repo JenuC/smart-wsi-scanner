@@ -1,0 +1,1 @@
+"""GUI module for Smart WSI Scanner.""" 
