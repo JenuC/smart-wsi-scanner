@@ -1,13 +1,17 @@
-.ipynb_checkpoints/
+
+## QuPath   
 QuPath-0.4.3/
 qupath-projects/
 data/
-*.log
+## Fiji for PyImageJ support
 fiji/
 *.tiff
 *ome.tif
-TileConfiguration.txt
+## acquisition-configs
 acquisition-configs/*
+## python specific
+.ipynb_checkpoints/
 *.pyc
-**/smartpath_libraries/models/__pycache__/*.*
-Transfer qp scope/Agnes_PnPData_361_50_3600dpi.TIF
+.vscode/*
+.venv/*
+*.log
