@@ -109,17 +109,25 @@ class smartpath:
         return device_dict
 
     @staticmethod
-    def _compare_dicts(d1, d2):
+    def _compare_dicts(d1: dict, d2: dict) -> str:
+        """Compare two dictionaries and return their differences in a readable format.
+        
+        Args:
+            d1: First dictionary to compare
+            d2: Second dictionary to compare
+            
+        Returns:
+            A string containing the differences between the dictionaries,
+            formatted with line-by-line diffs
         """
-        Adapted version from cpython unit-test
-        https://stackoverflow.com/questions/12956957/print-diff-of-python-dictionaries
-        https://github.com/python/cpython/blob/01fd68752e2d2d0a5f90ae8944ca35df0a5ddeaa/Lib/unittest/case.py#L1091
-        """
-        return "\n" + "\n".join(
-            difflib.ndiff(
-                pprint.pformat(d1).splitlines(), pprint.pformat(d2).splitlines()
-            )
-        )
+        import difflib
+        import pprint
+        
+        d1_lines = pprint.pformat(d1).splitlines()
+        d2_lines = pprint.pformat(d2).splitlines()
+        
+        diff = difflib.ndiff(d1_lines, d2_lines)
+        return "\n" + "\n".join(diff)
 
     @staticmethod
     def compare_dev_prop(dp1: dict, dp2: dict) -> str:

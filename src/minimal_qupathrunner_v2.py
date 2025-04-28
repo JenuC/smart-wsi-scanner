@@ -13,6 +13,8 @@ else:
     region = "bounds"  # or a centroid from the qupath annotation. eg "2012-2323"
     # TODO may change to universal centroid_index naming
 
+
+
 sp = smartpath(core)
 qp = smartpath_qpscope()    
 
