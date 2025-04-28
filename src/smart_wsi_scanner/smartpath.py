@@ -40,7 +40,7 @@ def is_mm_running() -> bool:
 
     for proc in psutil.process_iter(['name']):
         try:
-            if "ImageJ.exe" in proc.info['name'] or "Micro-Manager" in proc.info['name']:
+            if proc.exe().find('Micro-Manager')>0:
                 return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
