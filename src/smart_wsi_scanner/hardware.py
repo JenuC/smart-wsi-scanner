@@ -39,10 +39,10 @@ class MicroscopeHardware(ABC):
 class PycromanagerHardware(MicroscopeHardware):
     """Implementation for Pycromanager-based microscopes."""
     
-    def __init__(self, core: Core, settings: sp_microscope_settings):
+    def __init__(self, core: Core, settings: sp_microscope_settings, studio: Studio = None):
         self.core = core
         self.settings = settings
-        self.studio = Studio()
+        self.studio = studio or Studio()
         
     def move_to_position(self, position: sp_position) -> None:
         if not self._is_coordinate_in_range(position):

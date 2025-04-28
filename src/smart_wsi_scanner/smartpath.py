@@ -30,13 +30,6 @@ import pprint
 
 from pycromanager import Core, Studio
 
-
-def init_pycromanager():
-    core = Core()
-    studio = Studio()
-    core.set_timeout_ms(20000)
-    return core, studio
-
 def is_mm_running() -> bool:
     """Check if Micro-Manager is running as a Windows executable."""
     import platform
@@ -54,17 +47,32 @@ def is_mm_running() -> bool:
     return False
 
 def init_pycromanager():
+    """Initialize Pycromanager connection."""
     if not is_mm_running():
-        #raise RuntimeError()
         print("Micro-Manager is not running. Please start Micro-Manager before initializing.")
-        return None,None
+        return None, None
     core = Core()
-    studio = Studio() 
+    studio = Studio()
     core.set_timeout_ms(20000)
     return core, studio
 
-core, studio = init_pycromanager()
+# Initialize core and studio only when needed
+_core = None
+_studio = None
 
+def get_core():
+    """Get or initialize the core instance."""
+    global _core, _studio
+    if _core is None:
+        _core, _studio = init_pycromanager()
+    return _core
+
+def get_studio():
+    """Get or initialize the studio instance."""
+    global _core, _studio
+    if _studio is None:
+        _core, _studio = init_pycromanager()
+    return _studio
 
 class smartpath:
     def __init__(self, core):
@@ -261,7 +269,9 @@ class smartpath:
     ):
         """Snaps an Image using MM Core and returns img,tags"""
         if core.is_sequence_running():
-            studio.live().set_live_mode(False)
+            studio = get_studio()
+            if studio is not None:
+                studio.live().set_live_mode(False)
         core.snap_image()
         tagged_image = core.get_tagged_image()
         tags = OrderedDict(sorted(tagged_image.tags.items()))

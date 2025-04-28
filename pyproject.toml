@@ -21,6 +21,7 @@ dependencies = [
     "pycromanager>=0.13.0",
     "pyyaml>=6.0.1",
     "matplotlib>=3.8.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
