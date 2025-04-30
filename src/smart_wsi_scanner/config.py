@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from dataclasses import make_dataclass
-from typing import Dict, Type, Optional
+from typing import Dict, Type, Optional, Any, List
 import yaml
 import os
 from pathlib import Path
@@ -8,7 +8,8 @@ from pathlib import Path
 
 ## property constraints
 @dataclass
-class _limits:
+class Limits:
+    """Stage movement limits"""
     low: float
     high: float
 
@@ -16,122 +17,277 @@ class _limits:
         if self.low > self.high:
             self.low, self.high = self.high, self.low
 
+    def __repr__(self):
+        return f"Limits(low={self.low:.1f}, high={self.high:.1f})"
+
 
 @dataclass
-class sp_position:
-    x: float
-    y: float
-    z: float = field(default=None)
-
-    def __post_init__(self):
-        if not isinstance(self.x, (float, int)):
-            print("X WRONG")
+class Position:
+    """Stage position coordinates"""
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
 
     def __repr__(self):
-        kws_values = [
-            f"{key}={value:.1f}" for key, value in self.__dict__.items() if value
-        ]
-        kws_none = [
-            f"{key}={value!r}" for key, value in self.__dict__.items() if not value
-        ]
-        kws = kws_values + kws_none
-        return f"{type(self).__name__}({', '.join(kws)})"
+        return f"Position(x={self.x:.1f}, y={self.y:.1f}, z={self.z:.1f})"
 
 
 ## instruments: stage, lens, detector, imaging mode
 
 
 @dataclass
-class sp_stage_settings:
-    xlimit: _limits = field(default=None)
-    ylimit: _limits = field(default=None)
-    zlimit: _limits = field(default=None)
+class StageConfig:
+    """Stage movement and limits configuration"""
+    x_limits: Limits = field(default_factory=lambda: Limits(-100000, 100000))
+    y_limits: Limits = field(default_factory=lambda: Limits(-100000, 100000))
+    z_limits: Limits = field(default_factory=lambda: Limits(0, 100000))
+    vendor: str = "Unknown"
+    home_position: Position = field(default_factory=Position)
 
 
 @dataclass
-class sp_objective_lens:
-    name: str
-    magnification: float
-    NA: float
-    WD: float = field(default=None)
+class ImagingConfig:
+    """Imaging mode configuration"""
+    mode_name: str = "default"
+    pixel_size: float = 1.0
+    magnification: float = 1.0
+    na: float = 0.1
+    working_distance: Optional[float] = None
+    exposure_time: Optional[float] = None
+    light_intensity: Optional[float] = None
 
 
 @dataclass
-class sp_detector:
-    width: int = field(default=None)
-    height: int = field(default=None)
+class LensConfig:
+    """Objective lens configuration"""
+    name: str = "default"
+    magnification: float = 1.0
+    na: float = 0.1
+    working_distance: Optional[float] = None
+    correction: str = "Plan"
 
 
 @dataclass
-class sp_imaging_mode:
-    name: str = field(default=None)
-    pixelsize: float = field(default=None)
-
-
-## microscope settings
-
-
-@dataclass
-class sp_microscope_settings:
-    stage: sp_stage_settings = field(default=None)
-    lens: sp_objective_lens = field(default=None)
-    detector: sp_detector = field(default=None)
-    imaging_mode: sp_imaging_mode = field(default=None)
-
-
-## instrument specific adaptation
+class DetectorConfig:
+    """Camera/detector configuration"""
+    name: str = "default"
+    width: int = 2048
+    height: int = 2048
+    pixel_size: float = 6.5
+    bit_depth: int = 16
+    vendor: str = "Unknown"
 
 
 @dataclass
-class sp_camm_settings(sp_microscope_settings):
-    slide_size: sp_objective_lens = field(default=None)
-    lamp: sp_stage_settings = field(default=None)
-    objective_slider: sp_detector = field(default=None)
+class Config:
+    """Unified configuration class for microscope settings
+    
+    Examples:
+        Basic usage with existing YAML files:
+        
+        >>> from smart_wsi_scanner.config import ConfigManager
+        >>> 
+        >>> # Initialize the config manager (automatically loads all .yml files)
+        >>> config_manager = ConfigManager()
+        >>> 
+        >>> # List all available configurations
+        >>> print("Available configs:", config_manager.list_configs())
+        >>> # Output: ['config_PPM', 'config_CAMM']
+        >>> 
+        >>> # Load a specific configuration
+        >>> ppm_config = config_manager.get_config('config_PPM')
+        >>> print(ppm_config)
+        >>> # Output will show all configuration details including:
+        >>> # - Stage limits
+        >>> # - Imaging modes
+        >>> # - Lens specifications
+        >>> # - Detector settings
+        >>> 
+        >>> # Access specific settings
+        >>> print("Stage X limits:", ppm_config.stage.x_limits)
+        >>> print("Imaging mode:", ppm_config.imaging.mode_name)
+        >>> print("Lens magnification:", ppm_config.lens.magnification)
+        >>> 
+        >>> # Create a new configuration
+        >>> new_config = Config(
+        ...     name="custom_config",
+        ...     description="Custom microscope settings",
+        ...     stage=StageConfig(
+        ...         x_limits=Limits(-50000, 50000),
+        ...         y_limits=Limits(-50000, 50000),
+        ...         z_limits=Limits(0, 10000)
+        ...     ),
+        ...     imaging=ImagingConfig(
+        ...         mode_name="BF_20x",
+        ...         pixel_size=0.2271,
+        ...         magnification=20.0,
+        ...         na=0.4
+        ...     )
+        ... )
+        >>> 
+        >>> # Save the new configuration
+        >>> config_manager.save_config('custom_config', new_config)
+        >>> 
+        >>> # Load it back
+        >>> loaded_config = config_manager.get_config('custom_config')
+        >>> print(loaded_config)
+        
+        Working with YAML files directly:
+        
+        >>> import yaml
+        >>> 
+        >>> # Load YAML file
+        >>> with open('config_PPM.yml', 'r') as f:
+        ...     yaml_data = yaml.safe_load(f)
+        >>> 
+        >>> # Convert to Config object
+        >>> config = Config.from_yaml(yaml_data)
+        >>> 
+        >>> # Modify settings
+        >>> config.stage.x_limits = Limits(-60000, 60000)
+        >>> 
+        >>> # Convert back to YAML
+        >>> yaml_data = config.to_yaml()
+        >>> 
+        >>> # Save to file
+        >>> with open('modified_config.yml', 'w') as f:
+        ...     yaml.dump(yaml_data, f)
+    """
+    name: str = "default"
+    version: str = "1.0"
+    description: str = "Default configuration"
+    
+    stage: StageConfig = field(default_factory=StageConfig)
+    imaging: ImagingConfig = field(default_factory=ImagingConfig)
+    lens: LensConfig = field(default_factory=LensConfig)
+    detector: DetectorConfig = field(default_factory=DetectorConfig)
+    
+    instrument_specific: Dict[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_yaml(cls, yaml_data: Dict[str, Any]) -> 'Config':
+        """Create a Config instance from YAML data"""
+        # Create default config
+        config = cls()
+        
+        # Update with YAML data if available
+        if 'name' in yaml_data:
+            config.name = yaml_data['name']
+        if 'version' in yaml_data:
+            config.version = yaml_data['version']
+        if 'description' in yaml_data:
+            config.description = yaml_data['description']
+            
+        # Update stage config
+        if 'stage' in yaml_data:
+            stage_data = yaml_data['stage']
+            if 'xlimit' in stage_data:
+                config.stage.x_limits = Limits(**stage_data['xlimit'])
+            if 'ylimit' in stage_data:
+                config.stage.y_limits = Limits(**stage_data['ylimit'])
+            if 'zlimit' in stage_data:
+                config.stage.z_limits = Limits(**stage_data['zlimit'])
+            if 'vendor' in stage_data:
+                config.stage.vendor = stage_data['vendor']
+                
+        # Update imaging config
+        if 'imagingMode' in yaml_data:
+            # Take the first imaging mode as default
+            mode_name, mode_data = next(iter(yaml_data['imagingMode'].items()))
+            config.imaging.mode_name = mode_name
+            if 'pixelSize_um' in mode_data:
+                config.imaging.pixel_size = mode_data['pixelSize_um']
+            if 'objectiveLens' in mode_data:
+                config.lens.name = mode_data['objectiveLens']
+                
+        # Update lens config
+        if 'objectiveLens' in yaml_data:
+            lens_data = yaml_data['objectiveLens']
+            if 'name' in lens_data:
+                config.lens.name = lens_data['name']
+            if 'magnification' in lens_data:
+                config.lens.magnification = lens_data['magnification']
+            if 'NA' in lens_data:
+                config.lens.na = lens_data['NA']
+            if 'WD' in lens_data:
+                config.lens.working_distance = lens_data['WD']
+                
+        # Update detector config
+        if 'detector' in yaml_data:
+            detector_data = yaml_data['detector']
+            if 'name' in detector_data:
+                config.detector.name = detector_data['name']
+            if 'width' in detector_data:
+                config.detector.width = detector_data['width']
+            if 'height' in detector_data:
+                config.detector.height = detector_data['height']
+                
+        return config
 
-class sp_ppm_settings(sp_microscope_settings):
-    slide_size: sp_objective_lens = field(default=None)
+    def to_yaml(self) -> Dict[str, Any]:
+        """Convert Config instance to YAML-compatible dictionary"""
+        return {
+            'name': self.name,
+            'version': self.version,
+            'description': self.description,
+            'stage': {
+                'xlimit': {'low': self.stage.x_limits.low, 'high': self.stage.x_limits.high},
+                'ylimit': {'low': self.stage.y_limits.low, 'high': self.stage.y_limits.high},
+                'zlimit': {'low': self.stage.z_limits.low, 'high': self.stage.z_limits.high},
+                'vendor': self.stage.vendor
+            },
+            'imaging': {
+                'mode_name': self.imaging.mode_name,
+                'pixel_size': self.imaging.pixel_size,
+                'magnification': self.imaging.magnification,
+                'na': self.imaging.na
+            },
+            'lens': {
+                'name': self.lens.name,
+                'magnification': self.lens.magnification,
+                'na': self.lens.na,
+                'working_distance': self.lens.working_distance
+            },
+            'detector': {
+                'name': self.detector.name,
+                'width': self.detector.width,
+                'height': self.detector.height,
+                'pixel_size': self.detector.pixel_size
+            }
+        }
 
-
-## YAML support
-
-
-def read_yaml_file(filename):
-    with open(filename, "r") as file:
-        data = yaml.safe_load(file)
-    return data
-
-
-def create_dataclass(name, data):
-    fields = []
-    for key, value in data.items():
-        if isinstance(value, dict):
-            # Recursively create nested data classes for nested dictionaries
-            # print(value)
-            nested_class = create_dataclass(key.capitalize(), value)
-            fields.append((key, nested_class))
-        else:
-            fields.append((key, type(value)))
-    DataClass = make_dataclass(name, fields)
-    # print(DataClass)
-    return DataClass
-
-
-def instantiate_dataclass(data_class, data):
-    kwargs = {}
-    for fieldx in data_class.__dataclass_fields__:
-        value = data[fieldx]
-        field_type = data_class.__dataclass_fields__[fieldx].type
-        if isinstance(value, dict):
-            value = instantiate_dataclass(field_type, value)
-        kwargs[fieldx] = value
-    return data_class(**kwargs)
-
-
-def yaml_to_dataclass(yaml_data):
-    DataClass = create_dataclass("DataClass", yaml_data)
-    instance = instantiate_dataclass(DataClass, yaml_data)
-    return instance
+    def __repr__(self) -> str:
+        """Pretty print configuration details"""
+        config_details = []
+        config_details.append(f"Config(name='{self.name}', version='{self.version}')")
+        config_details.append(f"Description: {self.description}")
+        
+        config_details.append("\nStage Configuration:")
+        config_details.append(f"  X Limits: {self.stage.x_limits}")
+        config_details.append(f"  Y Limits: {self.stage.y_limits}")
+        config_details.append(f"  Z Limits: {self.stage.z_limits}")
+        config_details.append(f"  Vendor: {self.stage.vendor}")
+        
+        config_details.append("\nImaging Configuration:")
+        config_details.append(f"  Mode: {self.imaging.mode_name}")
+        config_details.append(f"  Pixel Size: {self.imaging.pixel_size}")
+        config_details.append(f"  Magnification: {self.imaging.magnification}")
+        config_details.append(f"  NA: {self.imaging.na}")
+        
+        config_details.append("\nLens Configuration:")
+        config_details.append(f"  Name: {self.lens.name}")
+        config_details.append(f"  Magnification: {self.lens.magnification}")
+        config_details.append(f"  NA: {self.lens.na}")
+        if self.lens.working_distance:
+            config_details.append(f"  Working Distance: {self.lens.working_distance}")
+            
+        config_details.append("\nDetector Configuration:")
+        config_details.append(f"  Name: {self.detector.name}")
+        config_details.append(f"  Resolution: {self.detector.width}x{self.detector.height}")
+        config_details.append(f"  Pixel Size: {self.detector.pixel_size}")
+        config_details.append(f"  Bit Depth: {self.detector.bit_depth}")
+        
+        return "\n".join(config_details)
 
 
 class ConfigManager:
@@ -145,7 +301,7 @@ class ConfigManager:
         else:
             self.config_dir = Path(config_dir)
             
-        self._configs: Dict[str, Type[sp_microscope_settings]] = {}
+        self._configs: Dict[str, Config] = {}
         self._load_configs()
         
     def _load_configs(self) -> None:
@@ -157,20 +313,21 @@ class ConfigManager:
             config_name = file.stem
             self._configs[config_name] = self.load_config(str(file))
                 
-    def load_config(self, config_path: str) -> Type[sp_microscope_settings]:
+    def load_config(self, config_path: str) -> Config:
         """Load a single configuration file"""
-        data = read_yaml_file(config_path)
-        return yaml_to_dataclass(data)
+        with open(config_path, "r") as file:
+            data = yaml.safe_load(file)
+        return Config.from_yaml(data)
         
-    def get_config(self, name: str) -> Optional[Type[sp_microscope_settings]]:
+    def get_config(self, name: str) -> Optional[Config]:
         """Get configuration by name"""
         return self._configs.get(name)
         
-    def save_config(self, name: str, config: sp_microscope_settings) -> None:
+    def save_config(self, name: str, config: Config) -> None:
         """Save configuration to file"""
         config_path = self.config_dir / f"{name}.yml"
         with open(config_path, 'w') as f:
-            yaml.dump(config.__dict__, f)
+            yaml.dump(config.to_yaml(), f)
         self._configs[name] = config
         
     def list_configs(self) -> list:
@@ -178,49 +335,14 @@ class ConfigManager:
         return list(self._configs.keys())
 
     def __repr__(self) -> str:
-        """Pretty print configuration details"""
+        """Pretty print configuration manager details"""
         config_details = []
         config_details.append("ConfigManager:")
         config_details.append(f"  Configuration Directory: {self.config_dir}")
         config_details.append("  Available Configurations:")
         
         for name, config in self._configs.items():
-            config_details.append(f"    {name}:")
-            if hasattr(config, 'stage'):
-                stage = config.stage
-                if stage:
-                    config_details.append("      Stage:")
-                    if hasattr(stage, 'xlimit'):
-                        config_details.append(f"        X Limits: {stage.xlimit}")
-                    if hasattr(stage, 'ylimit'):
-                        config_details.append(f"        Y Limits: {stage.ylimit}")
-                    if hasattr(stage, 'zlimit'):
-                        config_details.append(f"        Z Limits: {stage.zlimit}")
-            
-            if hasattr(config, 'imaging_mode'):
-                imaging_mode = config.imaging_mode
-                if imaging_mode:
-                    config_details.append("      Imaging Mode:")
-                    config_details.append(f"        Name: {imaging_mode.name}")
-                    config_details.append(f"        Pixel Size: {imaging_mode.pixelsize}")
-            
-            if hasattr(config, 'lens'):
-                lens = config.lens
-                if lens:
-                    config_details.append("      Lens:")
-                    config_details.append(f"        Name: {lens.name}")
-                    config_details.append(f"        Magnification: {lens.magnification}")
-                    config_details.append(f"        NA: {lens.NA}")
-                    if lens.WD:
-                        config_details.append(f"        Working Distance: {lens.WD}")
-            
-            if hasattr(config, 'detector'):
-                detector = config.detector
-                if detector:
-                    config_details.append("      Detector:")
-                    if detector.width:
-                        config_details.append(f"        Width: {detector.width}")
-                    if detector.height:
-                        config_details.append(f"        Height: {detector.height}")
+            config_details.append(f"\n  {name}:")
+            config_details.append(str(config))
         
         return "\n".join(config_details)
