@@ -1,7 +1,9 @@
-
 from smart_wsi_scanner.smartpath import init_pycromanager
 from smart_wsi_scanner.config import ConfigManager, sp_position
 from smart_wsi_scanner.hardware import PycromanagerHardware
+import argparse
+import sys
+
 core, studio = init_pycromanager()
 config_manager = ConfigManager()
 if not core:
@@ -20,13 +22,25 @@ def get_stageZ():
 def get_position():
     print(hardware.get_current_position())
     
-def move_stageXY(x,y,z):
-   hardware.move_to_position(sp_position(x=x,y=y,z=z))
-   print(hardware.get_current_position())
+def move_stageXY():
+    """Move stage to specified XY position, optionally with Z."""
+    parser = argparse.ArgumentParser(description='Move XY stage')
+    parser.add_argument('--x', type=float, help='X position')
+    parser.add_argument('--y', type=float, help='Y position')
+    parser.add_argument('--z', type=float, help='Z position (optional)')
+    args = parser.parse_args(sys.argv[2:])
     
-def move_stageZ(z):
-   hardware.move_to_position(sp_position(z=z))
-   print(hardware.get_current_position())
+    hardware.move_to_position(sp_position(x=args.x, y=args.y, z=args.z))
+    print(hardware.get_current_position())
+    
+def move_stageZ():
+    """Move stage to specified Z position."""
+    parser = argparse.ArgumentParser(description='Move Z stage')
+    parser.add_argument('position', type=float, help='Z position')
+    args = parser.parse_args(sys.argv[2:])
+    
+    hardware.move_to_position(sp_position(z=args.position))
+    print(hardware.get_current_position())
     
 ## Kinesis control for rotational stage for PPM
 # TODO: need to go to smartpath soon   
@@ -40,11 +54,16 @@ def get_stageR():
     kinesis_pos = core.get_position(brushless)
     print(f'{thor_to_ppm(kinesis_pos):.2f} deg')
     
-def move_stageR(angle):
-    newAngle = ppm_to_thor(angle)
+def move_stageR():
+    """Move rotation stage to specified angle."""
+    parser = argparse.ArgumentParser(description='Move rotation stage')
+    parser.add_argument('angle', type=float, help='Rotation angle in degrees')
+    args = parser.parse_args(sys.argv[2:])
+    
+    newAngle = ppm_to_thor(args.angle)
     core.set_position(brushless, newAngle)
     get_stageR()
-    
+
 
 
 
