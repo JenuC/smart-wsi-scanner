@@ -203,12 +203,9 @@ class smartpath:
     def move_to_position(
         core: Core, position: sp_position, settings: sp_microscope_settings
     ):
-        if not position.x:
-            position.x = smartpath.get_current_position(core).x
-        if not position.y:
-            position.y = smartpath.get_current_position(core).y
-        if not position.z:
-            position.z = smartpath.get_current_position(core).z
+        # Get current position and populate any missing coordinates
+        current_position = smartpath.get_current_position(core)
+        position.populate_missing(current_position)
 
         # check position in range
         if smartpath.is_coordinate_in_range(settings, position):

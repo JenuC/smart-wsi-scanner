@@ -19,20 +19,33 @@ class _limits:
 
 @dataclass
 class sp_position:
-    x: float
-    y: float
+    x: float = field(default=None)
+    y: float = field(default=None)
     z: float = field(default=None)
 
     def __post_init__(self):
-        if not isinstance(self.x, (float, int)):
+        if self.x is not None and not isinstance(self.x, (float, int)):
             print("X WRONG")
+        if self.y is not None and not isinstance(self.y, (float, int)):
+            print("Y WRONG")
+        if self.z is not None and not isinstance(self.z, (float, int)):
+            print("Z WRONG")
+
+    def populate_missing(self, current_position: 'sp_position') -> None:
+        """Populate missing coordinates with values from current_position."""
+        if self.x is None:
+            self.x = current_position.x
+        if self.y is None:
+            self.y = current_position.y
+        if self.z is None:
+            self.z = current_position.z
 
     def __repr__(self):
         kws_values = [
-            f"{key}={value:.1f}" for key, value in self.__dict__.items() if value
+            f"{key}={value:.1f}" for key, value in self.__dict__.items() if value is not None
         ]
         kws_none = [
-            f"{key}={value!r}" for key, value in self.__dict__.items() if not value
+            f"{key}={value!r}" for key, value in self.__dict__.items() if value is None
         ]
         kws = kws_values + kws_none
         return f"{type(self).__name__}({', '.join(kws)})"
@@ -176,51 +189,3 @@ class ConfigManager:
     def list_configs(self) -> list:
         """List all available configurations"""
         return list(self._configs.keys())
-
-    def __repr__(self) -> str:
-        """Pretty print configuration details"""
-        config_details = []
-        config_details.append("ConfigManager:")
-        config_details.append(f"  Configuration Directory: {self.config_dir}")
-        config_details.append("  Available Configurations:")
-        
-        for name, config in self._configs.items():
-            config_details.append(f"    {name}:")
-            if hasattr(config, 'stage'):
-                stage = config.stage
-                if stage:
-                    config_details.append("      Stage:")
-                    if hasattr(stage, 'xlimit'):
-                        config_details.append(f"        X Limits: {stage.xlimit}")
-                    if hasattr(stage, 'ylimit'):
-                        config_details.append(f"        Y Limits: {stage.ylimit}")
-                    if hasattr(stage, 'zlimit'):
-                        config_details.append(f"        Z Limits: {stage.zlimit}")
-            
-            if hasattr(config, 'imaging_mode'):
-                imaging_mode = config.imaging_mode
-                if imaging_mode:
-                    config_details.append("      Imaging Mode:")
-                    config_details.append(f"        Name: {imaging_mode.name}")
-                    config_details.append(f"        Pixel Size: {imaging_mode.pixelsize}")
-            
-            if hasattr(config, 'lens'):
-                lens = config.lens
-                if lens:
-                    config_details.append("      Lens:")
-                    config_details.append(f"        Name: {lens.name}")
-                    config_details.append(f"        Magnification: {lens.magnification}")
-                    config_details.append(f"        NA: {lens.NA}")
-                    if lens.WD:
-                        config_details.append(f"        Working Distance: {lens.WD}")
-            
-            if hasattr(config, 'detector'):
-                detector = config.detector
-                if detector:
-                    config_details.append("      Detector:")
-                    if detector.width:
-                        config_details.append(f"        Width: {detector.width}")
-                    if detector.height:
-                        config_details.append(f"        Height: {detector.height}")
-        
-        return "\n".join(config_details)

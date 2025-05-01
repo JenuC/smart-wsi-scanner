@@ -45,15 +45,12 @@ class PycromanagerHardware(MicroscopeHardware):
         self.studio = studio or Studio()
         
     def move_to_position(self, position: sp_position) -> None:
+        # Get current position and populate any missing coordinates
+        current_position = self.get_current_position()
+        position.populate_missing(current_position)
+        
         if not self._is_coordinate_in_range(position):
             raise ValueError("Position out of range")
-            
-        if not position.x:
-            position.x = self.get_current_position().x
-        if not position.y:
-            position.y = self.get_current_position().y
-        if not position.z:
-            position.z = self.get_current_position().z
             
         if self.core.get_focus_device() != self.settings.stage.z_stage:
             self.core.set_focus_device(self.settings.focus_device)
