@@ -77,16 +77,25 @@ class PycromanagerHardware(MicroscopeHardware):
         tagged_image = self.core.get_tagged_image()
         tags = OrderedDict(sorted(tagged_image.tags.items()))
         
+        color_camera = False
         # Handle QCamera specific processing
         if self.core.get_property("Core", "Camera") == "QCamera":
             if self.core.get_property("QCamera", "Color") == "ON":
-                pixels = np.reshape(tagged_image.pix, 
-                                newshape=[tags["Height"], tags["Width"], 4])
-                pixels = pixels[:, :, 0:3]  # Remove alpha
-                pixels = np.flip(pixels, 2)  # Flip channels
-                return pixels, tags
-                
-        return tagged_image.pix, tags
+                color_camera = True
+        if self.core.get_property("Core", "Camera") == "MicroPublisher6":
+            if self.core.get_property("MicroPublisher6", "Color") == "ON":
+                color_camera = True
+        if color_camera:
+            pixels = np.reshape(tagged_image.pix, 
+                            newshape=[tags["Height"], tags["Width"], 4])
+            pixels = pixels[:, :, 0:3]  # Remove alpha
+            pixels = np.flip(pixels, 2)  # Flip channels
+            return pixels, tags
+        else:
+            pixels = np.reshape(tagged_image.pix, 
+                            newshape=[tags["Height"], tags["Width"]])
+            return pixels, tags
+        #return tagged_image.pix, tags
         
     def set_objective(self, objective_name: str) -> None:
         current_slider_position = self.core.get_property(*self.settings.obj_slider)
