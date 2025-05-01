@@ -8,24 +8,45 @@ if not core:
     print("Failed to initialize Micro-Manager connection")
 ppm_settings = config_manager.get_config('config_PPM')
 hardware = PycromanagerHardware(core, ppm_settings, studio)
+brushless = "KBD101_Thor_Rotation"
+current_position_xyz = hardware.get_current_position()
 
 def get_stageXY():
-    print(hardware.get_current_position())
+    print(f'{current_position_xyz.x,current_position_xyz.y}')
         
 def get_stageZ():
+    print(current_position_xyz.z)
+
+def get_position():
     print(hardware.get_current_position())
     
-def get_stageP():
-    print(hardware.get_current_position())
+def move_stageXY(x,y,z):
+   hardware.move_to_position(sp_position(x=x,y=y,z=z))
+   print(hardware.get_current_position())
     
-def move_stageXY():
-    print(hardware.get_current_position())
+def move_stageZ(z):
+   hardware.move_to_position(sp_position(z=z))
+   print(hardware.get_current_position())
     
-def move_stageZ():
-    print(hardware.get_current_position())
+## Kinesis control for rotational stage for PPM
+# TODO: need to go to smartpath soon   
+def ppm_to_thor(angle):
+    return (-2*angle + 276)
+
+def thor_to_ppm(kinesis_pos):
+    return (276 - kinesis_pos) / 2
+
+def get_stageR():
+    kinesis_pos = core.get_position(brushless)
+    print(f'{thor_to_ppm(kinesis_pos):.2f} deg')
     
-def move_stageP():
-    print(hardware.get_current_position())
+def move_stageR(angle):
+    newAngle = ppm_to_thor(angle)
+    core.set_position(brushless, newAngle)
+    get_stageR()
+    
+
+
 
     
     
