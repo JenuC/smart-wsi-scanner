@@ -21,3 +21,5 @@ acquisition-configs/*
 
 ## 
 .vscode
+*.tif
+*.egg-info
