@@ -23,21 +23,26 @@ def get_position():
     print(hardware.get_current_position())
     
 def move_stageXY():
-    parser = argparse.ArgumentParser(description='Move XY stage')
-    parser.add_argument('x', type=float, help='X position')
-    parser.add_argument('y', type=float, help='Y position')
-    parser.add_argument('z', type=float, help='Z position (optional)')
-    args = parser.parse_args(sys.argv[2:])
+    parser = argparse.ArgumentParser(description='Move XYZ stage')
+    
+    # All arguments use flags and are not positional
+    parser.add_argument('-x', '--x', type=float, required=True, help='X position')
+    parser.add_argument('-y', '--y', type=float, required=True, help='Y position')
+    parser.add_argument('-z', '--z', type=float, required=False, help='Z position (optional)')
+
+    args = parser.parse_args()
+
     pos_kwargs = {'x': args.x, 'y': args.y}
     if args.z is not None:
         pos_kwargs['z'] = args.z
+
     hardware.move_to_position(sp_position(**pos_kwargs))
     print(hardware.get_current_position())
     
 def move_stageZ():
     parser = argparse.ArgumentParser(description='Move Z stage')
-    parser.add_argument('z', type=float, help='Z position')
-    args = parser.parse_args(sys.argv[2:])
+    parser.add_argument('-z', '--z', type=float, required=True, help='Z position')
+    args = parser.parse_args()
     
     hardware.move_to_position(sp_position(z=args.z))
     print(hardware.get_current_position())
@@ -52,7 +57,7 @@ def thor_to_ppm(kinesis_pos):
 
 def get_stageR():
     kinesis_pos = core.get_position(brushless)
-    print(f'{thor_to_ppm(kinesis_pos):.2f} deg')
+    print(f'{thor_to_ppm(kinesis_pos):.2f}')
     
 def move_stageR():
     """Move rotation stage to specified angle."""
