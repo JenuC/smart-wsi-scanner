@@ -29,8 +29,10 @@ def move_stageXY():
     parser.add_argument('--y', type=float, help='Y position')
     parser.add_argument('--z', type=float, help='Z position (optional)')
     args = parser.parse_args(sys.argv[2:])
-    
-    hardware.move_to_position(sp_position(x=args.x, y=args.y, z=args.z))
+    pos_kwargs = {'x': args.x, 'y': args.y}
+    if args.z is not None:
+        pos_kwargs['z'] = args.z
+    hardware.move_to_position(sp_position(**pos_kwargs))
     print(hardware.get_current_position())
     
 def move_stageZ():
