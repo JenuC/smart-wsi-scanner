@@ -110,6 +110,8 @@ class sp_ppm_settings(sp_microscope_settings):
 
 
 def read_yaml_file(filename):
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"The file '{filename}' does not exist.") 
     with open(filename, "r") as file:
         data = yaml.safe_load(file)
     return data

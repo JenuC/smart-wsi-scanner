@@ -108,14 +108,14 @@ class PycromanagerHardware(MicroscopeHardware):
             if self.core.get_property("MicroPublisher6", "Color") == "ON":
                 color_camera = True
         if color_camera:
-            pixels = np.reshape(tagged_image.pix, 
-                            newshape=[tags["Height"], tags["Width"], 4])
+            newshape=[tags["Height"], tags["Width"], 4]
+            pixels = tagged_image.pix.reshape(newshape)
             pixels = pixels[:, :, 0:3]  # Remove alpha
             pixels = np.flip(pixels, 2)  # Flip channels
             return pixels, tags
         else:
-            pixels = np.reshape(tagged_image.pix, 
-                            newshape=[tags["Height"], tags["Width"]])
+            newshape=[tags["Height"], tags["Width"]]
+            pixels = tagged_image.pix.reshape(newshape)
             return pixels, tags
         
     def set_objective(self, objective_name: str) -> None:
