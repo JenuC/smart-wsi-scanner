@@ -13,10 +13,19 @@ if is_mm_running():
     
 # Initialize core
 core = CMMCore()
-#"C:\Program Files\Micro-Manager-2.0\MMConfig_demo.cfg"
 
-mm_dir = r"C:\Program Files\Micro-Manager-2.0"
+## A Demo #"C:\Program Files\Micro-Manager-2.0\MMConfig_demo.cfg"
+#mm_dir = r"C:\Program Files\Micro-Manager-2.0"
+#core.loadSystemConfiguration(os.path.join(mm_dir, "MMConfig_demo.cfg"))
+
+## B nightly on BOCK_00124_ 
+## Mike's BGRB-correction + CFA-OFF loaded config
+#"C:\Program Files\Micro-Manager-2.0\PPM-20241016-colorbalance-v3.cfg"
+mm_dir =r'C:\Program Files\Micro-Manager-2.0-20250418'
 core.setDeviceAdapterSearchPaths([mm_dir])
-core.loadSystemConfiguration(os.path.join(mm_dir, "MMConfig_demo.cfg"))
+# config is on another folder!
+config_location = r'C:\Program Files\Micro-Manager-2.0\PPM-20241016-colorbalance-v3.cfg'
+core.loadSystemConfiguration(config_location)
 
 print(core.getPosition())
+print(core.getFocusDevice())
