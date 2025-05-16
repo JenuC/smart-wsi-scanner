@@ -111,7 +111,14 @@ def acquisitionWorkflow():
     #TODO exec : minimal_qupathrunner_v3.py
     pass
     
+def launch_modern_ui():
+    """Launch the modern UI interface"""
+    from smart_wsi_scanner.modern_snap_ui import main
+    main()
+    
 #TODO : quit the main and break multiprocess for Tk
 #TODO: move to custom-tk
 if __name__=='__main__':
-    snap_with_preview()
+    # Uncomment the line below to use modern UI
+    launch_modern_ui()
+    #snap_with_preview()
