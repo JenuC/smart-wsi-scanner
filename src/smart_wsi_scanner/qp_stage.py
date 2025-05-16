@@ -48,7 +48,7 @@ def move_stageZ():
     print(hardware.get_current_position())
     
 ## Kinesis control for rotational stage for PPM
-# TODO: need to go to smartpath soon   
+# TODO: need to move some of this to smartpath?   
 def ppm_to_thor(angle):
     return (-2*angle + 276)
 
@@ -70,8 +70,32 @@ def move_stageR():
     core.wait_for_device(brushless)
     get_stageR()
 
+from multiprocessing import Process
+from tkinter import Tk, Label
+from PIL import Image, ImageTk
 
+def image_window():
+    img = snap_image()
+    p = Process(target=run_tk_image_window, args=(img,))
+    p.start()    
+    return p
 
-
+def snap_with_preview():
+    viewer = image_window()
+    viewer.join()  
+    
+def snap_image():
+    image, metadata = hardware.snap_image()
+    return image 
+  
+def run_tk_image_window(image_array):
+    image = Image.fromarray(image_array.astype('uint8'), 'RGB')
+    root = Tk()
+    root.title("QP-test")
+    tk_img = ImageTk.PhotoImage(image)
+    label = Label(root, image=tk_img)
+    label.pack()
+    root.mainloop()
     
     
+snap_with_preview()
