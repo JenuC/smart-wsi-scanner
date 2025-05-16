@@ -107,9 +107,7 @@ def run_tk_image_window():
     # Run the Tkinter event loop
     root.mainloop()
 
-def acquisitionWorkflow():
-    #TODO exec : minimal_qupathrunner_v3.py
-    pass
+
     
 def launch_modern_ui():
     """Launch the modern UI interface"""

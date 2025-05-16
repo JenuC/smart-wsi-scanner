@@ -71,3 +71,8 @@ def move_stageR():
     core.set_position(brushless, newAngle)
     core.wait_for_device(brushless)
     get_stageR()
+
+def acquisitionWorkflow():
+    #TODO exec : minimal_qupathrunner_v3.py
+    print ("running acq from tile-confg")
+    #pass
