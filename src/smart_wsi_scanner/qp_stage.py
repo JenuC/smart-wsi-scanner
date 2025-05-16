@@ -73,52 +73,97 @@ def move_stageR():
     get_stageR()
 
 from multiprocessing import Process
-from tkinter import Tk, Label
+from tkinter import Tk, Label, Button, Frame
 from PIL import Image, ImageTk
 
 def image_window():
-    img = snap_image()
-    p = Process(target=run_tk_image_window, args=(img,))
+    # Create a process for the Tkinter window
+    p = Process(target=run_tk_image_window)
     p.start()    
     return p
 
 def snap_with_preview():
     viewer = image_window()
-    viewer.join()  
+    viewer.join()
     
 def snap_image():
     image, metadata = hardware.snap_image()
-    return image 
-  
-def run_tk_image_window(image_array):
-    
-    if len(image_array.shape) == 2:
-        # Grayscale image
-        if image_array.dtype == np.uint16 or image_array.dtype == np.int16:
-            # Convert 16-bit to 8-bit using skimage's rescaling
-            image_array = img_as_ubyte(exposure.rescale_intensity(image_array))
-        image = Image.fromarray(image_array.astype('uint8'), 'L')
-    else:
-        # RGB image (assuming 3D array with RGB channels)
-        try:
+    return image
+
+def process_image(image_array):
+    """Process image for display - converting from various formats to PIL Image"""
+    if image_array is None:
+        return None
+        
+    try:
+        if len(image_array.shape) == 2:
+            # Grayscale image
             if image_array.dtype == np.uint16 or image_array.dtype == np.int16:
-                # Convert 16-bit RGB to 8-bit RGB
+                # Convert 16-bit to 8-bit using skimage's rescaling
                 image_array = img_as_ubyte(exposure.rescale_intensity(image_array))
-            image = Image.fromarray(image_array.astype('uint8'), 'RGB')
-        except ValueError:
-            print("Error reading image")
-    
-    if image.size[0] > 1000:
-        image = image.resize((270, 200), Image.LANCZOS)
-    
+            image = Image.fromarray(image_array.astype('uint8'), 'L')
+        else:
+            # RGB image (assuming 3D array with RGB channels)
+            try:
+                if image_array.dtype == np.uint16 or image_array.dtype == np.int16:
+                    # Convert 16-bit RGB to 8-bit RGB
+                    image_array = img_as_ubyte(exposure.rescale_intensity(image_array))
+                image = Image.fromarray(image_array.astype('uint8'), 'RGB')
+            except ValueError:
+                print("Error reading image")
+                return None
+                
+        if image.size[0] > 1000:
+            image = image.resize((270, 200), Image.LANCZOS)
+        
+        return image
+    except Exception as e:
+        print(f"Error processing image: {str(e)}")
+        return None
+  
+def run_tk_image_window():
+    """Create a Tkinter window with an image display and snap button"""
     root = Tk()
     root.title("QP-test")
-    tk_img = ImageTk.PhotoImage(image)
-    label = Label(root, image=tk_img)
-    label.pack()
+    
+    # Create frame for the image
+    image_frame = Frame(root, width=270, height=200, bg="grey")
+    image_frame.pack(pady=10)
+    
+    # Label to hold the image
+    image_label = Label(image_frame)
+    image_label.pack()
+    
+    # Variable to hold the PhotoImage reference
+    photo_image = None
+    
+    def update_image():
+        """Snap a new image and update the display"""
+        nonlocal photo_image
+        
+        # Snap new image
+        image_array = snap_image()
+        
+        # Process image
+        pil_image = process_image(image_array)
+        
+        if pil_image:
+            # Update the displayed image
+            photo_image = ImageTk.PhotoImage(pil_image)
+            image_label.config(image=photo_image)
+            snap_button.config(text="Snap Again")
+    
+    # Button to snap image
+    snap_button = Button(root, text="Snap Image", command=update_image)
+    snap_button.pack(pady=10)
+    
+    # Close button
+    close_button = Button(root, text="Close", command=root.destroy)
+    close_button.pack(pady=5)
+    
+    # Run the Tkinter event loop
     root.mainloop()
-    
-    
+
 def acquisitionWorkflow():
     #TODO exec : minimal_qupathrunner_v3.py
     pass
