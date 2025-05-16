@@ -3,6 +3,8 @@ from smart_wsi_scanner.config import ConfigManager, sp_position
 from smart_wsi_scanner.hardware import PycromanagerHardware
 import argparse
 import sys
+import numpy as np
+from skimage import img_as_ubyte, exposure
 
 core, studio = init_pycromanager()
 config_manager = ConfigManager()
@@ -89,8 +91,26 @@ def snap_image():
     return image 
   
 def run_tk_image_window(image_array):
-    image = Image.fromarray(image_array.astype('uint8'), 'RGB')
-    image = image.resize((270, 200), Image.LANCZOS)
+    
+    if len(image_array.shape) == 2:
+        # Grayscale image
+        if image_array.dtype == np.uint16 or image_array.dtype == np.int16:
+            # Convert 16-bit to 8-bit using skimage's rescaling
+            image_array = img_as_ubyte(exposure.rescale_intensity(image_array))
+        image = Image.fromarray(image_array.astype('uint8'), 'L')
+    else:
+        # RGB image (assuming 3D array with RGB channels)
+        try:
+            if image_array.dtype == np.uint16 or image_array.dtype == np.int16:
+                # Convert 16-bit RGB to 8-bit RGB
+                image_array = img_as_ubyte(exposure.rescale_intensity(image_array))
+            image = Image.fromarray(image_array.astype('uint8'), 'RGB')
+        except ValueError:
+            print("Error reading image")
+    
+    if image.size[0] > 1000:
+        image = image.resize((270, 200), Image.LANCZOS)
+    
     root = Tk()
     root.title("QP-test")
     tk_img = ImageTk.PhotoImage(image)
