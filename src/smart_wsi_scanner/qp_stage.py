@@ -90,6 +90,7 @@ def snap_image():
   
 def run_tk_image_window(image_array):
     image = Image.fromarray(image_array.astype('uint8'), 'RGB')
+    image = image.resize((270, 200), Image.LANCZOS)
     root = Tk()
     root.title("QP-test")
     tk_img = ImageTk.PhotoImage(image)
@@ -98,4 +99,11 @@ def run_tk_image_window(image_array):
     root.mainloop()
     
     
-snap_with_preview()
+def acquisitionWorkflow():
+    #TODO exec : minimal_qupathrunner_v3.py
+    pass
+    
+#TODO : quit the main and break multiprocess for Tk
+#TODO: move to custom-tk
+if __name__=='__main__':
+    snap_with_preview()
