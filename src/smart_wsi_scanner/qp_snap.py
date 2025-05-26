@@ -111,7 +111,9 @@ def run_tk_image_window():
     
 def launch_modern_ui():
     """Launch the modern UI interface"""
-    from smart_wsi_scanner.modern_snap_ui import main
+    #from smart_wsi_scanner.modern_snap_ui import main
+    #from smart_wsi_scanner.customtkinter_snap_ui import main
+    from smart_wsi_scanner.ttkbootstrap_snap_ui import main
     main()
     
 #TODO : quit the main and break multiprocess for Tk
