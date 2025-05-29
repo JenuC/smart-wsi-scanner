@@ -1,4 +1,6 @@
 import sys
+import os
+
 from pathlib import Path
 from smart_wsi_scanner.smartpath import smartpath, init_pycromanager
 from smart_wsi_scanner.config import ConfigManager, sp_position
@@ -6,12 +8,44 @@ from smart_wsi_scanner.hardware import PycromanagerHardware
 import re
 import numpy as np
 from pprint import pprint as dict_printer
+import pprint
+import traceback
+#######
+from smart_wsi_scanner.smartpath import sp_microscope_settings, sp_position, smartpath, Core
+
+import numpy as np
+
+# af_min_distance
+import matplotlib
+import matplotlib.pyplot as plt
+
+# slide scan
+import tifffile as tf
+import os
+
+# QuPath Helper
+import re
+
+# qupath_helper
+from scipy.spatial.distance import cdist
+
+
+import uuid
+import pathlib
+#########
+
 
 def main():
-    # Parse command line arguments or use defaults
-    if len(sys.argv) == 5:
-        _, yaml_file_path, projects_folder_path, sample_label, scan_type, region = sys.argv
+    
+    if len(sys.argv) == 6:
+        _, yaml_file_path, projects_folder_path, sample_label, scan_type, region_name = sys.argv
     else:
+        # C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe, 
+        # D:\2025QPSC\smartpath_configurations\config_PPM.yml, 
+        # D:\2025QPSC\data, 
+        # test2, 
+        # BF_10x_1, 
+        # bounds]
         yaml_file_path = r'D:\2025QPSC\smartpath_configurations\config_PPM.yml'
         projects_folder_path = r"D:\2025QPSC\data"
         sample_label = "2"
@@ -23,7 +57,17 @@ def main():
         #  2,
         #  BF_10x_1,
         #  bounds
-
+    modality = '_'.join(scan_type.split('_')[:2])
+    
+    print("  Modality:", modality)
+    
+    # print("Arguments received:")
+    print("  YAML file:", yaml_file_path)
+    print("  Projects folder:", projects_folder_path)
+    print("  Sample label:", sample_label)
+    print("  Scan type:", scan_type)
+    print("  Region:", region_name)
+    
     # Initialize Micro-Manager connection
     core, studio = init_pycromanager()
     if not core:
@@ -94,9 +138,13 @@ def main():
         
         # Snap image
         image, metadata = hardware.snap_image()
-        
-        # Save image
+
         image_path = output_path / filename
+        ###
+        #This print statement is absolutely necessary for the progress bar in QuPath to work
+        ###
+        print("Tile saved: "+str(image_path), flush=True)
+        # Save image
         # FIXME : change ddataclass to dict to read var modality 
         smartpath_qpscope.ome_writer(
                 filename=image_path,
@@ -123,32 +171,20 @@ def main():
     #            f.write(f"{sample_label}_{scan_type}_{i:0{suffix_length}}.tif; ; ({pos.x}, {pos.y}, {pos.z})\n")
 
 if __name__ == "__main__":
-    main() 
+    try:
+        print("Python Tile Acquisition Starting", flush=True)
+        print("CWD:", os.getcwd(), "ARGV:", sys.argv, "ENV:", dict(os.environ), flush=True)
+        main()
+        print("Python Tile Acquisition Done", flush=True)
+    except Exception as e:
+        print("Fatal error:", file=sys.stderr, flush=True)
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        sys.stdout.flush()
+        sys.exit(1)
     
     
-    
-    
-from smart_wsi_scanner.smartpath import sp_microscope_settings, sp_position, smartpath, Core
 
-import numpy as np
-
-# af_min_distance
-import matplotlib
-import matplotlib.pyplot as plt
-
-# slide scan
-import tifffile as tf
-import os
-
-# QuPath Helper
-import re
-
-# qupath_helper
-from scipy.spatial.distance import cdist
-
-
-import uuid
-import pathlib
 
 
 class smartpath_qpscope:
