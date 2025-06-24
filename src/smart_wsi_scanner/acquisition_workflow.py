@@ -37,8 +37,8 @@ import pathlib
 
 def main():
     
-    if len(sys.argv) == 6:
-        _, yaml_file_path, projects_folder_path, sample_label, scan_type, region_name = sys.argv
+    if len(sys.argv) > 5:
+        _, yaml_file_path, projects_folder_path, sample_label, scan_type, region_name, angles_str  = sys.argv
     else:
         # C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe, 
         # D:\2025QPSC\smartpath_configurations\config_PPM.yml, 
@@ -46,6 +46,7 @@ def main():
         # test2, 
         # BF_10x_1, 
         # bounds]
+        print("DIDNT FIND 6 ARGUMENTS: USING DEFAULTS! ")
         yaml_file_path = r'D:\2025QPSC\smartpath_configurations\config_PPM.yml'
         projects_folder_path = r"D:\2025QPSC\data"
         sample_label = "2"
@@ -58,7 +59,9 @@ def main():
         #  BF_10x_1,
         #  bounds
     modality = '_'.join(scan_type.split('_')[:2])
-    
+    print(f"Angles arg: {angles_str}")
+    # Remove parentheses and split by space
+    angles = [float(x) for x in angles_str.strip("()").split()]
     print("  Modality:", modality)
     
     # print("Arguments received:")
@@ -99,6 +102,9 @@ def main():
     # Create project paths
     project_path = Path(projects_folder_path) / sample_label
     output_path = project_path / scan_type / region_name
+    if not output_path.exists:
+        output_path.mkdir(parents=True, exist_ok=True)
+        
     tile_config_path = output_path / "TileConfiguration.txt"
 
     # Read tile configuration
@@ -111,12 +117,16 @@ def main():
                 #pattern = r"^([\w\-\.]+); ; \(\s*([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)"
                 m = re.match(pattern, line)
                 if m:
+                    z = None
                     filename = m.group(1)
                     x = float(m.group(2))
                     y = float(m.group(3))
-                    #z = float(m.group(4))               
-                    #z = core.getPosition()         
-                    z = -23.0
+                    try: 
+                        z = float(m.group(4))               
+                    except Exception as e :
+                        print(e)
+                        z = core.get_position()         
+                    #z = -23.0                    
                     positions.append([sp_position(x, y, z),filename])
 
     
