@@ -163,7 +163,7 @@ class smartpath_qpscope:
             smartpath_qpscope.ome_writer(
                 filename=os.path.join(save_folder, file_id + ".tif"),
                 pixel_size_um=camm.imaging_mode.pixelsize,
-                data=np.flipud(sp.white_balance(img)),
+                data=sp.white_balance(img),
             )
 
             current_props = sp.get_device_properties(core)
