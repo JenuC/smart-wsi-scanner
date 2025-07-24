@@ -47,9 +47,7 @@ class smartpath_qpscope:
         left_bottom = np.argmin(np.array([x[0] ** 2 + x[1] ** 2 for x in positions]))
         xa = positions[left_bottom]
         distances = np.round(cdist([xa], positions).ravel(), 2)
-        positions_d = {
-            ix: (positions[ix], distances[ix]) for ix in range(len(distances))
-        }
+        positions_d = {ix: (positions[ix], distances[ix]) for ix in range(len(distances))}
         positions_d = dict(sorted(positions_d.items(), key=lambda item: item[1][1]))
         return positions_d
 
@@ -69,9 +67,7 @@ class smartpath_qpscope:
         return fov_x, fov_y
 
     @staticmethod
-    def get_dummy_coordinates(
-        nX: int, nY: int, p1: sp_position, camm: sp_microscope_settings
-    ):
+    def get_dummy_coordinates(nX: int, nY: int, p1: sp_position, camm: sp_microscope_settings):
         fov_x, fov_y = smartpath_qpscope.get_fov(camm)
         positions = []
         for k in range(nX):
@@ -81,9 +77,7 @@ class smartpath_qpscope:
         return positions
 
     @staticmethod
-    def get_autofocus_positions(
-        positions: list, camm: sp_microscope_settings, ntiles: float
-    ):
+    def get_autofocus_positions(positions: list, camm: sp_microscope_settings, ntiles: float):
         # find distance in terms of field of view or number of tiles
         fov_x, fov_y = smartpath_qpscope.get_fov(camm)
         af_min_distance = cdist([[0, 0]], [[fov_x * ntiles, fov_y * ntiles]])[0][0]
@@ -102,8 +96,8 @@ class smartpath_qpscope:
 
     @staticmethod
     def visualize_autofocus_locations(positions, camm, ntiles=1.35):
-        af_position_indices, af_min_distance = (
-            smartpath_qpscope.get_autofocus_positions(positions, camm, ntiles)
+        af_position_indices, af_min_distance = smartpath_qpscope.get_autofocus_positions(
+            positions, camm, ntiles
         )
         ax = plt.subplot(111)
         for ix, pos in enumerate(positions):
@@ -169,9 +163,7 @@ class smartpath_qpscope:
             current_props = sp.get_device_properties(core)
             metadata_change = sp.compare_dev_prop(current_props, starting_props)
             if metadata_change:
-                with open(
-                    os.path.join(save_folder, file_id + "_DPchanges.txt"), "w"
-                ) as fid:
+                with open(os.path.join(save_folder, file_id + "_DPchanges.txt"), "w") as fid:
                     print(metadata_change, file=fid)
         with open(os.path.join(save_folder, "MM2_ImageTags.txt"), "w") as fid:
             pprint.pprint(smartpath_qpscope.format_imagetags(tags), stream=fid)
