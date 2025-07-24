@@ -10,6 +10,7 @@ import numpy as np
 from pprint import pprint as dict_printer
 import pprint
 import traceback
+
 #######
 from smart_wsi_scanner.smartpath import sp_microscope_settings, sp_position, smartpath, Core
 
@@ -32,45 +33,54 @@ from scipy.spatial.distance import cdist
 
 import uuid
 import pathlib
+
 #########
 
 
 def main():
-    
+
     if len(sys.argv) > 5:
-        _, yaml_file_path, projects_folder_path, sample_label, scan_type, region_name, angles_str  = sys.argv
+        (
+            _,
+            yaml_file_path,
+            projects_folder_path,
+            sample_label,
+            scan_type,
+            region_name,
+            angles_str,
+        ) = sys.argv
     else:
-        # C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe, 
-        # D:\2025QPSC\smartpath_configurations\config_PPM.yml, 
-        # D:\2025QPSC\data, 
-        # test2, 
-        # BF_10x_1, 
+        # C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe,
+        # D:\2025QPSC\smartpath_configurations\config_PPM.yml,
+        # D:\2025QPSC\data,
+        # test2,
+        # BF_10x_1,
         # bounds]
         print("DIDNT FIND 6 ARGUMENTS: USING DEFAULTS! ")
-        yaml_file_path = r'D:\2025QPSC\smartpath_configurations\config_PPM.yml'
+        yaml_file_path = r"D:\2025QPSC\smartpath_configurations\config_PPM.yml"
         projects_folder_path = r"D:\2025QPSC\data"
         sample_label = "2"
         scan_type = "BF_10x_1"
         region_name = "roi_name"
-        modality = '_'.join(scan_type.split('_')[:2])
+        modality = "_".join(scan_type.split("_")[:2])
         #  D:\2025QPSC\smartpath_configurations\microscopes\config_PPM.yml,
         #  D:\2025QPSC\data,
         #  2,
         #  BF_10x_1,
         #  bounds
-    modality = '_'.join(scan_type.split('_')[:2])
+    modality = "_".join(scan_type.split("_")[:2])
     print(f"Angles arg: {angles_str}")
     # Remove parentheses and split by space
-    angles = [float(x) for x in angles_str.strip("()").split()]
+    ticks = [float(x) for x in angles_str.strip("()").split()]
     print("  Modality:", modality)
-    
+
     # print("Arguments received:")
     print("  YAML file:", yaml_file_path)
     print("  Projects folder:", projects_folder_path)
     print("  Sample label:", sample_label)
     print("  Scan type:", scan_type)
     print("  Region:", region_name)
-    
+
     # Initialize Micro-Manager connection
     core, studio = init_pycromanager()
     if not core:
@@ -81,10 +91,12 @@ def main():
     config_manager = ConfigManager()
     ppm_settings = config_manager.load_config(yaml_file_path)
 
-    loci_rsc = r'resources\resources_LOCI.yml'
+    loci_rsc = r"resources\resources_LOCI.yml"
     import pathlib
+
     loci_rsc = pathlib.Path(yaml_file_path).parent / loci_rsc
     import os
+
     if os.path.exists(loci_rsc):
         loci_settings = config_manager.load_config(loci_rsc)
 
@@ -99,86 +111,102 @@ def main():
     # Initialize smartpath
     sp = smartpath(core)
 
+    def ppm_to_thor(angle):
+        return -2 * angle + 276
+
+    def thor_to_ppm(kinesis_pos):
+        return (276 - kinesis_pos) / 2
+
+    def set_angle(theta):
+        theta = ppm_to_thor(theta)
+        core.set_position(brushless, theta)
+        core.wait_for_device(brushless)
+
+    brushless = "KBD101_Thor_Rotation"
+    print("current angle at", core.get_position(brushless))
+
     # Create project paths
     project_path = Path(projects_folder_path) / sample_label
     output_path = project_path / scan_type / region_name
     if not output_path.exists:
         output_path.mkdir(parents=True, exist_ok=True)
-        
+
     tile_config_path = output_path / "TileConfiguration.txt"
+
+    import shutil
+
+    for tickname in ticks:
+        pathlib.Path(output_path / str(tickname)).mkdir(exist_ok=True)
+        shutil.copy2(tile_config_path, output_path / str(tickname) / "TileConfiguration.txt")
 
     # Read tile configuration
     positions = []
     if tile_config_path.exists():
-        with open(tile_config_path, 'r') as f:
+        with open(tile_config_path, "r") as f:
             for line in f:
                 ## only works with Gridstitcher format that Mike supplies from qupath extension
                 pattern = r"^([\w\-\.]+); ; \(\s*([-\d.]+),\s*([-\d.]+)"
-                #pattern = r"^([\w\-\.]+); ; \(\s*([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)"
+                # pattern = r"^([\w\-\.]+); ; \(\s*([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)"
                 m = re.match(pattern, line)
                 if m:
                     z = None
                     filename = m.group(1)
                     x = float(m.group(2))
                     y = float(m.group(3))
-                    try: 
-                        z = float(m.group(4))               
-                    except Exception as e :
+                    try:
+                        z = float(m.group(4))
+                    except Exception as e:
                         print(e)
-                        z = core.get_position()         
-                    #z = -23.0                    
-                    positions.append([sp_position(x, y, z),filename])
+                        z = core.get_position()
+                    # z = -23.0
+                    positions.append([sp_position(x, y, z), filename])
 
-    
     AUTOFOCUS = False
-    
-    if AUTOFOCUS: # FIXME
+
+    if AUTOFOCUS:  # FIXME
         pass
 
     # Scan using positions
 
     for i, _p in enumerate(positions):
-        pos,filename = _p
+        pos, filename = _p
         # Move to position
         hardware.move_to_position(pos)
-        
+
         if AUTOFOCUS:
             # FIXME
             pass
-        
-        # Snap image
-        image, metadata = hardware.snap_image()
 
-        image_path = output_path / filename
-        ###
-        #This print statement is absolutely necessary for the progress bar in QuPath to work
-        ###
-        print("Tile saved: "+str(image_path), flush=True)
-        # Save image
-        # FIXME : change ddataclass to dict to read var modality 
-        smartpath_qpscope.ome_writer(
+        for tick in ticks:
+            # Set the angle for the hardware
+            set_angle(tick)
+            print(f"Set angle to {tick} ticks")
+
+            # Snap image
+            image, metadata = hardware.snap_image()
+
+            image_path = output_path / str(tick) / filename
+            ###
+            # This print statement is absolutely necessary for the progress bar in QuPath to work
+            ###
+            print("Tile saved: " + str(image_path), flush=True)
+            # Save image
+            # FIXME : change ddataclass to dict to read var modality
+            smartpath_qpscope.ome_writer(
                 filename=image_path,
                 pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,
-                data=np.flipud(image)
-                #data=np.flipud(sp.white_balance(img)),
+                data=np.flipud(image),
+                # data=np.flipud(sp.white_balance(img)),
             )
     current_props = sp.get_device_properties(core)
     # TODO
-    #metadata_change = sp.compare_dev_prop(current_props, starting_props)
-    #if metadata_change:
-    with open(output_path /  "MMproperties.txt", "w") as fid:
+    # metadata_change = sp.compare_dev_prop(current_props, starting_props)
+    # if metadata_change:
+    with open(output_path / "MMproperties.txt", "w") as fid:
         dict_printer(current_props, stream=fid)
     with open(os.path.join(output_path, "MM2_ImageTags_of_last_file.txt"), "w") as fid:
         dict_printer(smartpath_qpscope.format_imagetags(metadata), stream=fid)
 
-    # Write updated tile configuration
-    #if os.path.exists(tile_config_path):
-    #    with open(tile_config_path, 'w') as f:
-    #        f.write("# Define the number of dimensions we are working on\n")
-    #        f.write("dim = 3\n\n")
-    #        f.write("# Define the image coordinates\n")
-    #        for i, pos in enumerate(positions):
-    #            f.write(f"{sample_label}_{scan_type}_{i:0{suffix_length}}.tif; ; ({pos.x}, {pos.y}, {pos.z})\n")
 
 if __name__ == "__main__":
     try:
@@ -192,9 +220,6 @@ if __name__ == "__main__":
         sys.stderr.flush()
         sys.stdout.flush()
         sys.exit(1)
-    
-    
-
 
 
 class smartpath_qpscope:
@@ -223,9 +248,7 @@ class smartpath_qpscope:
         left_bottom = np.argmin(np.array([x[0] ** 2 + x[1] ** 2 for x in positions]))
         xa = positions[left_bottom]
         distances = np.round(cdist([xa], positions).ravel(), 2)
-        positions_d = {
-            ix: (positions[ix], distances[ix]) for ix in range(len(distances))
-        }
+        positions_d = {ix: (positions[ix], distances[ix]) for ix in range(len(distances))}
         positions_d = dict(sorted(positions_d.items(), key=lambda item: item[1][1]))
         return positions_d
 
@@ -245,9 +268,7 @@ class smartpath_qpscope:
         return fov_x, fov_y
 
     @staticmethod
-    def get_dummy_coordinates(
-        nX: int, nY: int, p1: sp_position, camm: sp_microscope_settings
-    ):
+    def get_dummy_coordinates(nX: int, nY: int, p1: sp_position, camm: sp_microscope_settings):
         fov_x, fov_y = smartpath_qpscope.get_fov(camm)
         positions = []
         for k in range(nX):
@@ -257,9 +278,7 @@ class smartpath_qpscope:
         return positions
 
     @staticmethod
-    def get_autofocus_positions(
-        positions: list, camm: sp_microscope_settings, ntiles: float
-    ):
+    def get_autofocus_positions(positions: list, camm: sp_microscope_settings, ntiles: float):
         # find distance in terms of field of view or number of tiles
         fov_x, fov_y = smartpath_qpscope.get_fov(camm)
         af_min_distance = cdist([[0, 0]], [[fov_x * ntiles, fov_y * ntiles]])[0][0]
@@ -278,8 +297,8 @@ class smartpath_qpscope:
 
     @staticmethod
     def visualize_autofocus_locations(positions, camm, ntiles=1.35):
-        af_position_indices, af_min_distance = (
-            smartpath_qpscope.get_autofocus_positions(positions, camm, ntiles)
+        af_position_indices, af_min_distance = smartpath_qpscope.get_autofocus_positions(
+            positions, camm, ntiles
         )
         ax = plt.subplot(111)
         for ix, pos in enumerate(positions):
@@ -345,9 +364,7 @@ class smartpath_qpscope:
             current_props = sp.get_device_properties(core)
             metadata_change = sp.compare_dev_prop(current_props, starting_props)
             if metadata_change:
-                with open(
-                    os.path.join(save_folder, file_id + "_DPchanges.txt"), "w"
-                ) as fid:
+                with open(os.path.join(save_folder, file_id + "_DPchanges.txt"), "w") as fid:
                     print(metadata_change, file=fid)
         with open(os.path.join(save_folder, "MM2_ImageTags.txt"), "w") as fid:
             pprint.pprint(smartpath_qpscope.format_imagetags(tags), stream=fid)
