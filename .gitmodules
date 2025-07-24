@@ -1,3 +1,6 @@
 [submodule "src/smart_wsi_scanner/configurations"]
 	path = src/smart_wsi_scanner/configurations
 	url = https://github.com/JenuC/smartpath_configurations.git
+[submodule "src/smart_wsi_scanner/dreams"]
+	path = src/smart_wsi_scanner/dreams
+	url = https://github.com/JenuC/dreams
