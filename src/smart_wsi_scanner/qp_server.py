@@ -125,18 +125,18 @@ def handle_client(conn, addr):
             if data == b"move____":
                 coords = conn.recv(8)
                 if len(coords) == 8:
-                    x, y = struct.unpack('!ff', coords)
+                    x, y = struct.unpack("!ff", coords)
                     print(f"Received from {addr}: {(x,y)}")
                     print(f"Client {addr} requested move to: x={x}, y={y}")
                     hardware.move_to_position(sp_position(x, y))
                 else:
                     print(f"Client {addr} sent incomplete move coordinates: {coords}")
                 continue
-            #try:
+            # try:
             #    x, y = struct.unpack("!ff", data)
             #    print(f"Received from {addr}: {(x,y)}")
             #    hardware.move_to_position(sp_position(x, y))
-            #except struct.error:
+            # except struct.error:
             #    print(f"Malformed data from {addr}: {data}")
     finally:
         conn.close()

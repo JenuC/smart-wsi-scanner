@@ -1,0 +1,29 @@
+
+
+
+BEFORE
+
+14:18:14 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, 17047.184, -y, -8116.820000000001] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:18:14 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+14:18:14 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+14:18:14 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: 17047.184
+14:18:14 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+14:18:14 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: -8116.820000000001
+14:18:14 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 811039655
+
+14:18:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:18:33 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (17047, -8117)
+
+
+AFTER ( 3 sec speed up per pycromanager call << MV or GET>> )
+
+15:50:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, 17033.184, -y, -8047.820000000001] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:50:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:50:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:50:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: 17033.184
+15:50:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:50:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: -8047.820000000001
+15:50:28 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 1997300413
+
+15:50:35 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:50:37 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (17033.0, -8048.0)
