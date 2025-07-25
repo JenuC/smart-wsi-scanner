@@ -100,7 +100,7 @@ def disconnect():
         print("Disconnected from server.")
 
 
-def acquisitionWorkflow():
+def acquisition_workflow():
     """Run the acquisition workflow."""
 
     if len(sys.argv) > 5:
