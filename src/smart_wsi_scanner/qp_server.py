@@ -4,63 +4,35 @@ import struct
 from smart_wsi_scanner.smartpath import init_pycromanager
 from smart_wsi_scanner.config import ConfigManager, sp_position
 from smart_wsi_scanner.hardware import PycromanagerHardware
-import argparse
 import sys
-from smart_wsi_scanner.qp_server_config import Command, TCP_PORT
+from smart_wsi_scanner.qp_server_config import Command, TCP_PORT, END_MARKER
+import pathlib
+import re
+from smart_wsi_scanner.smartpath import smartpath
+from smart_wsi_scanner.smartpath_qpscope import smartpath_qpscope
+from pprint import pprint as dict_printer
 
 HOST = "0.0.0.0"  # Listen on all interfaces
 PORT = TCP_PORT  # Arbitrary non-privileged port
 shutdown_event = threading.Event()
 
-core, studio = init_pycromanager()
+
+def _pycromanager():
+    """Initialize Pycro-Manager connection."""
+    core, studio = init_pycromanager()
+    if not core:
+        print("Failed to initialize Micro-Manager connection")
+        sys.exit(1)
+    return core, studio
+
+
 config_manager = ConfigManager()
-if not core:
-    print("Failed to initialize Micro-Manager connection")
 ppm_settings = config_manager.get_config("config_PPM")
-# TODO : ppm_settings can be None
+# TODO : Need stricter type checking for config
+
+core, studio = _pycromanager()
 hardware = PycromanagerHardware(core, ppm_settings, studio)
 brushless = "KBD101_Thor_Rotation"
-
-
-def get_stageXY():
-    current_position_xyz = hardware.get_current_position()
-    print(f"{current_position_xyz.x,current_position_xyz.y}")
-
-
-def get_stageZ():
-    current_position_xyz = hardware.get_current_position()
-    print(current_position_xyz.z)
-
-
-def get_position():
-    print(hardware.get_current_position())
-
-
-def move_stageXY():
-    parser = argparse.ArgumentParser(description="Move XYZ stage")
-
-    # All arguments use flags and are not positional
-    parser.add_argument("-x", "--x", type=float, required=True, help="X position")
-    parser.add_argument("-y", "--y", type=float, required=True, help="Y position")
-    parser.add_argument("-z", "--z", type=float, required=False, help="Z position (optional)")
-
-    args = parser.parse_args()
-
-    pos_kwargs = {"x": args.x, "y": args.y}
-    if args.z is not None:
-        pos_kwargs["z"] = args.z
-
-    hardware.move_to_position(sp_position(**pos_kwargs))
-    print(hardware.get_current_position())
-
-
-def move_stageZ():
-    parser = argparse.ArgumentParser(description="Move Z stage")
-    parser.add_argument("-z", "--z", type=float, required=True, help="Z position")
-    args = parser.parse_args()
-
-    hardware.move_to_position(sp_position(z=args.z))
-    print(hardware.get_current_position())
 
 
 ## Kinesis control for rotational stage for PPM
@@ -73,27 +45,87 @@ def thor_to_ppm(kinesis_pos):
     return (276 - kinesis_pos) / 2
 
 
-def get_stageR():
-    kinesis_pos = core.get_position(brushless)
-    print(f"{thor_to_ppm(kinesis_pos):.2f}")
-
-
-def move_stageR():
-    """Move rotation stage to specified angle."""
-    parser = argparse.ArgumentParser(description="Move rotation stage")
-    parser.add_argument("angle", type=float, help="Rotation angle in degrees")
-    args = parser.parse_args(sys.argv[2:])
-
-    newAngle = ppm_to_thor(args.angle)
-    core.set_position(brushless, newAngle)
+def set_angle(theta):
+    theta = ppm_to_thor(theta)
+    core.set_position(brushless, theta)
     core.wait_for_device(brushless)
-    get_stageR()
 
 
-def acquisitionWorkflow():
-    # TODO exec : minimal_qupathrunner_v3.py
-    print("running acq from tile-config")
-    # pass
+def read_tile_config(tile_config_path):
+    positions = []
+    if tile_config_path.exists():
+        with open(tile_config_path, "r") as f:
+            for line in f:
+                ## only works with Gridstitcher format that Mike supplies from qupath extension
+                pattern = r"^([\w\-\.]+); ; \(\s*([-\d.]+),\s*([-\d.]+)"
+                # pattern = r"^([\w\-\.]+); ; \(\s*([-\d.]+),\s*([-\d.]+),\s*([-\d.]+)\)"
+                m = re.match(pattern, line)
+                if m:
+                    z = None
+                    filename = m.group(1)
+                    x = float(m.group(2))
+                    y = float(m.group(3))
+                    try:
+                        z = float(m.group(4))
+                    except Exception as e:
+                        print(e)
+                        z = core.get_position()
+                    # z = -23.0
+                    positions.append([sp_position(x, y, z), filename])
+    return positions
+
+
+def acquisitionWorkflow(message):
+    parts = message.split(",")
+    yaml_file_path = parts[0]
+    projects_folder_path = parts[1]
+    sample_label = parts[2]
+    scan_type = parts[3]
+    region_name = parts[4]
+    angles_str = parts[5]
+    modality = "_".join(scan_type.split("_")[:2])
+    print(f"Angles arg: {angles_str}")
+    # Remove parentheses and split by space
+    ticks = [float(x) for x in angles_str.strip("()").split()]  ## TODO: cant use comma as delimiter
+    print("  Modality:", modality)
+    # print("Arguments received:")
+    print("  YAML file:", yaml_file_path)
+    print("  Projects folder:", projects_folder_path)
+    print("  Sample label:", sample_label)
+    print("  Scan type:", scan_type)
+    print("  Region:", region_name)
+
+    project_path = pathlib.Path(projects_folder_path) / sample_label
+    output_path = project_path / scan_type / region_name
+    if not output_path.exists:
+        output_path.mkdir(parents=True, exist_ok=True)
+
+    tile_config_path = output_path / "TileConfiguration.txt"
+    positions = read_tile_config(tile_config_path)
+
+    sp = smartpath(core)
+
+    for i, _p in enumerate(positions):
+        pos, filename = _p
+        hardware.move_to_position(pos)
+        for tick in ticks:
+            set_angle(tick)
+            print(f"Set angle to {tick} ticks")
+            image, metadata = hardware.snap_image()
+            image_path = output_path / str(tick) / filename
+            # This print statement is absolutely necessary for the progress bar in QuPath to work
+            print("Tile saved: " + str(image_path), flush=True)
+            # FIXME : change ddataclass to dict to read var modality
+            smartpath_qpscope.ome_writer(
+                filename=image_path,
+                pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,
+                data=image,
+            )
+    current_props = sp.get_device_properties(core)
+    with open(output_path / "MMproperties.txt", "w") as fid:
+        dict_printer(current_props, stream=fid)
+    with open(os.path.join(output_path, "MM2_ImageTags_of_last_file.txt"), "w") as fid:
+        dict_printer(smartpath_qpscope.format_imagetags(metadata), stream=fid)
 
 
 def handle_client(conn, addr):
@@ -121,6 +153,28 @@ def handle_client(conn, addr):
                 response = struct.pack("!f", current_position_xyz.z)
                 conn.sendall(response)
                 continue
+            if data == Command.GETR.value:
+                kinesis_pos = core.get_position(brushless)
+                response = struct.pack("!f", thor_to_ppm(kinesis_pos))
+                conn.sendall(response)
+                continue
+            if data == Command.MOVER.value:
+                coords = conn.recv(4)
+                angle = struct.unpack("!f", coords)[0]
+                print(f"Received from {addr}: {angle}")
+                print(f"Client {addr} requested move to rotation angle: {angle}")
+                new_angle = ppm_to_thor(angle)
+                core.set_position(brushless, new_angle)
+                core.wait_for_device(brushless)
+                continue
+            if data == Command.MOVEZ.value:
+                z = conn.recv(4)
+                z_position = struct.unpack("!f", z)[0]
+                print(f"Received from {addr}: {z_position}")
+                print(f"Client {addr} requested move to Z position: {z_position}")
+                hardware.move_to_position(sp_position(z=z_position))
+                continue
+
             # Unpack float (network byte order)
             if data == Command.MOVE.value:
                 coords = conn.recv(8)
@@ -132,6 +186,22 @@ def handle_client(conn, addr):
                 else:
                     print(f"Client {addr} sent incomplete move coordinates: {coords}")
                 continue
+
+            if data == Command.ACQUIRE.value:
+                print(f"Client {addr} requested acquisition workflow.")
+                message = ""
+                while True:
+                    data = conn.recv(1024)
+                    if not data:
+                        break
+                    message += data.decode()
+                    if str(END_MARKER) in message:
+                        # Remove the escape string from the message
+                        message = message.replace(END_MARKER, "")
+                        break
+                acquisitionWorkflow(message)
+                continue
+
     finally:
         conn.close()
         print(f"Connection closed for {addr}")
