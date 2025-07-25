@@ -30,6 +30,7 @@ import pprint
 
 from pycromanager import Core, Studio
 
+
 def is_mm_running() -> bool:
     """Check if Micro-Manager is running as a Windows executable."""
     import platform
@@ -38,13 +39,14 @@ def is_mm_running() -> bool:
     if platform.system() != "Windows":
         return False
 
-    for proc in psutil.process_iter(['name']):
+    for proc in psutil.process_iter(["name"]):
         try:
-            if proc.exe().find('Micro-Manager')>0:
+            if proc.exe().find("Micro-Manager") > 0:
                 return True
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
     return False
+
 
 def init_pycromanager():
     """Initialize Pycromanager connection."""
@@ -56,9 +58,11 @@ def init_pycromanager():
     core.set_timeout_ms(20000)
     return core, studio
 
+
 # Initialize core and studio only when needed
 _core = None
 _studio = None
+
 
 def get_core():
     """Get or initialize the core instance."""
@@ -67,12 +71,14 @@ def get_core():
         _core, _studio = init_pycromanager()
     return _core
 
+
 def get_studio():
     """Get or initialize the studio instance."""
     global _core, _studio
     if _studio is None:
         _core, _studio = init_pycromanager()
     return _studio
+
 
 class smartpath:
     def __init__(self, core):
@@ -119,21 +125,21 @@ class smartpath:
     @staticmethod
     def _compare_dicts(d1: dict, d2: dict) -> str:
         """Compare two dictionaries and return their differences in a readable format.
-        
+
         Args:
             d1: First dictionary to compare
             d2: Second dictionary to compare
-            
+
         Returns:
             A string containing the differences between the dictionaries,
             formatted with line-by-line diffs
         """
         import difflib
         import pprint
-        
+
         d1_lines = pprint.pformat(d1).splitlines()
         d2_lines = pprint.pformat(d2).splitlines()
-        
+
         diff = difflib.ndiff(d1_lines, d2_lines)
         return "\n" + "\n".join(diff)
 
@@ -194,15 +200,11 @@ class smartpath:
 
     @staticmethod
     def get_current_position(core: Core):
-        current_pos = sp_position(
-            core.get_x_position(), core.get_y_position(), core.get_position()
-        )
+        current_pos = sp_position(core.get_x_position(), core.get_y_position(), core.get_position())
         return current_pos
 
     @staticmethod
-    def move_to_position(
-        core: Core, position: sp_position, settings: sp_microscope_settings
-    ):
+    def move_to_position(core: Core, position: sp_position, settings: sp_microscope_settings):
         # Get current position and populate any missing coordinates
         current_position = smartpath.get_current_position(core)
         position.populate_missing(current_position)
@@ -240,16 +242,12 @@ class smartpath:
                 core.set_focus_device(camm.stage.z_stage)
                 core.set_position(desired_imaging_mode.z)
                 core.wait_for_device(camm.stage.z_stage)
-                core.set_property(
-                    *camm.obj_slider, desired_imaging_mode.objective_position_label
-                )
+                core.set_property(*camm.obj_slider, desired_imaging_mode.objective_position_label)
                 core.set_focus_device(camm.stage.f_stage)
                 core.set_position(desired_imaging_mode.f)
                 core.wait_for_system()
             if desired_imaging_mode.name.startswith("20X"):
-                core.set_property(
-                    *camm.obj_slider, desired_imaging_mode.objective_position_label
-                )
+                core.set_property(*camm.obj_slider, desired_imaging_mode.objective_position_label)
                 core.wait_for_device(camm.obj_slider[0])
                 core.set_focus_device(camm.stage.z_stage)
                 core.set_position(desired_imaging_mode.z)
@@ -261,9 +259,7 @@ class smartpath:
             camm.imaging_mode = desired_imaging_mode
 
     @staticmethod
-    def snap(
-        core: Core, flip_channel=True, background_correction=False, remove_alpha=True
-    ):
+    def snap(core: Core, flip_channel=True, background_correction=False, remove_alpha=True):
         """Snaps an Image using MM Core and returns img,tags"""
         if core.is_sequence_running():
             studio = get_studio()
@@ -293,9 +289,7 @@ class smartpath:
                     # pixels = smartpath.background_correction(pixels)
 
             else:
-                pixels = np.reshape(
-                    tagged_image.pix, newshape=[tags["Height"], tags["Width"]]
-                )
+                pixels = np.reshape(tagged_image.pix, newshape=[tags["Height"], tags["Width"]])
         # OpenScan
         elif smartpath.get_device_properties(core)["Core"]["Camera"] == "OSc-LSM":
             # tags["Core-Camera"] == "OSc-LSM":
@@ -346,9 +340,7 @@ class smartpath:
 
             # interpolation
             interp_x = np.linspace(z_steps[0], z_steps[-1], n_steps * interp_strength)
-            interp_y = scipy.interpolate.interp1d(z_steps, scores, kind=interp_kind)(
-                interp_x
-            )
+            interp_y = scipy.interpolate.interp1d(z_steps, scores, kind=interp_kind)(interp_x)
             new_z = interp_x[np.argmax(interp_y)]
 
             if pop_a_plot:
