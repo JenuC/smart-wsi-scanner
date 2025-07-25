@@ -195,7 +195,7 @@ def main():
             smartpath_qpscope.ome_writer(
                 filename=image_path,
                 pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,
-                data=np.flipud(image),
+                data=image,
                 # data=np.flipud(sp.white_balance(img)),
             )
     current_props = sp.get_device_properties(core)
