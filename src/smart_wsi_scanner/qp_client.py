@@ -2,15 +2,16 @@ import socket
 import struct
 import argparse
 import sys
+from smart_wsi_scanner.qp_server_config import Command, TCP_PORT
 
 HOST = "127.0.0.1"  # Server address (localhost by default)
-PORT = 5000  # Must match server
+PORT = TCP_PORT  # Must match server
 
 
 def get_stageXY():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        s.sendall(b"getxy___")
+        s.sendall(Command.GETXY.value)
         data = s.recv(8)
         if len(data) == 8:
             x, y = struct.unpack("!ff", data)
@@ -22,7 +23,7 @@ def get_stageXY():
 def get_stageZ():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        s.sendall(b"getz____")
+        s.sendall(Command.GETZ.value)
         data = s.recv(4)
         if len(data) == 4:
             z = struct.unpack("!f", data)
@@ -46,21 +47,20 @@ def move_stageXY():
     # print("Asking to move to", x, y)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        s.sendall(b"move____")
-        s.sendall(packed)
+        s.sendall(Command.MOVE.value + packed)
 
 
 def shutdown_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        s.sendall(b"shutdown")
+        s.sendall(Command.SHUTDOWN.value)
         print("Sent server shutdown command. Disconnected.")
 
 
 def disconnect():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        s.sendall(b"quitclnt")
+        s.sendall(Command.DISCONNECT.value)
         print("Disconnected from server.")
 
 

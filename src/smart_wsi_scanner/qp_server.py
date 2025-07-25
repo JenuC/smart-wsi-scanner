@@ -6,11 +6,10 @@ from smart_wsi_scanner.config import ConfigManager, sp_position
 from smart_wsi_scanner.hardware import PycromanagerHardware
 import argparse
 import sys
-import numpy as np
-from skimage import img_as_ubyte, exposure
+from smart_wsi_scanner.qp_server_config import Command, TCP_PORT
 
 HOST = "0.0.0.0"  # Listen on all interfaces
-PORT = 5000  # Arbitrary non-privileged port
+PORT = TCP_PORT  # Arbitrary non-privileged port
 shutdown_event = threading.Event()
 
 core, studio = init_pycromanager()
@@ -18,6 +17,7 @@ config_manager = ConfigManager()
 if not core:
     print("Failed to initialize Micro-Manager connection")
 ppm_settings = config_manager.get_config("config_PPM")
+# TODO : ppm_settings can be None
 hardware = PycromanagerHardware(core, ppm_settings, studio)
 brushless = "KBD101_Thor_Rotation"
 
@@ -97,32 +97,32 @@ def acquisitionWorkflow():
 
 
 def handle_client(conn, addr):
-    print(f"Connected by {addr}")
+    print(f"Connected by client at {addr}")
     try:
         while True:
             data = conn.recv(8)
-            print(data)
+            # print(data)
             if not data:
                 break
-            if data == b"quitclnt":
+            if data == Command.DISCONNECT.value:
                 print(f"Client {addr} requested to quit.")
                 break
-            if data == b"shutdown":
+            if data == Command.SHUTDOWN.value:
                 print(f"Client {addr} requested server shutdown.")
                 shutdown_event.set()
                 break
-            if data == b"getxy___":
+            if data == Command.GETXY.value:
                 current_position_xyz = hardware.get_current_position()
                 response = struct.pack("!ff", current_position_xyz.x, current_position_xyz.y)
                 conn.sendall(response)
                 continue
-            if data == b"getz____":
+            if data == Command.GETZ.value:
                 current_position_xyz = hardware.get_current_position()
                 response = struct.pack("!f", current_position_xyz.z)
                 conn.sendall(response)
                 continue
             # Unpack float (network byte order)
-            if data == b"move____":
+            if data == Command.MOVE.value:
                 coords = conn.recv(8)
                 if len(coords) == 8:
                     x, y = struct.unpack("!ff", coords)
@@ -132,12 +132,6 @@ def handle_client(conn, addr):
                 else:
                     print(f"Client {addr} sent incomplete move coordinates: {coords}")
                 continue
-            # try:
-            #    x, y = struct.unpack("!ff", data)
-            #    print(f"Received from {addr}: {(x,y)}")
-            #    hardware.move_to_position(sp_position(x, y))
-            # except struct.error:
-            #    print(f"Malformed data from {addr}: {data}")
     finally:
         conn.close()
         print(f"Connection closed for {addr}")
