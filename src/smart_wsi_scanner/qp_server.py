@@ -11,10 +11,13 @@ import re
 from smart_wsi_scanner.smartpath import smartpath
 from smart_wsi_scanner.smartpath_qpscope import smartpath_qpscope
 from pprint import pprint as dict_printer
+import imageio
+import numpy as np
 
 HOST = "0.0.0.0"  # Listen on all interfaces
 PORT = TCP_PORT  # Arbitrary non-privileged port
 shutdown_event = threading.Event()
+wait_for_function_event = threading.Event()  # Event to wait for a function
 
 
 def _pycromanager():
@@ -72,10 +75,13 @@ def read_tile_config(tile_config_path):
                         z = core.get_position()
                     # z = -23.0
                     positions.append([sp_position(x, y, z), filename])
+    else:
+        print(f"Tile configuration file {tile_config_path} does not exist.")
     return positions
 
 
-def acquisitionWorkflow(message):
+def acquisitionWorkflow(message, blue):
+    print(blue)
     parts = message.split(",")
     yaml_file_path = parts[0]
     projects_folder_path = parts[1]
@@ -97,35 +103,48 @@ def acquisitionWorkflow(message):
 
     project_path = pathlib.Path(projects_folder_path) / sample_label
     output_path = project_path / scan_type / region_name
-    if not output_path.exists:
+    if not output_path.exists():
         output_path.mkdir(parents=True, exist_ok=True)
 
     tile_config_path = output_path / "TileConfiguration.txt"
     positions = read_tile_config(tile_config_path)
 
     sp = smartpath(core)
-
+    print(f"Imaging {len(positions)} positions")
     for i, _p in enumerate(positions):
         pos, filename = _p
         hardware.move_to_position(pos)
         for tick in ticks:
             set_angle(tick)
+
             print(f"Set angle to {tick} ticks")
             image, metadata = hardware.snap_image()
             image_path = output_path / str(tick) / filename
+            print(image_path)
+            print(image_path.exists())
+            if not image_path.parent.exists():
+                image_path.parent.mkdir(parents=True, exist_ok=True)
             # This print statement is absolutely necessary for the progress bar in QuPath to work
             print("Tile saved: " + str(image_path), flush=True)
             # FIXME : change ddataclass to dict to read var modality
-            smartpath_qpscope.ome_writer(
-                filename=image_path,
-                pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,
-                data=image,
-            )
+            if image_path.parent.exists():
+                smartpath_qpscope.ome_writer(
+                    filename=str(image_path),
+                    pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,
+                    data=image,
+                )
+                # np.save(image_path, image)
+                # imageio.imwrite(str(image_path), image, format="tiff")
+            else:
+                print(f"Failed to save image at {image_path}. Directory does not exist.")
+
     current_props = sp.get_device_properties(core)
     with open(output_path / "MMproperties.txt", "w") as fid:
         dict_printer(current_props, stream=fid)
-    with open(os.path.join(output_path, "MM2_ImageTags_of_last_file.txt"), "w") as fid:
-        dict_printer(smartpath_qpscope.format_imagetags(metadata), stream=fid)
+    # with open(output_path / "MM2_ImageTags_of_last_file.txt", "w") as fid:
+    #    dict_printer(smartpath_qpscope.format_imagetags(metadata), stream=fid)
+    print("Acquisition workflow completed.")
+    wait_for_function_event.set()  # Signal that the acquisition workflow is done
 
 
 def handle_client(conn, addr):
@@ -199,7 +218,13 @@ def handle_client(conn, addr):
                         # Remove the escape string from the message
                         message = message.replace(END_MARKER, "")
                         break
-                acquisitionWorkflow(message)
+                # print(len(message), message)
+                function_thread = threading.Thread(
+                    target=acquisitionWorkflow, args=(message, "test"), daemon=True
+                )
+                function_thread.start()
+                # acquisitionWorkflow(message)
+                wait_for_function_event.wait()
                 continue
 
     finally:
@@ -214,6 +239,7 @@ def main():
         s.listen()
         print(f"Server listening on {HOST}:{PORT}")
         threads = []
+
         while not shutdown_event.is_set():
             try:
                 s.settimeout(1.0)

@@ -19,6 +19,6 @@ $r = "85"
     #get_stageR
 
 #
-acquisition_workflow 
+acquisition_workflow r"D:\2025QPSC\smartpath_configurations\config_PPM.yml" "D:\2025QPSC\data" "189align2" "BF_10x_1" "121583_48062" "(90)"
 
 #snap 
