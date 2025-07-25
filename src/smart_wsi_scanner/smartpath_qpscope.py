@@ -1,5 +1,5 @@
 import pprint
-from smart_wsi_scanner.smartpath import sp_microscope_settings, sp_position, smartpath
+from smart_wsi_scanner.smartpath import sp_microscope_settings, sp_position, smartpath, Core
 import numpy as np
 
 # af_min_distance
