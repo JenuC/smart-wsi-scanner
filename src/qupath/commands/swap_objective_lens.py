@@ -1,7 +1,7 @@
 import sys
 
 from smartpath import *
-from src.smartpath_qpscope import *
+from smart_wsi_scanner.smartpath_qpscope import *
 
 sp = smartpath(core)
 qp = smartpath_qpscope()

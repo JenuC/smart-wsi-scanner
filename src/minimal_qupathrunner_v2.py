@@ -1,6 +1,6 @@
 from smartpath import *
 from smartpath_config import *
-from smartpath_qpscope import *
+from smart_wsi_scanner.smartpath_qpscope import *
 import sys
 
 if len(sys.argv) == 5:
