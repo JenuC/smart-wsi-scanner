@@ -13,6 +13,8 @@ from smart_wsi_scanner.smartpath_qpscope import smartpath_qpscope
 from pprint import pprint as dict_printer
 import imageio
 import numpy as np
+import shutil
+
 
 HOST = "0.0.0.0"  # Listen on all interfaces
 PORT = TCP_PORT  # Arbitrary non-privileged port
@@ -80,8 +82,8 @@ def read_tile_config(tile_config_path):
     return positions
 
 
-def acquisitionWorkflow(message, blue):
-    print(blue)
+def acquisitionWorkflow(message, test):
+
     parts = message.split(",")
     yaml_file_path = parts[0]
     projects_folder_path = parts[1]
@@ -108,6 +110,9 @@ def acquisitionWorkflow(message, blue):
 
     tile_config_path = output_path / "TileConfiguration.txt"
     positions = read_tile_config(tile_config_path)
+    for tickname in ticks:
+        pathlib.Path(output_path / str(tickname)).mkdir(exist_ok=True)
+        shutil.copy2(tile_config_path, output_path / str(tickname) / "TileConfiguration.txt")
 
     sp = smartpath(core)
     print(f"Imaging {len(positions)} positions")
@@ -152,7 +157,7 @@ def handle_client(conn, addr):
     try:
         while True:
             data = conn.recv(8)
-            # print(data)
+            print(data)
             if not data:
                 break
             if data == Command.DISCONNECT.value:
@@ -186,6 +191,29 @@ def handle_client(conn, addr):
                 core.set_position(brushless, new_angle)
                 core.wait_for_device(brushless)
                 continue
+
+            if data == Command.GET.value:
+                message = ""
+                while True:
+                    data = conn.recv(1024)
+                    if not data:
+                        break
+                    message += data.decode()
+                    if str(END_MARKER) in message:
+                        # Remove the escape string from the message
+                        message = message.replace(END_MARKER, "")
+                        break
+                prop_name = message.split(",")[:-1]
+                print(prop_name)
+                response = struct.pack("!f", float(core.get_property(*prop_name)))
+                conn.sendall(response)
+                continue
+
+            if data == Command.SET.value:
+                # TODO
+                print("will set prop later")
+                continue
+
             if data == Command.MOVEZ.value:
                 z = conn.recv(4)
                 z_position = struct.unpack("!f", z)[0]

@@ -12,6 +12,8 @@ class Command(Enum):
     GETR = b"getr____"
     MOVER = b"move_r__"
     MOVE = b"move____"
+    GET = b"get_____"
+    SET = b"set_____"
     ACQUIRE = b"acquire_"
     SHUTDOWN = b"shutdown"
     DISCONNECT = b"quitclnt"
