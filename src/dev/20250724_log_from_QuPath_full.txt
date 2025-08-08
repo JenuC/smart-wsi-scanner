@@ -1,0 +1,1308 @@
+1:18:28 PM: Executing 'run'…
+
+> Task :buildSrc:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :buildSrc:generateExternalPluginSpecBuilders UP-TO-DATE
+> Task :buildSrc:extractPluginRequests NO-SOURCE
+> Task :buildSrc:generatePluginAdapters NO-SOURCE
+> Task :buildSrc:extractPrecompiledScriptPluginPlugins UP-TO-DATE
+> Task :buildSrc:compilePluginsBlocks UP-TO-DATE
+> Task :buildSrc:generatePrecompiledScriptPluginAccessors UP-TO-DATE
+> Task :buildSrc:generateScriptPluginAdapters UP-TO-DATE
+> Task :buildSrc:compileKotlin UP-TO-DATE
+> Task :buildSrc:compileJava UP-TO-DATE
+> Task :buildSrc:compileGroovy NO-SOURCE
+> Task :buildSrc:compileGroovyPlugins NO-SOURCE
+> Task :buildSrc:pluginDescriptors UP-TO-DATE
+> Task :buildSrc:processResources UP-TO-DATE
+> Task :buildSrc:classes UP-TO-DATE
+> Task :buildSrc:jar UP-TO-DATE
+> Task :qupath-extension-tiles-to-pyramid:processResources UP-TO-DATE
+> Task :qupath-extension-qpsc:processResources UP-TO-DATE
+> Task :qupath-core:compileJava UP-TO-DATE
+> Task :qupath-core-processing:compileJava UP-TO-DATE
+> Task :qupath-gui-fx:compileJava UP-TO-DATE
+> Task :qupath-app:compileJava UP-TO-DATE
+> Task :qupath-extension-bioformats:compileJava UP-TO-DATE
+> Task :qupath-extension-openslide:compileJava UP-TO-DATE
+> Task :qupath-extension-processing:compileJava UP-TO-DATE
+> Task :qupath-extension-script-editor:compileJava UP-TO-DATE
+> Task :qupath-extension-svg:compileJava UP-TO-DATE
+> Task :processResources NO-SOURCE
+> Task :qupath-app:processResources NO-SOURCE
+> Task :qupath-app:classes UP-TO-DATE
+> Task :qupath-app:jar
+> Task :qupath-core:processResources UP-TO-DATE
+> Task :qupath-core:classes UP-TO-DATE
+> Task :qupath-core:jar
+> Task :qupath-core-processing:processResources UP-TO-DATE
+> Task :qupath-core-processing:classes UP-TO-DATE
+> Task :qupath-core-processing:jar
+> Task :qupath-extension-bioformats:processResources UP-TO-DATE
+> Task :qupath-extension-bioformats:classes UP-TO-DATE
+> Task :qupath-extension-bioformats:jar
+> Task :qupath-extension-openslide:processResources UP-TO-DATE
+> Task :qupath-extension-openslide:classes UP-TO-DATE
+> Task :qupath-extension-openslide:jar
+> Task :qupath-extension-processing:processResources UP-TO-DATE
+> Task :qupath-extension-processing:classes UP-TO-DATE
+> Task :qupath-extension-processing:jar
+> Task :qupath-extension-script-editor:processResources UP-TO-DATE
+> Task :qupath-extension-script-editor:classes UP-TO-DATE
+> Task :qupath-extension-script-editor:jar
+> Task :qupath-extension-svg:processResources UP-TO-DATE
+> Task :qupath-extension-svg:classes UP-TO-DATE
+> Task :qupath-extension-svg:jar
+> Task :qupath-gui-fx:processResources UP-TO-DATE
+> Task :qupath-gui-fx:classes UP-TO-DATE
+> Task :qupath-gui-fx:jar
+> Task :qupath-extension-tiles-to-pyramid:compileJava UP-TO-DATE
+> Task :qupath-extension-tiles-to-pyramid:compileGroovy NO-SOURCE
+> Task :qupath-extension-tiles-to-pyramid:classes UP-TO-DATE
+> Task :qupath-extension-tiles-to-pyramid:jar UP-TO-DATE
+
+> Task :qupath-extension-qpsc:compileJava
+
+> Task :qupath-extension-qpsc:compileGroovy NO-SOURCE
+> Task :qupath-extension-qpsc:classes
+> Task :compileJava NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :qupath-extension-qpsc:jar
+D:\2025QPSC\qupath-extension-qpsc\src\main\java\qupath\ext\qpsc\controller\ExistingImageWorkflow.java:469: warning: [unchecked] unchecked cast
+        Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.details.get("currentQuPathProject");
+                                                                                         ^
+  required: Project<BufferedImage>
+  found:    Object
+D:\2025QPSC\qupath-extension-qpsc\src\main\java\qupath\ext\qpsc\controller\ExistingImageWorkflow.java:655: warning: [unchecked] unchecked cast
+            Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.details.get("currentQuPathProject");
+                                                                                             ^
+  required: Project<BufferedImage>
+  found:    Object
+D:\2025QPSC\qupath-extension-qpsc\src\main\java\qupath\ext\qpsc\controller\ExistingImageWorkflow.java:704: warning: [unchecked] unchecked cast
+                    Project<BufferedImage> project = (Project<BufferedImage>) context.projectInfo.details.get("currentQuPathProject");
+                                                                                                             ^
+  required: Project<BufferedImage>
+  found:    Object
+D:\2025QPSC\qupath-extension-qpsc\src\main\java\qupath\ext\qpsc\controller\ExistingImageWorkflow.java:1062: warning: [unchecked] unchecked cast
+                    Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.details.get("currentQuPathProject");
+                                                                                                     ^
+  required: Project<BufferedImage>
+  found:    Object
+D:\2025QPSC\qupath-extension-qpsc\src\main\java\qupath\ext\qpsc\controller\ExistingImageWorkflow.java:1075: warning: [unchecked] unchecked cast
+                    Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.details.get("currentQuPathProject");
+                                                                                                     ^
+  required: Project<BufferedImage>
+  found:    Object
+5 warnings
+
+> Task :run
+13:18:35.527 [JavaFX Application Thread] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting default Locale to en_US
+13:18:35.531 [JavaFX Application Thread] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting Locale for FORMAT to en_US
+13:18:35.531 [JavaFX Application Thread] [INFO ] qupath.lib.gui.prefs.PathPrefs - Setting Locale for DISPLAY to en_US
+13:18:35.567 [JavaFX Application Thread] [INFO ] qupath.lib.common.ThreadTools - Setting parallelism to 19
+13:18:35.651 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Initializing: 1753381115651
+13:18:36.315 [JavaFX Application Thread] [INFO ] q.l.g.i.s.ImageRegionStoreFactory - Setting tile cache size to 8156.00 MB (25.0% max memory)
+13:18:36.835 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - QuPath build: Version: 0.7.0-SNAPSHOT
+Build time: 2025-07-24 13:18
+13:18:39.461 [JavaFX Application Thread] [INFO ] qupath.lib.scripting.QP - Initializing type adapters
+13:18:40.101 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.SetupScope - Installing extension: QuPath SCope
+13:18:40.208 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Loaded 1 transform presets from D:\2025QPSC\smartpath_configurations\saved_transforms.json
+13:18:40.210 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+13:18:40.211 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+13:18:40.211 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension QuPath SCope version 0.2.1-SNAPSHOT (110 ms)
+13:18:40.214 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension name version 0.1.0 (1 ms)
+13:18:40.546 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension BasicStitching version 0.1.0 (288 ms)
+13:18:40.565 [JavaFX Application Thread] [INFO ] q.l.i.s.b.BioFormatsOptionsExtension - Bio-Formats version 8.2.0
+13:18:40.577 [JavaFX Application Thread] [INFO ] q.l.i.s.b.BioFormatsOptionsExtension - If Bio-Formats is slow to load images, setting the Bio-Formats memoization time in QuPath's preferences may help (this will create temp files)
+13:18:40.577 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension Bio-Formats extension (Bio-Formats 8.2.0) version 0.7.0-SNAPSHOT (29 ms)
+13:18:40.657 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension ImageJ extension version 0.7.0-SNAPSHOT (24 ms)
+13:18:40.694 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension Processing & classification extension version 0.7.0-SNAPSHOT (36 ms)
+13:18:40.958 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension Rich script editor extension version 0.7.0-SNAPSHOT (252 ms)
+13:18:40.962 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension SVG export extension version 0.7.0-SNAPSHOT (2 ms)
+13:18:41.173 [JavaFX Application Thread] [INFO ] q.ext.openslide.OpenSlideExtension - OpenSlide loaded successfully: 4.0.0
+13:18:41.173 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension OpenSlide extension version 0.7.0-SNAPSHOT (209 ms)
+13:18:41.181 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension QuPath training extension version 0.1.0 (3 ms)
+13:18:41.183 [JavaFX Application Thread] [INFO ] qupath.ext.djl.DjlExtension - Registering DjlDnnModel
+13:18:41.194 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension Deep Java Library extension version 0.4.0 (11 ms)
+13:18:41.199 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension Align extension version 0.5.0 (2 ms)
+13:18:41.203 [JavaFX Application Thread] [INFO ] qupath.lib.gui.ExtensionLoader - Loaded extension Stitching extension version 0.1.0 (0 ms)
+13:18:41.247 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathApp - Starting QuPath with parameters: []
+13:18:41.531 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.SetupScope - Creating microscope alignment menu item. Config valid: true
+13:18:41.534 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.SetupScope - Menu items added for extension: QuPath SCope
+13:20:14.373 [JavaFX Application Thread] [INFO ] q.l.i.s.b.BioFormatsServerOptions - Setting max Bio-Formats readers to 20
+13:20:17.624 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+13:20:25.613 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+13:20:33.611 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - ************************************
+13:20:33.611 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Starting Existing Image Workflow...
+13:20:33.611 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - ************************************
+13:20:38.941 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189Exist, folder: D:\2025QPSC\data, modality: BF_10x
+13:20:38.941 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189Exist, modality: BF_10x
+13:20:38.953 [JavaFX Application Thread] [INFO ] q.e.q.u.AlignmentSelectionController - Starting alignment selection dialog for modality: BF_10x
+13:20:38.970 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Loaded 1 transform presets from D:\2025QPSC\smartpath_configurations\saved_transforms.json
+13:20:38.970 [JavaFX Application Thread] [INFO ] q.e.q.u.AlignmentSelectionController - Loading transforms for microscope: 'PPM' from directory: 'D:\2025QPSC\smartpath_configurations'
+13:20:38.973 [JavaFX Application Thread] [INFO ] q.e.q.u.AlignmentSelectionController - Found 1 transforms for microscope 'PPM' in file: D:\2025QPSC\smartpath_configurations/saved_transforms.json
+13:20:41.198 [JavaFX Application Thread] [INFO ] q.e.q.u.AlignmentSelectionController - Dialog result: Use existing alignment - transform: 'Ocus40_PPM', refinement: false
+13:20:41.206 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Path A: Using existing alignment
+13:20:41.207 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Using macro pixel size 88.0 µm for scanner 'Generic'
+13:20:41.259 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+13:20:41.261 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+13:20:41.261 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Applied flips to cropped macro image: X=true, Y=true
+13:20:41.261 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Using saved green box parameters from transform
+13:20:41.262 [JavaFX Application Thread] [INFO ] q.e.q.ui.GreenBoxPreviewController - Opening green box preview dialog - Image size: 938x312, Has saved params: true
+13:20:42.831 [JavaFX Application Thread] [INFO ] q.e.q.ui.GreenBoxPreviewController - Running green box detection - Edge: 3, Threshold: 0.4
+13:20:42.834 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+13:20:42.937 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+13:20:42.937 [JavaFX Application Thread] [INFO ] q.e.q.ui.GreenBoxPreviewController - Green box detected successfully - Location: (449.0, 38.0), Size: 368.0x235.0, Confidence: 0.530333679587411
+13:20:42.945 [JavaFX Application Thread] [WARN ] q.e.q.ui.GreenBoxPreviewController - Low confidence detection (0.530333679587411) - user may want to adjust parameters
+13:20:44.192 [JavaFX Application Thread] [INFO ] q.e.q.ui.GreenBoxPreviewController - User confirmed green box detection - Final parameters: threshold=0.4, edge=3
+13:20:44.201 [JavaFX Application Thread] [INFO ] q.e.q.ui.GreenBoxPreviewController - Green box detection completed successfully
+13:20:44.209 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Creating new project
+13:20:44.211 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Creating/opening project: 189Exist in D:\2025QPSC\data
+13:20:44.214 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Creating new project in: D:\2025QPSC\data\189Exist
+13:20:44.215 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Current image found, checking if it needs to be added to project
+13:20:44.217 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Adding new image to project: D:\2025QPSC\data\MH_Slides\MetroHealth_189.svs
+13:20:44.217 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Adding image to project: MetroHealth_189.svs (flipX=true, flipY=true)
+13:20:44.290 [JavaFX Application Thread] [WARN ] q.e.q.utilities.QPProjectFunctions - Applying flips to image - associated images (macro) will not be preserved in the project
+13:20:44.415 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+13:20:44.444 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 0 object(s)...
+13:20:44.446 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.01 seconds
+13:20:44.457 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Successfully added flipped image to project (associated images not preserved)
+13:20:44.458 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Opened image in GUI: MetroHealth_189.svs
+13:20:44.473 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+13:20:44.486 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to Project: 189Exist-project
+13:20:44.487 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Reopening image after project set: MetroHealth_189.svs
+13:20:50.988 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+13:20:51.989 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Project setup complete. Mode: BF_10x_1, Tile acquisition parent dir: D:\2025QPSC\data\189Exist\BF_10x_1
+13:20:52.566 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Loaded macro→stage transform: AffineTransform[[89.24008626086957, 0.0, -45945.93786713043], [0.0, 87.3413610212766, -12601.370662808511]]
+13:20:52.571 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Modifying script D:\2025QPSC\data\MH_Slides\DetectTissue.groovy
+13:20:54.999 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Tissue detection completed
+13:20:55.002 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Auto-named annotation: Tissue_71941_42473
+13:20:55.002 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Auto-named annotation: Tissue_121583_48062
+13:20:55.002 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Auto-named 2 annotations
+13:20:55.002 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Green box detected at (449.0, 38.0, 368.0, 235.0) in displayed (cropped+flipped) macro
+13:20:55.002 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - FullRes→Macro transform: AffineTransform[[0.0028076171875, 0.0, 449.0], [0.0, 0.00286865234375, 38.0]]
+13:20:55.003 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Transform verification: full-res (0,0) → macro [449.0, 38.0], full-res (131072,81920) → macro [817.0, 273.0]
+13:20:55.003 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Created full-res→stage transform: AffineTransform[[0.250552, 0.0, -5877.139135999998], [0.0, 0.250552, -9282.398944]]
+13:20:55.004 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Stage limits from config - X: [-21000.0, 33000.0], Y: [-12000.0, 13000.0]
+13:20:55.013 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Green box detected at (449.0, 38.0, 368.0, 235.0)
+13:20:55.013 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+13:20:55.013 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+13:20:55.013 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, height_px] (key: 2) for lookup path {1}
+13:20:55.013 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+13:20:55.013 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Image pixel size: 0.250552 µm, Macro pixel size: 88.0 µm, Camera pixel size: 0.4537 µm
+13:20:55.013 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Frame size in pixels: 4867.435103291931 x 3983.76384942048 (from 1219.5456 x 998.14 µm)
+13:20:55.090 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Starting tile creation for modality: BF_10x_1
+13:20:55.091 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Creating tiles for 2 annotations
+13:20:55.154 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 71940_42472 at bounds (18368.0, 4672.0, 100992.0, 72128.0)
+13:20:55.155 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+13:20:55.155 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (15934.282448354035, 2680.11807528976) to (121793.71755164597, 78791.88192471024)
+13:20:55.156 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+13:20:55.156 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+13:20:55.156 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 22 columns x 20 rows
+13:20:55.587 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 303 tiles, skipped 137 tiles outside ROI
+13:20:55.591 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189Exist\BF_10x_1\71940_42472\TileConfiguration.txt
+13:20:55.754 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 303 detection tiles to QuPath
+13:20:55.754 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 121583_48062 at bounds (119360.0, 41664.0, 4992.0, 14144.0)
+13:20:55.755 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+13:20:55.755 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (116926.28244835403, 39672.11807528976) to (126785.71755164597, 57799.881924710244)
+13:20:55.755 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+13:20:55.755 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+13:20:55.755 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 5 rows
+13:20:55.767 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 9 tiles, skipped 6 tiles outside ROI
+13:20:55.769 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062\TileConfiguration.txt
+13:20:55.942 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 9 detection tiles to QuPath
+13:20:55.943 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile creation completed
+13:20:55.943 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Created tiles for 2 annotations
+13:20:55.948 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Saved slide-specific alignment to: D:\2025QPSC\data\189Exist\alignmentFiles\189Exist_alignment.json
+13:21:07.797 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - 1 object(s) deleted
+13:21:18.326 [JavaFX Application Thread] [INFO ] q.ext.qpsc.model.RotationManager - Brightfield angle configured: 90.0 degrees
+13:21:18.327 [JavaFX Application Thread] [INFO ] q.ext.qpsc.model.RotationManager - Initialized rotation strategies for modality: BF_10x
+13:21:18.327 [JavaFX Application Thread] [INFO ] q.ext.qpsc.model.RotationManager - Getting rotation angles for modality: BF_10x
+13:21:18.327 [JavaFX Application Thread] [INFO ] q.ext.qpsc.model.RotationManager - Using BrightfieldRotationStrategy for modality BF_10x
+13:21:18.328 [JavaFX Application Thread] [INFO ] q.ext.qpsc.model.RotationManager - Strategy BrightfieldRotationStrategy returned angles: [90.0]
+13:21:18.330 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Rotation angles: [90.0]
+13:21:18.330 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Preparing annotations for acquisition...
+13:21:18.330 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Auto-named annotation: Tissue_42985_52898
+13:21:18.330 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Auto-named 1 annotations
+13:21:38.585 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Removed 312 existing tiles for modality: BF_10x
+13:21:38.586 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+13:21:38.587 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+13:21:38.587 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, height_px] (key: 2) for lookup path {1}
+13:21:38.587 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+13:21:38.588 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Image pixel size: 0.250552 µm, Macro pixel size: 88.0 µm, Camera pixel size: 0.4537 µm
+13:21:38.588 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Frame size in pixels: 4867.435103291931 x 3983.76384942048 (from 1219.5456 x 998.14 µm)
+13:21:38.655 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Starting tile creation for modality: BF_10x_1
+13:21:38.656 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Creating tiles for 2 annotations
+13:21:38.726 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 42985_52897 at bounds (39052.0, 49074.0, 7866.0, 7647.0)
+13:21:38.728 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+13:21:38.728 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (36618.28244835403, 47082.11807528976) to (49351.71755164596, 58712.881924710244)
+13:21:38.728 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+13:21:38.728 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+13:21:38.728 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 3 rows
+13:21:38.736 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 8 tiles, skipped 1 tiles outside ROI
+13:21:38.738 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897\TileConfiguration.txt
+13:21:38.881 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 8 detection tiles to QuPath
+13:21:38.882 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 121583_48062 at bounds (119360.0, 41664.0, 4992.0, 14144.0)
+13:21:38.883 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+13:21:38.883 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (116926.28244835403, 39672.11807528976) to (126785.71755164597, 57799.881924710244)
+13:21:38.883 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+13:21:38.883 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+13:21:38.884 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 5 rows
+13:21:38.896 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 9 tiles, skipped 6 tiles outside ROI
+13:21:38.898 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062\TileConfiguration.txt
+13:21:39.035 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 9 detection tiles to QuPath
+13:21:39.037 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile creation completed
+13:21:39.037 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Created tiles for 2 annotations
+13:21:39.037 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Transforming tile configurations in: D:\2025QPSC\data\189Exist\BF_10x_1
+13:21:39.037 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Looking for TileConfiguration files in: D:\2025QPSC\data\189Exist\BF_10x_1
+13:21:39.040 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Found and transforming: D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062\TileConfiguration.txt
+13:21:39.043 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Backed up original to: D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062\TileConfiguration_QP.txt
+13:21:39.045 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Transformed 9 tile coordinates
+13:21:39.046 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Found and transforming: D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897\TileConfiguration.txt
+13:21:39.047 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Backed up original to: D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897\TileConfiguration_QP.txt
+13:21:39.049 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Transformed 8 tile coordinates
+13:21:39.049 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Found and transforming: D:\2025QPSC\data\189Exist\BF_10x_1\71940_42472\TileConfiguration.txt
+13:21:39.051 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Backed up original to: D:\2025QPSC\data\189Exist\BF_10x_1\71940_42472\TileConfiguration_QP.txt
+13:21:39.069 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Transformed 303 tile coordinates
+13:21:39.070 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Modified directories: [121583_48062, 42985_52897, 71940_42472]
+13:21:39.070 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Transformed tile configurations for directories: [121583_48062, 42985_52897, 71940_42472]
+13:21:39.070 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Created and transformed tiles for 2 annotations
+13:21:39.070 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Found 2 valid annotations for acquisition
+13:21:39.078 [JavaFX Application Thread] [INFO ] q.e.q.c.ExistingImageWorkflow - Processing annotation 1 of 2: 121583_48062
+13:21:39.088 [ForkJoinPool.commonPool-worker-5] [INFO ] q.e.q.c.ExistingImageWorkflow - Starting acquisition with args: [acquisition_workflow, D:\2025QPSC\smartpath_configurations\config_PPM.yml, D:\2025QPSC\data, 189Exist, BF_10x_1, 121583_48062, (90.0)]
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe, D:\2025QPSC\smartpath_configurations\config_PPM.yml, D:\2025QPSC\data, 189Exist, BF_10x_1, 121583_48062, (90.0)] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: D:\2025QPSC\smartpath_configurations\config_PPM.yml
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: D:\2025QPSC\data
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: 189Exist
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: BF_10x_1
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 5: 121583_48062
+13:21:39.096 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 6: (90.0)
+13:21:39.124 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 946412107
+13:21:39.125 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Base directory for monitoring: D:\2025QPSC\data\189Exist\BF_10x_1
+13:21:39.125 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Detected 1 rotation angles: [90.0]
+13:21:39.126 [ForkJoinPool.commonPool-worker-5] [INFO ] q.ext.qpsc.utilities.MinorFunctions - Found 9 .tif entries out of 10 lines in D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062\TileConfiguration_QP.txt
+13:21:39.126 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Annotation workflow: monitoring D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062 for 9 base tiles × 1 angles = 9 total files
+13:21:39.477 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Creating progress bar UI on FX thread for 9 total files
+13:21:39.541 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Starting progress Timeline on FX thread
+13:21:39.543 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Progress bar initialized for 9 files with 60000 ms timeout
+13:21:39.543 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Started progress bar for 9 expected tiles
+13:21:39.546 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - File monitor thread started
+13:21:39.546 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Watching directories: [D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062]
+13:21:39.546 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Expecting 9 total TIF files
+13:21:39.546 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Using tifCounter with identity: 946412107
+13:21:39.546 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Directory EXISTS: D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062
+13:21:39.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Contents of D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062: 
+13:21:39.558 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -     - TileConfiguration.txt
+13:21:39.558 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -     - TileConfiguration_QP.txt
+13:21:39.562 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - Check #1 - Found 0 TIF files in D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062
+13:21:47.614 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 0.tif
+13:21:48.054 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 1 of 9 files
+13:21:49.377 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - Check #40 - Found 1 TIF files in D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062
+13:21:49.378 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - === File Monitor Status ===
+13:21:49.378 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Checks performed: 40
+13:21:49.378 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Files found: 1/9
+13:21:49.378 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Counter value: 1
+13:21:49.378 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Process alive: true
+13:21:49.378 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - ==========================
+13:21:49.882 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 1.tif
+13:21:50.054 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 2 of 9 files
+13:21:52.145 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 2.tif
+13:21:52.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 3 of 9 files
+13:21:54.157 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 3.tif
+13:21:54.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 4 of 9 files
+13:21:56.421 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 4.tif
+13:21:56.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 5 of 9 files
+13:21:58.684 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 5.tif
+13:21:59.046 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 6 of 9 files
+13:21:59.439 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - Check #80 - Found 6 TIF files in D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062
+13:21:59.439 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - === File Monitor Status ===
+13:21:59.439 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Checks performed: 80
+13:21:59.439 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Files found: 6/9
+13:21:59.439 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Counter value: 6
+13:21:59.439 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Process alive: true
+13:21:59.441 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - ==========================
+13:22:00.950 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 6.tif
+13:22:01.046 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 7 of 9 files
+13:22:03.216 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 7.tif
+13:22:03.542 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 8 of 9 files
+13:22:05.480 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 8.tif
+13:22:05.559 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 9 of 9 files
+13:22:05.560 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Progress bar closing - complete: true, stalled: false, files: 9/9
+13:22:05.731 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - File monitor thread ending - found 9/9 files
+13:22:06.576 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Closing progress bar handle
+13:22:06.576 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.ui.UIFunctions - ProgressHandle.close() called.
+13:22:06.578 [ForkJoinPool.commonPool-worker-5] [INFO ] q.e.q.c.ExistingImageWorkflow - Acquisition completed successfully for 121583_48062
+13:22:06.590 [ForkJoinPool.commonPool-worker-5] [INFO ] q.e.q.c.ExistingImageWorkflow - Processing annotation 2 of 2: 42985_52897
+13:22:06.590 [stitching-queue] [INFO ] q.e.q.c.ExistingImageWorkflow - Stitching 121583_48062 for modality BF_10x_1
+13:22:06.590 [ForkJoinPool.commonPool-worker-5] [INFO ] q.e.q.c.ExistingImageWorkflow - Starting acquisition with args: [acquisition_workflow, D:\2025QPSC\smartpath_configurations\config_PPM.yml, D:\2025QPSC\data, 189Exist, BF_10x_1, 42985_52897, (90.0)]
+13:22:06.591 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe, D:\2025QPSC\smartpath_configurations\config_PPM.yml, D:\2025QPSC\data, 189Exist, BF_10x_1, 42985_52897, (90.0)] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+13:22:06.591 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\acquisition_workflow.exe
+13:22:06.591 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: D:\2025QPSC\smartpath_configurations\config_PPM.yml
+13:22:06.591 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: D:\2025QPSC\data
+13:22:06.592 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: 189Exist
+13:22:06.592 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: BF_10x_1
+13:22:06.592 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 5: 42985_52897
+13:22:06.592 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 6: (90.0)
+13:22:06.600 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 1080762267
+13:22:06.601 [stitching-queue] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Stitching tiles in 'D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062' → output in 'D:\2025QPSC\data\189Exist\SlideImages'
+13:22:06.601 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Base directory for monitoring: D:\2025QPSC\data\189Exist\BF_10x_1
+13:22:06.601 [stitching-queue] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Using matching string: '121583_48062'
+13:22:06.602 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Detected 1 rotation angles: [90.0]
+13:22:06.603 [ForkJoinPool.commonPool-worker-5] [INFO ] q.ext.qpsc.utilities.MinorFunctions - Found 8 .tif entries out of 9 lines in D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897\TileConfiguration_QP.txt
+13:22:06.604 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Annotation workflow: monitoring D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897 for 8 base tiles × 1 angles = 8 total files
+13:22:06.605 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - === STITCHING WORKFLOW STARTING ===
+13:22:06.605 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - Configuration:
+13:22:06.606 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Stitching type: Coordinates in TileConfiguration.txt file
+13:22:06.606 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Folder path: D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062
+13:22:06.606 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Matching string: '121583_48062'
+13:22:06.606 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Output path: D:\2025QPSC\data\189Exist\SlideImages
+13:22:06.606 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Compression: DEFAULT
+13:22:06.606 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Pixel size: 0.4537 µm
+13:22:06.606 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Downsample: 1.0
+13:22:06.613 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - Selected strategy: TileConfigurationTxtStrategy
+13:22:06.613 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - Preparing tile mappings...
+13:22:06.613 [stitching-queue] [INFO ] q.e.b.s.TileConfigurationTxtStrategy - Preparing stitching using TileConfiguration.txt strategy for folder: D:\2025QPSC\data\189Exist\BF_10x_1\121583_48062
+13:22:06.614 [stitching-queue] [INFO ] q.e.b.s.TileConfigurationTxtStrategy - Total tiles mapped from TileConfiguration.txt: 0
+13:22:06.615 [stitching-queue] [ERROR] q.e.b.workflow.StitchingWorkflow - No tile mappings produced by strategy
+13:22:06.615 [stitching-queue] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Stitching returned path: null
+13:22:06.615 [stitching-queue] [ERROR] q.e.q.c.ExistingImageWorkflow - Stitching failed for 121583_48062
+java.io.IOException: Stitching workflow returned null - no tiles were stitched
+	at qupath.ext.qpsc.utilities.UtilityFunctions.stitchImagesAndUpdateProject(UtilityFunctions.java:120)
+	at qupath.ext.qpsc.utilities.UtilityFunctions.stitchImagesAndUpdateProject(UtilityFunctions.java:288)
+	at qupath.ext.qpsc.controller.ExistingImageWorkflow.lambda$stitchAnnotation$53(ExistingImageWorkflow.java:1592)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncRun.run(CompletableFuture.java:1804)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+13:22:06.640 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Creating progress bar UI on FX thread for 8 total files
+13:22:06.665 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Starting progress Timeline on FX thread
+13:22:06.666 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Progress bar initialized for 8 files with 60000 ms timeout
+13:22:06.666 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Started progress bar for 8 expected tiles
+13:22:06.667 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - File monitor thread started
+13:22:06.667 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Watching directories: [D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897]
+13:22:06.667 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Expecting 8 total TIF files
+13:22:06.667 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Using tifCounter with identity: 1080762267
+13:22:06.667 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Directory EXISTS: D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897
+13:22:06.667 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   - Contents of D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897: 
+13:22:06.668 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -     - TileConfiguration.txt
+13:22:06.668 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -     - TileConfiguration_QP.txt
+13:22:06.668 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - Check #1 - Found 0 TIF files in D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897
+13:22:06.678 [JavaFX Application Thread] [ERROR] qupath.ext.qpsc.ui.UIFunctions - Error during Stitching Error: Stitching failed for 121583_48062: Stitching workflow returned null - no tiles were stitched
+13:22:13.459 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 0.tif
+13:22:13.670 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 1 of 8 files
+13:22:15.474 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 1.tif
+13:22:15.671 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 2 of 8 files
+13:22:16.481 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - Check #40 - Found 2 TIF files in D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897
+13:22:16.482 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - === File Monitor Status ===
+13:22:16.482 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Checks performed: 40
+13:22:16.482 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Files found: 2/8
+13:22:16.482 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Counter value: 2
+13:22:16.482 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Process alive: true
+13:22:16.482 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - ==========================
+13:22:17.738 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 2.tif
+13:22:18.182 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 3 of 8 files
+13:22:20.004 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 3.tif
+13:22:20.166 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 4 of 8 files
+13:22:22.269 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 4.tif
+13:22:22.677 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 5 of 8 files
+13:22:24.533 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 5.tif
+13:22:24.679 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 6 of 8 files
+13:22:26.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - Check #80 - Found 6 TIF files in D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897
+13:22:26.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - === File Monitor Status ===
+13:22:26.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Checks performed: 80
+13:22:26.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Files found: 6/8
+13:22:26.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Counter value: 6
+13:22:26.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor -   Process alive: true
+13:22:26.547 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - ==========================
+13:22:26.799 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 6.tif
+13:22:27.174 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 7 of 8 files
+13:22:29.063 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - NEW TIF DETECTED: 7.tif
+13:22:29.174 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - PROGRESS UPDATE: 8 of 8 files
+13:22:29.175 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.ui.UIFunctions - Progress bar closing - complete: true, stalled: false, files: 8/8
+13:22:29.315 [TIF-File-Monitor] [INFO ] qupath.ext.qpsc.service.CliExecutor - File monitor thread ending - found 8/8 files
+13:22:30.097 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.service.CliExecutor - Closing progress bar handle
+13:22:30.097 [ForkJoinPool.commonPool-worker-5] [INFO ] qupath.ext.qpsc.ui.UIFunctions - ProgressHandle.close() called.
+13:22:30.097 [ForkJoinPool.commonPool-worker-5] [INFO ] q.e.q.c.ExistingImageWorkflow - Acquisition completed successfully for 42985_52897
+13:22:30.098 [ForkJoinPool.commonPool-worker-5] [INFO ] q.e.q.c.ExistingImageWorkflow - All acquisitions completed. Waiting for 2 stitching operations to complete...
+13:22:30.098 [stitching-queue] [INFO ] q.e.q.c.ExistingImageWorkflow - Stitching 42985_52897 for modality BF_10x_1
+13:22:30.098 [stitching-queue] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Stitching tiles in 'D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897' → output in 'D:\2025QPSC\data\189Exist\SlideImages'
+13:22:30.098 [stitching-queue] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Using matching string: '42985_52897'
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - === STITCHING WORKFLOW STARTING ===
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - Configuration:
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Stitching type: Coordinates in TileConfiguration.txt file
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Folder path: D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Matching string: '42985_52897'
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Output path: D:\2025QPSC\data\189Exist\SlideImages
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Compression: DEFAULT
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Pixel size: 0.4537 µm
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow -   - Downsample: 1.0
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - Selected strategy: TileConfigurationTxtStrategy
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.workflow.StitchingWorkflow - Preparing tile mappings...
+13:22:30.099 [stitching-queue] [INFO ] q.e.b.s.TileConfigurationTxtStrategy - Preparing stitching using TileConfiguration.txt strategy for folder: D:\2025QPSC\data\189Exist\BF_10x_1\42985_52897
+13:22:30.100 [stitching-queue] [INFO ] q.e.b.s.TileConfigurationTxtStrategy - Total tiles mapped from TileConfiguration.txt: 0
+13:22:30.100 [stitching-queue] [ERROR] q.e.b.workflow.StitchingWorkflow - No tile mappings produced by strategy
+13:22:30.100 [stitching-queue] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Stitching returned path: null
+13:22:30.100 [stitching-queue] [ERROR] q.e.q.c.ExistingImageWorkflow - Stitching failed for 42985_52897
+java.io.IOException: Stitching workflow returned null - no tiles were stitched
+	at qupath.ext.qpsc.utilities.UtilityFunctions.stitchImagesAndUpdateProject(UtilityFunctions.java:120)
+	at qupath.ext.qpsc.utilities.UtilityFunctions.stitchImagesAndUpdateProject(UtilityFunctions.java:288)
+	at qupath.ext.qpsc.controller.ExistingImageWorkflow.lambda$stitchAnnotation$53(ExistingImageWorkflow.java:1592)
+	at java.base/java.util.concurrent.CompletableFuture$AsyncRun.run(CompletableFuture.java:1804)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+13:22:30.101 [stitching-queue] [INFO ] q.e.q.c.ExistingImageWorkflow - All acquisitions and stitching completed
+13:22:30.115 [JavaFX Application Thread] [ERROR] qupath.ext.qpsc.ui.UIFunctions - Error during Stitching Error: Stitching failed for 42985_52897: Stitching workflow returned null - no tiles were stitched
+14:11:18.052 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+14:11:18.056 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to null
+14:11:27.521 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+14:11:28.743 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+14:11:35.117 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - *******************************************
+14:11:35.118 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Starting Microscope Alignment Workflow...
+14:11:35.118 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - ********************************************
+14:11:35.271 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Loaded 1 transform presets from D:\2025QPSC\smartpath_configurations\saved_transforms.json
+14:11:54.193 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, folder: D:\2025QPSC\data, modality: BF_10x
+14:11:54.193 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, modality: BF_10x
+14:11:54.383 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+14:11:54.385 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+14:12:02.034 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Successfully retrieved macro image: 1200x400
+14:12:02.034 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+14:12:02.035 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Cropped to slide area: 938x312 (offset: 0, 19)
+14:12:02.037 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+14:12:02.037 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Applied flips: X=true, Y=true
+14:12:02.038 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+14:12:02.200 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+14:12:02.216 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Saved successful detection parameters to preferences
+14:12:04.269 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Performing detection while macro image is available
+14:12:04.299 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Original macro dimensions: 1200x400
+14:12:04.299 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using scanner 'Generic' for macro image processing
+14:12:04.299 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+14:12:04.300 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Cropped macro dimensions: 938x312 (offset: 0, 19)
+14:12:04.302 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+14:12:04.302 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Applied flips for green box detection: X=true, Y=true
+14:12:04.302 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+14:12:04.336 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+14:12:04.339 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Starting macro image analysis with method: Color deconvolution
+14:12:04.340 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Available associated images: [Series 1 (label image), Series 2 (macro image)]
+14:12:04.340 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found macro image entry: 'Series 2 (macro image)'
+14:12:04.406 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Extracted macro image: 1200x400 pixels
+14:12:04.546 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found 1 tissue regions with overall bounds: (137.0, 62.0, 303.0, 225.0)
+14:12:04.547 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue analysis found 1 regions
+14:12:04.550 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Creating new project in: D:\2025QPSC\data\189align2
+14:12:04.560 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+14:12:04.562 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to Project: 189align2-project
+14:12:04.562 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Adding image to project: MetroHealth_189.svs (flipX=true, flipY=true)
+14:12:04.621 [JavaFX Application Thread] [WARN ] q.e.q.utilities.QPProjectFunctions - Applying flips to image - associated images (macro) will not be preserved in the project
+14:12:04.655 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+14:12:04.673 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 0 object(s)...
+14:12:04.673 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.01 seconds
+14:12:04.681 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Successfully added flipped image to project (associated images not preserved)
+14:12:05.633 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+14:12:05.633 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Reopened image with flips applied
+14:12:05.638 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Running tissue detection script
+14:12:05.639 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Modifying script D:\2025QPSC\data\MH_Slides\DetectTissue.groovy
+14:12:06.918 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue detection script completed
+14:12:06.920 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations after script
+14:12:06.921 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Using macro pixel size 88.0 µm for scanner 'Generic'
+14:12:06.921 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using macro pixel size 88.0 µm from scanner configuration
+14:12:06.922 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating alignment tiles with flips - X: true, Y: true
+14:12:06.922 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations for tiling
+14:12:06.996 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Removed existing tiles for modality base: BF_10x
+14:12:06.997 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+14:12:06.997 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+14:12:06.997 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, height_px] (key: 2) for lookup path {1}
+14:12:06.997 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+14:12:06.997 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating tiles: frame size 4867.435103291931x3983.76384942048 QP pixels (1219.5456x998.14 µm) for modality BF_10x
+14:12:06.997 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Starting tile creation for modality: BF_10x_1
+14:12:06.997 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Creating tiles for 2 annotations
+14:12:07.075 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 71940_42472 at bounds (18368.0, 4672.0, 100992.0, 72128.0)
+14:12:07.077 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+14:12:07.077 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (15934.282448354035, 2680.11807528976) to (121793.71755164597, 78791.88192471024)
+14:12:07.077 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+14:12:07.077 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+14:12:07.077 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 22 columns x 20 rows
+14:12:07.417 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 303 tiles, skipped 137 tiles outside ROI
+14:12:07.419 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\71940_42472\TileConfiguration.txt
+14:12:07.549 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 303 detection tiles to QuPath
+14:12:07.551 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 121583_48062 at bounds (119360.0, 41664.0, 4992.0, 14144.0)
+14:12:07.620 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+14:12:07.620 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (116926.28244835403, 39672.11807528976) to (126785.71755164597, 57799.881924710244)
+14:12:07.620 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+14:12:07.620 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+14:12:07.620 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 5 rows
+14:12:07.626 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 9 tiles, skipped 6 tiles outside ROI
+14:12:07.629 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\121583_48062\TileConfiguration.txt
+14:12:07.760 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 9 detection tiles to QuPath
+14:12:07.760 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile creation completed
+14:12:07.760 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created detection tiles for alignment
+14:12:08.514 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Starting affine transformation setup (pixelSize: 0.250552, flipX: false, flipY: false)
+14:12:08.515 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Initial scaling transform: AffineTransform[[0.250552, 0.0, 0.0], [0.0, 0.250552, 0.0]]
+14:13:30.693 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - User selected tile '233' at QuPath coords: [18368.0, 56460.930042466236]
+14:13:31.806 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:13:37.077 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1246, 4859)
+14:13:37.079 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1246  4859
+14:13:37.079 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Current stage coordinates after manual alignment: [-1246.0, 4859.0]
+14:13:37.079 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Calculated affine transform from manual alignment: AffineTransform[[0.250552, 0.0, -5848.139136], [0.0, 0.250552, -9287.398944]]
+14:13:37.108 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '2'
+14:13:37.109 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, 17047.184, -y, -8116.820000000001] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:13:37.109 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+14:13:37.109 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+14:13:37.109 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: 17047.184
+14:13:37.109 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+14:13:37.109 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: -8116.820000000001
+14:13:37.116 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 2003214319
+14:13:42.239 [JavaFX Application Thread] [ERROR] qupath.ext.qpsc.ui.UIFunctions - Error during Stage Move XY: Move XY returned exit code 1
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe\__main__.py", line 10, in <module>
+  File "C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\src\smart_wsi_scanner\qp_stage.py", line 41, in move_stageXY
+    hardware.move_to_position(sp_position(**pos_kwargs))
+  File "C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\src\smart_wsi_scanner\hardware.py", line 77, in move_to_position
+    if not self._is_coordinate_in_range(position):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\src\smart_wsi_scanner\hardware.py", line 149, in _is_coordinate_in_range
+    return smartpath.is_coordinate_in_range(self.settings, position)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\src\smart_wsi_scanner\smartpath.py", line 176, in is_coordinate_in_range
+    if settings.stage.ylimit.low < position.y < settings.stage.ylimit.high:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '<' not supported between instances of 'str' and 'float'
+
+14:14:56.999 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - User cancelled during secondary alignment at tile '2'.
+14:14:57.001 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '233'
+14:14:57.001 [JavaFX Application Thread] [ERROR] q.e.q.u.AffineTransformationController - Error during tile refinement
+java.lang.NullPointerException: Cannot invoke "java.awt.geom.AffineTransform.transform(java.awt.geom.Point2D, java.awt.geom.Point2D)" because "fullResToStageTransform" is null
+	at qupath.ext.qpsc.utilities.TransformationFunctions.transformQuPathFullResToStage(TransformationFunctions.java:59)
+	at qupath.ext.qpsc.ui.AffineTransformationController.lambda$setupAffineTransformationAndValidationGUI$0(AffineTransformationController.java:131)
+	at javafx.graphics@23.0.2/com.sun.javafx.application.PlatformImpl.lambda$runLater$10(PlatformImpl.java:456)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:400)
+	at javafx.graphics@23.0.2/com.sun.javafx.application.PlatformImpl.lambda$runLater$11(PlatformImpl.java:455)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.InvokeLaterDispatcher$Future.run(InvokeLaterDispatcher.java:95)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication._runLoop(Native Method)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication.lambda$runLoop$3(WinApplication.java:184)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+14:14:57.003 [JavaFX Application Thread] [ERROR] q.e.q.u.AffineTransformationController - Refinement failed
+java.util.concurrent.CompletionException: java.lang.NullPointerException: Cannot invoke "java.awt.geom.AffineTransform.transform(java.awt.geom.Point2D, java.awt.geom.Point2D)" because "fullResToStageTransform" is null
+	at java.base/java.util.concurrent.CompletableFuture.encodeRelay(CompletableFuture.java:368)
+	at java.base/java.util.concurrent.CompletableFuture.completeRelay(CompletableFuture.java:377)
+	at java.base/java.util.concurrent.CompletableFuture$UniRelay.tryFire(CompletableFuture.java:1097)
+	at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:510)
+	at java.base/java.util.concurrent.CompletableFuture.completeExceptionally(CompletableFuture.java:2194)
+	at qupath.ext.qpsc.ui.AffineTransformationController.lambda$setupAffineTransformationAndValidationGUI$0(AffineTransformationController.java:151)
+	at javafx.graphics@23.0.2/com.sun.javafx.application.PlatformImpl.lambda$runLater$10(PlatformImpl.java:456)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:400)
+	at javafx.graphics@23.0.2/com.sun.javafx.application.PlatformImpl.lambda$runLater$11(PlatformImpl.java:455)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.InvokeLaterDispatcher$Future.run(InvokeLaterDispatcher.java:95)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication._runLoop(Native Method)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication.lambda$runLoop$3(WinApplication.java:184)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NullPointerException: Cannot invoke "java.awt.geom.AffineTransform.transform(java.awt.geom.Point2D, java.awt.geom.Point2D)" because "fullResToStageTransform" is null
+	at qupath.ext.qpsc.utilities.TransformationFunctions.transformQuPathFullResToStage(TransformationFunctions.java:59)
+	at qupath.ext.qpsc.ui.AffineTransformationController.lambda$setupAffineTransformationAndValidationGUI$0(AffineTransformationController.java:131)
+	... 7 common frames omitted
+14:14:57.003 [JavaFX Application Thread] [ERROR] q.e.q.c.MicroscopeAlignmentWorkflow - Error in transform setup
+java.util.concurrent.CompletionException: java.lang.NullPointerException: Cannot invoke "java.awt.geom.AffineTransform.transform(java.awt.geom.Point2D, java.awt.geom.Point2D)" because "fullResToStageTransform" is null
+	at java.base/java.util.concurrent.CompletableFuture.encodeRelay(CompletableFuture.java:368)
+	at java.base/java.util.concurrent.CompletableFuture.completeRelay(CompletableFuture.java:377)
+	at java.base/java.util.concurrent.CompletableFuture$UniRelay.tryFire(CompletableFuture.java:1097)
+	at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:510)
+	at java.base/java.util.concurrent.CompletableFuture.completeExceptionally(CompletableFuture.java:2194)
+	at qupath.ext.qpsc.ui.AffineTransformationController.lambda$setupAffineTransformationAndValidationGUI$0(AffineTransformationController.java:151)
+	at javafx.graphics@23.0.2/com.sun.javafx.application.PlatformImpl.lambda$runLater$10(PlatformImpl.java:456)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:400)
+	at javafx.graphics@23.0.2/com.sun.javafx.application.PlatformImpl.lambda$runLater$11(PlatformImpl.java:455)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.InvokeLaterDispatcher$Future.run(InvokeLaterDispatcher.java:95)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication._runLoop(Native Method)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication.lambda$runLoop$3(WinApplication.java:184)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NullPointerException: Cannot invoke "java.awt.geom.AffineTransform.transform(java.awt.geom.Point2D, java.awt.geom.Point2D)" because "fullResToStageTransform" is null
+	at qupath.ext.qpsc.utilities.TransformationFunctions.transformQuPathFullResToStage(TransformationFunctions.java:59)
+	at qupath.ext.qpsc.ui.AffineTransformationController.lambda$setupAffineTransformationAndValidationGUI$0(AffineTransformationController.java:131)
+	... 7 common frames omitted
+14:14:57.088 [JavaFX Application Thread] [ERROR] qupath.ext.qpsc.ui.UIFunctions - Error during Transform Error: Transform setup failed: java.lang.NullPointerException: Cannot invoke "java.awt.geom.AffineTransform.transform(java.awt.geom.Point2D, java.awt.geom.Point2D)" because "fullResToStageTransform" is null
+14:17:22.351 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+14:17:22.354 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to null
+14:17:35.077 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+14:17:36.120 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+14:17:45.794 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - *******************************************
+14:17:45.795 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Starting Microscope Alignment Workflow...
+14:17:45.795 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - ********************************************
+14:17:45.823 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Loaded 1 transform presets from D:\2025QPSC\smartpath_configurations\saved_transforms.json
+14:17:47.795 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, folder: D:\2025QPSC\data, modality: BF_10x
+14:17:47.795 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, modality: BF_10x
+14:17:47.905 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+14:17:47.907 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+14:17:52.070 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Successfully retrieved macro image: 1200x400
+14:17:52.071 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+14:17:52.071 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Cropped to slide area: 938x312 (offset: 0, 19)
+14:17:52.072 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+14:17:52.072 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Applied flips: X=true, Y=true
+14:17:52.074 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+14:17:52.173 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+14:17:52.189 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Saved successful detection parameters to preferences
+14:17:53.823 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Performing detection while macro image is available
+14:17:53.849 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Original macro dimensions: 1200x400
+14:17:53.850 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using scanner 'Generic' for macro image processing
+14:17:53.850 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+14:17:53.850 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Cropped macro dimensions: 938x312 (offset: 0, 19)
+14:17:53.851 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+14:17:53.851 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Applied flips for green box detection: X=true, Y=true
+14:17:53.851 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+14:17:53.887 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+14:17:53.887 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Starting macro image analysis with method: Color deconvolution
+14:17:53.887 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Available associated images: [Series 1 (label image), Series 2 (macro image)]
+14:17:53.887 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found macro image entry: 'Series 2 (macro image)'
+14:17:53.917 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Extracted macro image: 1200x400 pixels
+14:17:54.011 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found 1 tissue regions with overall bounds: (137.0, 62.0, 303.0, 225.0)
+14:17:54.011 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue analysis found 1 regions
+14:17:54.013 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Creating new project in: D:\2025QPSC\data\189align2
+14:17:54.023 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+14:17:54.024 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to Project: 189align2-project
+14:17:54.025 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Adding image to project: MetroHealth_189.svs (flipX=true, flipY=true)
+14:17:54.079 [JavaFX Application Thread] [WARN ] q.e.q.utilities.QPProjectFunctions - Applying flips to image - associated images (macro) will not be preserved in the project
+14:17:54.110 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+14:17:54.122 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 0 object(s)...
+14:17:54.123 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.00 seconds
+14:17:54.129 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Successfully added flipped image to project (associated images not preserved)
+14:17:55.134 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+14:17:55.134 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Reopened image with flips applied
+14:17:55.135 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Running tissue detection script
+14:17:55.135 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Modifying script D:\2025QPSC\data\MH_Slides\DetectTissue.groovy
+14:17:56.379 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue detection script completed
+14:17:56.381 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations after script
+14:17:56.381 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Using macro pixel size 88.0 µm for scanner 'Generic'
+14:17:56.381 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using macro pixel size 88.0 µm from scanner configuration
+14:17:56.381 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating alignment tiles with flips - X: true, Y: true
+14:17:56.381 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations for tiling
+14:17:56.473 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Removed existing tiles for modality base: BF_10x
+14:17:56.474 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+14:17:56.474 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+14:17:56.474 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, height_px] (key: 2) for lookup path {1}
+14:17:56.474 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+14:17:56.476 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating tiles: frame size 4867.435103291931x3983.76384942048 QP pixels (1219.5456x998.14 µm) for modality BF_10x
+14:17:56.476 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Starting tile creation for modality: BF_10x_1
+14:17:56.476 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Creating tiles for 2 annotations
+14:17:56.568 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 71940_42472 at bounds (18368.0, 4672.0, 100992.0, 72128.0)
+14:17:56.570 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+14:17:56.570 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (15934.282448354035, 2680.11807528976) to (121793.71755164597, 78791.88192471024)
+14:17:56.570 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+14:17:56.570 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+14:17:56.570 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 22 columns x 20 rows
+14:17:56.867 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 303 tiles, skipped 137 tiles outside ROI
+14:17:56.870 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\71940_42472\TileConfiguration.txt
+14:17:57.011 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 303 detection tiles to QuPath
+14:17:57.011 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 121583_48062 at bounds (119360.0, 41664.0, 4992.0, 14144.0)
+14:17:57.012 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+14:17:57.012 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (116926.28244835403, 39672.11807528976) to (126785.71755164597, 57799.881924710244)
+14:17:57.012 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+14:17:57.012 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+14:17:57.012 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 5 rows
+14:17:57.018 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 9 tiles, skipped 6 tiles outside ROI
+14:17:57.047 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\121583_48062\TileConfiguration.txt
+14:17:57.178 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 9 detection tiles to QuPath
+14:17:57.179 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile creation completed
+14:17:57.179 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created detection tiles for alignment
+14:17:58.172 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Starting affine transformation setup (pixelSize: 0.250552, flipX: false, flipY: false)
+14:17:58.173 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Initial scaling transform: AffineTransform[[0.250552, 0.0, 0.0], [0.0, 0.250552, 0.0]]
+14:18:08.390 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - User selected tile '233' at QuPath coords: [18368.0, 56460.930042466236]
+14:18:09.847 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:18:14.634 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1246, 4859)
+14:18:14.635 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1246  4859
+14:18:14.636 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Current stage coordinates after manual alignment: [-1246.0, 4859.0]
+14:18:14.636 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Calculated affine transform from manual alignment: AffineTransform[[0.250552, 0.0, -5848.139136], [0.0, 0.250552, -9287.398944]]
+14:18:14.648 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '2'
+14:18:14.648 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, 17047.184, -y, -8116.820000000001] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:18:14.648 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+14:18:14.648 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+14:18:14.648 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: 17047.184
+14:18:14.648 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+14:18:14.648 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: -8116.820000000001
+14:18:14.656 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 811039655
+14:18:28.472 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:18:33.514 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (17047, -8117)
+14:18:33.516 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: 17047  -8117
+14:18:33.516 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Refined transform after tile '2': AffineTransform[[0.250552, 0.0, -5848.323135999999], [0.0, 0.250552, -9287.578944]]
+14:18:33.523 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '233'
+14:18:33.523 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, -1246.1839999999993, -y, 4858.82] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:18:33.523 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+14:18:33.523 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+14:18:33.523 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: -1246.1839999999993
+14:18:33.523 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+14:18:33.523 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: 4858.82
+14:18:33.528 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 1384579563
+14:18:51.021 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+14:18:55.771 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1246, 4859)
+14:18:55.771 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1246  4859
+14:18:55.772 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Refined transform after tile '233': AffineTransform[[0.250552, 0.0, -5848.139136], [0.0, 0.250552, -9287.398944]]
+14:18:55.772 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Alignment transform complete (full-res→stage): AffineTransform[[0.250552, 0.0, -5848.139136], [0.0, 0.250552, -9287.398944]]
+14:18:55.773 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using green box at (449.0, 38.0, 368.0, 235.0) in displayed macro image
+14:18:55.773 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Macro→FullRes transform: scale(356.17391304347825, 348.59574468085106), translate(-449.0, -38.0)
+14:18:55.773 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Green box corners map to full-res: (449.0, 38.0) → (0.0, 0.0), (817.0, 273.0) → (131072.0, 81920.0)
+14:18:55.773 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created macro→stage transform: AffineTransform[[89.24008626086957, 0.0, -45916.93786713043], [0.0, 87.3413610212766, -12606.370662808511]]
+14:18:55.773 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Testing transform with ground truth values:
+14:18:55.773 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow -   Top center: macro (700.0, 43.0) → stage (16551.122515478266, -8850.692138893617), expected (~16286, ~-8112)
+14:18:55.774 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow -   Center left: macro (486.0, 202.0) → stage (-2546.255944347824, 5036.584263489362), expected (~-1275, ~4664)
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Ground truth validation failed:
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Input: (486.0, 202.0)
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Expected: (-1275.0, 4664.0)
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Actual: (-2546.255944347824, 5036.584263489362)
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Error: 1324.7304289702067 µm (X: 1271.255944347824, Y: 372.58426348936155)
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Ground truth validation failed:
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Input: (700.0, 43.0)
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Expected: (16286.0, -8112.0)
+14:18:55.774 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Actual: (16551.122515478266, -8850.692138893617)
+14:18:55.775 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Error: 784.8286591841243 µm (X: 265.122515478266, Y: 738.6921388936171)
+14:18:55.775 [JavaFX Application Thread] [WARN ] q.e.q.c.MicroscopeAlignmentWorkflow - Ground truth validation failed - transform may be incorrect!
+14:18:55.775 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Final Macro→Stage transform details:
+14:18:55.775 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Matrix: [m00=89.24008626086956, m10=0.0, m01=0.0, m11=87.3413610212766, m02=-45916.93786713043, m12=-12606.370662808511]
+14:18:55.775 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Scale X: 89.24008626086956, Scale Y: 87.3413610212766
+14:18:55.775 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Shear X: 0.0, Shear Y: 0.0
+14:18:55.775 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Translate X: -45916.93786713043, Translate Y: -12606.370662808511
+14:18:55.775 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Determinant: 7794.350591680474
+14:18:55.775 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Type: TRANSLATION | GENERAL_SCALE
+14:18:55.775 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (0.0, 0.0) → (-45916.93786713043, -12606.370662808511) - X valid: false, Y valid: false
+14:18:55.776 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (938.0, 0.0) → (37790.263045565225, -12606.370662808511) - X valid: false, Y valid: false
+14:18:55.776 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (0.0, 312.0) → (-45916.93786713043, 14644.133975829789) - X valid: false, Y valid: false
+14:18:55.776 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (938.0, 312.0) → (37790.263045565225, 14644.133975829789) - X valid: false, Y valid: false
+14:18:55.776 [JavaFX Application Thread] [WARN ] q.e.q.c.MicroscopeAlignmentWorkflow - Transform validation failed - may produce out-of-bounds coordinates!
+14:18:55.781 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Saved transform preset: Ocus40_PPM2
+14:18:55.781 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Saved macro→stage transform: Ocus40_PPM2
+15:39:41.178 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:39:45.702 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1250, 4860)
+15:39:45.702 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1250  4860
+15:39:45.704 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageZ.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:39:50.086 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - Z stage position um:-303.6
+15:39:50.087 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageR.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:39:54.489 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - Rotational stage angle90.00
+15:40:04.115 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, -1150.0, -y, 4860.0] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:40:04.115 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:40:04.115 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:40:04.115 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: -1150.0
+15:40:04.115 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:40:04.115 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: 4860.0
+15:40:04.118 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 202178667
+15:41:03.371 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, -1250.0, -y, 4860.0] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:41:03.371 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:41:03.371 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:41:03.371 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: -1250.0
+15:41:03.371 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:41:03.371 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: 4860.0
+15:41:03.427 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 1651728744
+15:41:51.273 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, -1250.0, -y, 4260.0] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:41:51.274 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:41:51.274 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:41:51.274 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: -1250.0
+15:41:51.274 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:41:51.274 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: 4260.0
+15:41:51.277 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 925319777
+15:41:59.489 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, -1250.0, -y, 1260.0] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:41:59.489 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:41:59.489 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:41:59.489 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: -1250.0
+15:41:59.489 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:41:59.489 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: 1260.0
+15:41:59.492 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 989010058
+15:42:31.055 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+15:42:31.059 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to Project: 189align2-project
+15:42:59.397 [JavaFX Application Thread] [ERROR] qupath.lib.gui.QuPathGUI - Error syncing project
+java.nio.file.NoSuchFileException: D:\2025QPSC\data\189align2\project.qpproj.tmp
+	at java.base/sun.nio.fs.WindowsException.translateToIOException(WindowsException.java:85)
+	at java.base/sun.nio.fs.WindowsException.rethrowAsIOException(WindowsException.java:103)
+	at java.base/sun.nio.fs.WindowsException.rethrowAsIOException(WindowsException.java:108)
+	at java.base/sun.nio.fs.WindowsFileSystemProvider.newByteChannel(WindowsFileSystemProvider.java:234)
+	at java.base/java.nio.file.spi.FileSystemProvider.newOutputStream(FileSystemProvider.java:482)
+	at java.base/java.nio.file.Files.newOutputStream(Files.java:228)
+	at java.base/java.nio.file.Files.newBufferedWriter(Files.java:3001)
+	at qupath.lib.projects.DefaultProject.writeProject(DefaultProject.java:1007)
+	at qupath.lib.projects.DefaultProject.syncChanges(DefaultProject.java:344)
+	at qupath.lib.gui.QuPathGUI.setProject(QuPathGUI.java:2557)
+	at qupath.lib.gui.commands.Commands.closeProject(Commands.java:1355)
+	at qupath.lib.gui.actions.menus.FileMenuActions$ProjectActions.lambda$new$0(FileMenuActions.java:140)
+	at qupath.lib.gui.QuPathGUI.lambda$createProjectAction$33(QuPathGUI.java:2850)
+	at org.controlsfx.control.action.Action.handle(Action.java:423)
+	at org.controlsfx.control.action.Action.handle(Action.java:64)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventHandler.dispatchBubblingEvent(CompositeEventHandler.java:86)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:232)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:189)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:58)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEventImpl(EventUtil.java:74)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEvent(EventUtil.java:49)
+	at javafx.base@23.0.2/javafx.event.Event.fireEvent(Event.java:199)
+	at javafx.controls@23.0.2/javafx.scene.control.MenuItem.fire(MenuItem.java:459)
+	at javafx.controls@23.0.2/com.sun.javafx.scene.control.ContextMenuContent$MenuItemContainer.doSelect(ContextMenuContent.java:1426)
+	at javafx.controls@23.0.2/com.sun.javafx.scene.control.ContextMenuContent$MenuItemContainer.lambda$createChildren$12(ContextMenuContent.java:1379)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventHandler$NormalEventHandlerRecord.handleBubblingEvent(CompositeEventHandler.java:247)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventHandler.dispatchBubblingEvent(CompositeEventHandler.java:80)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:232)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:189)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventDispatcher.dispatchBubblingEvent(CompositeEventDispatcher.java:59)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:58)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:56)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:56)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:56)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEventImpl(EventUtil.java:74)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEvent(EventUtil.java:54)
+	at javafx.base@23.0.2/javafx.event.Event.fireEvent(Event.java:199)
+	at javafx.graphics@23.0.2/javafx.scene.Scene$MouseHandler.process(Scene.java:3987)
+	at javafx.graphics@23.0.2/javafx.scene.Scene.processMouseEvent(Scene.java:1893)
+	at javafx.graphics@23.0.2/javafx.scene.Scene$ScenePeerListener.mouseEvent(Scene.java:2711)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler$MouseEventNotification.run(GlassViewEventHandler.java:411)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler$MouseEventNotification.run(GlassViewEventHandler.java:301)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:400)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler.lambda$handleMouseEvent$2(GlassViewEventHandler.java:450)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.QuantumToolkit.runWithoutRenderLock(QuantumToolkit.java:430)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler.handleMouseEvent(GlassViewEventHandler.java:449)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.View.handleMouseEvent(View.java:560)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.View.notifyMouse(View.java:946)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication._runLoop(Native Method)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication.lambda$runLoop$3(WinApplication.java:184)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+15:43:03.848 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to null
+15:43:08.494 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+15:43:09.365 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+15:43:13.041 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - *******************************************
+15:43:13.041 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Starting Microscope Alignment Workflow...
+15:43:13.041 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - ********************************************
+15:43:13.068 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Loaded 2 transform presets from D:\2025QPSC\smartpath_configurations\saved_transforms.json
+15:43:14.913 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, folder: D:\2025QPSC\data, modality: BF_10x
+15:43:14.914 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, modality: BF_10x
+15:43:15.059 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:43:15.060 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:43:17.385 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Successfully retrieved macro image: 1200x400
+15:43:17.385 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:43:17.386 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Cropped to slide area: 938x312 (offset: 0, 19)
+15:43:17.387 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:43:17.387 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Applied flips: X=true, Y=true
+15:43:17.388 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+15:43:17.512 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+15:43:17.527 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Saved successful detection parameters to preferences
+15:43:18.326 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Performing detection while macro image is available
+15:43:18.352 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Original macro dimensions: 1200x400
+15:43:18.352 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using scanner 'Generic' for macro image processing
+15:43:18.352 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:43:18.352 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Cropped macro dimensions: 938x312 (offset: 0, 19)
+15:43:18.353 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:43:18.353 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Applied flips for green box detection: X=true, Y=true
+15:43:18.353 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+15:43:18.383 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+15:43:18.383 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Starting macro image analysis with method: Color deconvolution
+15:43:18.383 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Available associated images: [Series 1 (label image), Series 2 (macro image)]
+15:43:18.383 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found macro image entry: 'Series 2 (macro image)'
+15:43:18.408 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Extracted macro image: 1200x400 pixels
+15:43:18.509 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found 1 tissue regions with overall bounds: (137.0, 62.0, 303.0, 225.0)
+15:43:18.509 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue analysis found 1 regions
+15:43:18.521 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Creating new project in: D:\2025QPSC\data\189align2
+15:43:18.531 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+15:43:18.532 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to Project: 189align2-project
+15:43:18.532 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Adding image to project: MetroHealth_189.svs (flipX=true, flipY=true)
+15:43:18.591 [JavaFX Application Thread] [WARN ] q.e.q.utilities.QPProjectFunctions - Applying flips to image - associated images (macro) will not be preserved in the project
+15:43:18.618 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+15:43:18.629 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 0 object(s)...
+15:43:18.629 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.00 seconds
+15:43:18.637 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Successfully added flipped image to project (associated images not preserved)
+15:43:19.550 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+15:43:19.550 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Reopened image with flips applied
+15:43:19.551 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Running tissue detection script
+15:43:19.551 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Modifying script D:\2025QPSC\data\MH_Slides\DetectTissue.groovy
+15:43:20.866 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue detection script completed
+15:43:20.867 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations after script
+15:43:20.867 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Using macro pixel size 88.0 µm for scanner 'Generic'
+15:43:20.867 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using macro pixel size 88.0 µm from scanner configuration
+15:43:20.867 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating alignment tiles with flips - X: true, Y: true
+15:43:20.867 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations for tiling
+15:43:20.948 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Removed existing tiles for modality base: BF_10x
+15:43:20.949 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+15:43:20.949 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+15:43:20.949 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, height_px] (key: 2) for lookup path {1}
+15:43:20.949 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+15:43:20.949 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating tiles: frame size 4867.435103291931x3983.76384942048 QP pixels (1219.5456x998.14 µm) for modality BF_10x
+15:43:20.950 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Starting tile creation for modality: BF_10x_1
+15:43:20.950 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Creating tiles for 2 annotations
+15:43:21.028 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 71940_42472 at bounds (18368.0, 4672.0, 100992.0, 72128.0)
+15:43:21.030 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+15:43:21.030 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (15934.282448354035, 2680.11807528976) to (121793.71755164597, 78791.88192471024)
+15:43:21.030 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+15:43:21.030 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+15:43:21.030 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 22 columns x 20 rows
+15:43:21.370 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 303 tiles, skipped 137 tiles outside ROI
+15:43:21.373 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\71940_42472\TileConfiguration.txt
+15:43:21.509 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 303 detection tiles to QuPath
+15:43:21.509 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 121583_48062 at bounds (119360.0, 41664.0, 4992.0, 14144.0)
+15:43:21.510 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+15:43:21.510 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (116926.28244835403, 39672.11807528976) to (126785.71755164597, 57799.881924710244)
+15:43:21.510 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+15:43:21.510 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+15:43:21.510 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 5 rows
+15:43:21.515 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 9 tiles, skipped 6 tiles outside ROI
+15:43:21.518 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\121583_48062\TileConfiguration.txt
+15:43:21.639 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 9 detection tiles to QuPath
+15:43:21.640 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile creation completed
+15:43:21.640 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created detection tiles for alignment
+15:43:22.476 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Starting affine transformation setup (pixelSize: 0.250552, flipX: false, flipY: false)
+15:43:22.476 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Initial scaling transform: AffineTransform[[0.250552, 0.0, 0.0], [0.0, 0.250552, 0.0]]
+15:44:24.253 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - User selected tile '233' at QuPath coords: [18368.0, 56460.930042466236]
+15:44:25.793 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:44:28.289 [JavaFX Application Thread] [ERROR] q.e.q.u.AffineTransformationController - Affine transformation setup failed
+java.io.IOException: Command [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe] failed (exit 1):
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe\__main__.py", line 4, in <module>
+ImportError: cannot import name 'get_stageXY' from 'smart_wsi_scanner.qp_client' (C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\src\smart_wsi_scanner\qp_client.py). Did you mean: 'get_stageZ'?
+	at qupath.ext.qpsc.service.CliExecutor.execCommandAndGetOutput(CliExecutor.java:97)
+	at qupath.ext.qpsc.controller.MicroscopeController.getStagePositionXY(MicroscopeController.java:70)
+	at qupath.ext.qpsc.ui.AffineTransformationController.lambda$setupAffineTransformationAndValidationGUI$4(AffineTransformationController.java:91)
+	at java.base/java.util.concurrent.CompletableFuture$UniAccept.tryFire(CompletableFuture.java:718)
+	at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:510)
+	at java.base/java.util.concurrent.CompletableFuture.complete(CompletableFuture.java:2179)
+	at qupath.ext.qpsc.ui.UIFunctions.lambda$promptTileSelectionDialogAsync$17(UIFunctions.java:451)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventHandler.dispatchBubblingEvent(CompositeEventHandler.java:86)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:232)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:189)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventDispatcher.dispatchBubblingEvent(CompositeEventDispatcher.java:59)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:58)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:56)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:56)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEventImpl(EventUtil.java:74)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEvent(EventUtil.java:49)
+	at javafx.base@23.0.2/javafx.event.Event.fireEvent(Event.java:199)
+	at javafx.graphics@23.0.2/javafx.scene.Node.fireEvent(Node.java:8963)
+	at javafx.controls@23.0.2/javafx.scene.control.Button.fire(Button.java:203)
+	at javafx.controls@23.0.2/com.sun.javafx.scene.control.behavior.ButtonBehavior.mouseReleased(ButtonBehavior.java:207)
+	at javafx.controls@23.0.2/com.sun.javafx.scene.control.inputmap.InputMap.handle(InputMap.java:274)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventHandler$NormalEventHandlerRecord.handleBubblingEvent(CompositeEventHandler.java:247)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventHandler.dispatchBubblingEvent(CompositeEventHandler.java:80)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:232)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventHandlerManager.dispatchBubblingEvent(EventHandlerManager.java:189)
+	at javafx.base@23.0.2/com.sun.javafx.event.CompositeEventDispatcher.dispatchBubblingEvent(CompositeEventDispatcher.java:59)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:58)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:56)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.BasicEventDispatcher.dispatchEvent(BasicEventDispatcher.java:56)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventDispatchChainImpl.dispatchEvent(EventDispatchChainImpl.java:114)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEventImpl(EventUtil.java:74)
+	at javafx.base@23.0.2/com.sun.javafx.event.EventUtil.fireEvent(EventUtil.java:54)
+	at javafx.base@23.0.2/javafx.event.Event.fireEvent(Event.java:199)
+	at javafx.graphics@23.0.2/javafx.scene.Scene$MouseHandler.process(Scene.java:3987)
+	at javafx.graphics@23.0.2/javafx.scene.Scene.processMouseEvent(Scene.java:1893)
+	at javafx.graphics@23.0.2/javafx.scene.Scene$ScenePeerListener.mouseEvent(Scene.java:2711)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler$MouseEventNotification.run(GlassViewEventHandler.java:411)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler$MouseEventNotification.run(GlassViewEventHandler.java:301)
+	at java.base/java.security.AccessController.doPrivileged(AccessController.java:400)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler.lambda$handleMouseEvent$2(GlassViewEventHandler.java:450)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.QuantumToolkit.runWithoutRenderLock(QuantumToolkit.java:430)
+	at javafx.graphics@23.0.2/com.sun.javafx.tk.quantum.GlassViewEventHandler.handleMouseEvent(GlassViewEventHandler.java:449)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.View.handleMouseEvent(View.java:560)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.View.notifyMouse(View.java:946)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication._runLoop(Native Method)
+	at javafx.graphics@23.0.2/com.sun.glass.ui.win.WinApplication.lambda$runLoop$3(WinApplication.java:184)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+15:44:28.323 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Transform setup cancelled
+15:47:05.451 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 314 object(s)...
+15:47:05.454 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.01 seconds
+15:47:05.488 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+15:47:05.491 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to null
+15:47:13.712 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+15:47:14.589 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+15:47:18.727 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - *******************************************
+15:47:18.727 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Starting Microscope Alignment Workflow...
+15:47:18.727 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - ********************************************
+15:47:18.760 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Loaded 2 transform presets from D:\2025QPSC\smartpath_configurations\saved_transforms.json
+15:47:20.531 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, folder: D:\2025QPSC\data, modality: BF_10x
+15:47:20.531 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, modality: BF_10x
+15:47:20.652 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:47:20.654 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:47:22.677 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Successfully retrieved macro image: 1200x400
+15:47:22.677 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:47:22.677 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Cropped to slide area: 938x312 (offset: 0, 19)
+15:47:22.678 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:47:22.678 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Applied flips: X=true, Y=true
+15:47:22.680 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+15:47:22.817 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+15:47:22.834 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Saved successful detection parameters to preferences
+15:47:23.418 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Performing detection while macro image is available
+15:47:23.444 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Original macro dimensions: 1200x400
+15:47:23.444 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using scanner 'Generic' for macro image processing
+15:47:23.444 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:47:23.444 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Cropped macro dimensions: 938x312 (offset: 0, 19)
+15:47:23.445 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:47:23.445 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Applied flips for green box detection: X=true, Y=true
+15:47:23.445 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+15:47:23.475 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+15:47:23.475 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Starting macro image analysis with method: Color deconvolution
+15:47:23.475 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Available associated images: [Series 1 (label image), Series 2 (macro image)]
+15:47:23.475 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found macro image entry: 'Series 2 (macro image)'
+15:47:23.502 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Extracted macro image: 1200x400 pixels
+15:47:23.591 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found 1 tissue regions with overall bounds: (137.0, 62.0, 303.0, 225.0)
+15:47:23.591 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue analysis found 1 regions
+15:47:23.592 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Creating new project in: D:\2025QPSC\data\189align2
+15:47:23.607 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+15:47:23.608 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to Project: 189align2-project
+15:47:23.609 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Adding image to project: MetroHealth_189.svs (flipX=true, flipY=true)
+15:47:23.660 [JavaFX Application Thread] [WARN ] q.e.q.utilities.QPProjectFunctions - Applying flips to image - associated images (macro) will not be preserved in the project
+15:47:23.686 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+15:47:23.694 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 0 object(s)...
+15:47:23.694 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.00 seconds
+15:47:23.699 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Successfully added flipped image to project (associated images not preserved)
+15:47:24.649 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+15:47:24.649 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Reopened image with flips applied
+15:47:24.649 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Running tissue detection script
+15:47:24.649 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Modifying script D:\2025QPSC\data\MH_Slides\DetectTissue.groovy
+15:47:25.688 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue detection script completed
+15:47:25.689 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations after script
+15:47:25.689 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Using macro pixel size 88.0 µm for scanner 'Generic'
+15:47:25.689 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using macro pixel size 88.0 µm from scanner configuration
+15:47:25.689 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating alignment tiles with flips - X: true, Y: true
+15:47:25.689 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations for tiling
+15:47:25.769 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Removed existing tiles for modality base: BF_10x
+15:47:25.769 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+15:47:25.769 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+15:47:25.769 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, height_px] (key: 2) for lookup path {1}
+15:47:25.769 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+15:47:25.770 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating tiles: frame size 4867.435103291931x3983.76384942048 QP pixels (1219.5456x998.14 µm) for modality BF_10x
+15:47:25.770 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Starting tile creation for modality: BF_10x_1
+15:47:25.770 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Creating tiles for 2 annotations
+15:47:25.861 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 71940_42472 at bounds (18368.0, 4672.0, 100992.0, 72128.0)
+15:47:25.864 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+15:47:25.864 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (15934.282448354035, 2680.11807528976) to (121793.71755164597, 78791.88192471024)
+15:47:25.864 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+15:47:25.864 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+15:47:25.864 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 22 columns x 20 rows
+15:47:26.015 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 303 tiles, skipped 137 tiles outside ROI
+15:47:26.019 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\71940_42472\TileConfiguration.txt
+15:47:26.182 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 303 detection tiles to QuPath
+15:47:26.182 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 121583_48062 at bounds (119360.0, 41664.0, 4992.0, 14144.0)
+15:47:26.183 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+15:47:26.183 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (116926.28244835403, 39672.11807528976) to (126785.71755164597, 57799.881924710244)
+15:47:26.183 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+15:47:26.183 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+15:47:26.183 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 5 rows
+15:47:26.186 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 9 tiles, skipped 6 tiles outside ROI
+15:47:26.189 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\121583_48062\TileConfiguration.txt
+15:47:26.322 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 9 detection tiles to QuPath
+15:47:26.323 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile creation completed
+15:47:26.323 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created detection tiles for alignment
+15:47:27.296 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Starting affine transformation setup (pixelSize: 0.250552, flipX: false, flipY: false)
+15:47:27.296 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Initial scaling transform: AffineTransform[[0.250552, 0.0, 0.0], [0.0, 0.250552, 0.0]]
+15:47:33.697 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - User selected tile '233' at QuPath coords: [18368.0, 56460.930042466236]
+15:47:35.020 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:47:37.598 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1260.0, 4928.0)
+15:47:37.598 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1260.0  4928.0
+15:47:37.599 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Current stage coordinates after manual alignment: [-1260.0, 4928.0]
+15:47:37.599 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Calculated affine transform from manual alignment: AffineTransform[[0.250552, 0.0, -5862.139136], [0.0, 0.250552, -9218.398944]]
+15:47:37.610 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '2'
+15:47:37.610 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, 17033.184, -y, -8047.820000000001] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:47:37.610 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:47:37.611 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:47:37.611 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: 17033.184
+15:47:37.611 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:47:37.611 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: -8047.820000000001
+15:47:37.745 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 1789458678
+15:47:44.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:47:46.985 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (17033.0, -8048.0)
+15:47:46.986 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: 17033.0  -8048.0
+15:47:46.987 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Refined transform after tile '2': AffineTransform[[0.250552, 0.0, -5862.323135999999], [0.0, 0.250552, -9218.578944]]
+15:47:46.991 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '233'
+15:47:46.991 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, -1260.1839999999993, -y, 4927.82] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:47:46.991 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:47:46.991 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:47:46.991 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: -1260.1839999999993
+15:47:46.991 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:47:46.991 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: 4927.82
+15:47:46.997 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 980141975
+15:48:02.233 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:48:04.682 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1260.0, 4928.0)
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1260.0  4928.0
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Refined transform after tile '233': AffineTransform[[0.250552, 0.0, -5862.139136], [0.0, 0.250552, -9218.398944]]
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Alignment transform complete (full-res→stage): AffineTransform[[0.250552, 0.0, -5862.139136], [0.0, 0.250552, -9218.398944]]
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using green box at (449.0, 38.0, 368.0, 235.0) in displayed macro image
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Macro→FullRes transform: scale(356.17391304347825, 348.59574468085106), translate(-449.0, -38.0)
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Green box corners map to full-res: (449.0, 38.0) → (0.0, 0.0), (817.0, 273.0) → (131072.0, 81920.0)
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created macro→stage transform: AffineTransform[[89.24008626086957, 0.0, -45930.93786713043], [0.0, 87.3413610212766, -12537.370662808511]]
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Testing transform with ground truth values:
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow -   Top center: macro (700.0, 43.0) → stage (16537.122515478266, -8781.692138893617), expected (~16286, ~-8112)
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow -   Center left: macro (486.0, 202.0) → stage (-2560.255944347824, 5105.584263489362), expected (~-1275, ~4664)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Ground truth validation failed:
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Input: (486.0, 202.0)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Expected: (-1275.0, 4664.0)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Actual: (-2560.255944347824, 5105.584263489362)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Error: 1358.9994496845313 µm (X: 1285.255944347824, Y: 441.58426348936155)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Ground truth validation failed:
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Input: (700.0, 43.0)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Expected: (16286.0, -8112.0)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Actual: (16537.122515478266, -8781.692138893617)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Error: 715.2272916185733 µm (X: 251.122515478266, Y: 669.6921388936171)
+15:48:04.683 [JavaFX Application Thread] [WARN ] q.e.q.c.MicroscopeAlignmentWorkflow - Ground truth validation failed - transform may be incorrect!
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Final Macro→Stage transform details:
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Matrix: [m00=89.24008626086956, m10=0.0, m01=0.0, m11=87.3413610212766, m02=-45930.93786713043, m12=-12537.370662808511]
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Scale X: 89.24008626086956, Scale Y: 87.3413610212766
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Shear X: 0.0, Shear Y: 0.0
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Translate X: -45930.93786713043, Translate Y: -12537.370662808511
+15:48:04.683 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Determinant: 7794.350591680474
+15:48:04.684 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Type: TRANSLATION | GENERAL_SCALE
+15:48:04.684 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (0.0, 0.0) → (-45930.93786713043, -12537.370662808511) - X valid: false, Y valid: false
+15:48:04.684 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (938.0, 0.0) → (37776.263045565225, -12537.370662808511) - X valid: false, Y valid: false
+15:48:04.684 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (0.0, 312.0) → (-45930.93786713043, 14713.133975829789) - X valid: false, Y valid: false
+15:48:04.684 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (938.0, 312.0) → (37776.263045565225, 14713.133975829789) - X valid: false, Y valid: false
+15:48:04.684 [JavaFX Application Thread] [WARN ] q.e.q.c.MicroscopeAlignmentWorkflow - Transform validation failed - may produce out-of-bounds coordinates!
+15:48:04.686 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Saved transform preset: Ocus40_PPM2
+15:48:04.686 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Saved macro→stage transform: Ocus40_PPM2
+15:50:00.649 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 314 object(s)...
+15:50:00.651 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.01 seconds
+15:50:00.684 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+15:50:00.687 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to null
+15:50:04.534 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+15:50:05.473 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+15:50:09.953 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - *******************************************
+15:50:09.953 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Starting Microscope Alignment Workflow...
+15:50:09.953 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - ********************************************
+15:50:09.980 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Loaded 2 transform presets from D:\2025QPSC\smartpath_configurations\saved_transforms.json
+15:50:11.192 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, folder: D:\2025QPSC\data, modality: BF_10x
+15:50:11.192 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.SampleSetupController - Saved sample setup preferences - name: 189align2, modality: BF_10x
+15:50:11.304 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:50:11.306 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:50:14.251 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Successfully retrieved macro image: 1200x400
+15:50:14.251 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:50:14.251 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Cropped to slide area: 938x312 (offset: 0, 19)
+15:50:14.252 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:50:14.252 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Applied flips: X=true, Y=true
+15:50:14.254 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+15:50:14.351 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+15:50:14.368 [JavaFX Application Thread] [INFO ] q.ext.qpsc.ui.MacroImageController - Saved successful detection parameters to preferences
+15:50:15.401 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Performing detection while macro image is available
+15:50:15.425 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Original macro dimensions: 1200x400
+15:50:15.426 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using scanner 'Generic' for macro image processing
+15:50:15.426 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Cropping macro image from 1200x400 to 938x312 (offset: 0, 19)
+15:50:15.426 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Cropped macro dimensions: 938x312 (offset: 0, 19)
+15:50:15.427 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Applied flips to macro image: flipX=true, flipY=true
+15:50:15.427 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Applied flips for green box detection: X=true, Y=true
+15:50:15.427 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Starting green box detection on 938x312 image
+15:50:15.457 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.GreenBoxDetector - Green box detected at (449.0, 38.0, 368.0, 235.0) with confidence 0.530333679587411
+15:50:15.457 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Starting macro image analysis with method: Color deconvolution
+15:50:15.457 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Available associated images: [Series 1 (label image), Series 2 (macro image)]
+15:50:15.457 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found macro image entry: 'Series 2 (macro image)'
+15:50:15.480 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Extracted macro image: 1200x400 pixels
+15:50:15.551 [JavaFX Application Thread] [INFO ] q.e.q.utilities.MacroImageAnalyzer - Found 1 tissue regions with overall bounds: (137.0, 62.0, 303.0, 225.0)
+15:50:15.551 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue analysis found 1 regions
+15:50:15.554 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Creating new project in: D:\2025QPSC\data\189align2
+15:50:15.564 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data reset
+15:50:15.565 [JavaFX Application Thread] [INFO ] qupath.lib.gui.QuPathGUI - Project set to Project: 189align2-project
+15:50:15.565 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Adding image to project: MetroHealth_189.svs (flipX=true, flipY=true)
+15:50:15.617 [JavaFX Application Thread] [WARN ] q.e.q.utilities.QPProjectFunctions - Applying flips to image - associated images (macro) will not be preserved in the project
+15:50:15.643 [JavaFX Application Thread] [INFO ] qupath.lib.gui.tools.GuiTools - Estimating H & E staining
+15:50:15.654 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Writing object hierarchy with 0 object(s)...
+15:50:15.655 [JavaFX Application Thread] [INFO ] qupath.lib.io.PathIO - Image data written in 0.00 seconds
+15:50:15.662 [JavaFX Application Thread] [INFO ] q.e.q.utilities.QPProjectFunctions - Successfully added flipped image to project (associated images not preserved)
+15:50:16.599 [JavaFX Application Thread] [INFO ] qupath.lib.gui.viewer.QuPathViewer - Image data set to ImageData: Brightfield (H&E), MetroHealth_189.svs
+15:50:16.599 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Reopened image with flips applied
+15:50:16.600 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Running tissue detection script
+15:50:16.600 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.UtilityFunctions - Modifying script D:\2025QPSC\data\MH_Slides\DetectTissue.groovy
+15:50:17.622 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Tissue detection script completed
+15:50:17.623 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations after script
+15:50:17.623 [JavaFX Application Thread] [INFO ] q.e.qpsc.utilities.MacroImageUtility - Using macro pixel size 88.0 µm for scanner 'Generic'
+15:50:17.623 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using macro pixel size 88.0 µm from scanner configuration
+15:50:17.623 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating alignment tiles with flips - X: true, Y: true
+15:50:17.623 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Found 2 tissue annotations for tiling
+15:50:17.749 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Removed existing tiles for modality base: BF_10x
+15:50:17.750 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, width_px] (key: 2) for lookup path {1}
+15:50:17.750 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+15:50:17.750 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Switching to LOCI resource reference 'LOCI-CAMERA-002' at step [imagingMode, BF_10x, detector, height_px] (key: 2) for lookup path {1}
+15:50:17.750 [JavaFX Application Thread] [INFO ] q.e.q.u.MicroscopeConfigManager - Found LOCI resource entry in section 'ID_Detector' for id 'LOCI_CAMERA_002': {name=MicroPublisher 6, manufacturer=Teledyne, width_px=2688, height_px=2200, sensorpixelWidth_um=4.54, sensorpixelHeight_um=4.54, description=null}
+15:50:17.750 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Creating tiles: frame size 4867.435103291931x3983.76384942048 QP pixels (1219.5456x998.14 µm) for modality BF_10x
+15:50:17.750 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Starting tile creation for modality: BF_10x_1
+15:50:17.750 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Creating tiles for 2 annotations
+15:50:17.848 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 71940_42472 at bounds (18368.0, 4672.0, 100992.0, 72128.0)
+15:50:17.850 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+15:50:17.850 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (15934.282448354035, 2680.11807528976) to (121793.71755164597, 78791.88192471024)
+15:50:17.850 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+15:50:17.850 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+15:50:17.850 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 22 columns x 20 rows
+15:50:18.294 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 303 tiles, skipped 137 tiles outside ROI
+15:50:18.297 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\71940_42472\TileConfiguration.txt
+15:50:18.436 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 303 detection tiles to QuPath
+15:50:18.436 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Processing annotation: 121583_48062 at bounds (119360.0, 41664.0, 4992.0, 14144.0)
+15:50:18.437 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile grid configuration:
+15:50:18.437 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Area: (116926.28244835403, 39672.11807528976) to (126785.71755164597, 57799.881924710244)
+15:50:18.437 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Frame size: 4867.435103291931 x 3983.76384942048
+15:50:18.437 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Step size: 4867.435103291931 x 3983.76384942048 (0.0% overlap)
+15:50:18.437 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities -   Grid: 3 columns x 5 rows
+15:50:18.446 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Generated 9 tiles, skipped 6 tiles outside ROI
+15:50:18.448 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Wrote tile configuration to: D:\2025QPSC\data\189align2\BF_10x_1\121583_48062\TileConfiguration.txt
+15:50:18.588 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Added 9 detection tiles to QuPath
+15:50:18.588 [JavaFX Application Thread] [INFO ] q.ext.qpsc.utilities.TilingUtilities - Tile creation completed
+15:50:18.588 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created detection tiles for alignment
+15:50:19.272 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Starting affine transformation setup (pixelSize: 0.250552, flipX: false, flipY: false)
+15:50:19.272 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Initial scaling transform: AffineTransform[[0.250552, 0.0, 0.0], [0.0, 0.250552, 0.0]]
+15:50:24.966 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - User selected tile '233' at QuPath coords: [18368.0, 56460.930042466236]
+15:50:26.095 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:50:28.541 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1260.0, 4928.0)
+15:50:28.541 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1260.0  4928.0
+15:50:28.541 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Current stage coordinates after manual alignment: [-1260.0, 4928.0]
+15:50:28.541 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Calculated affine transform from manual alignment: AffineTransform[[0.250552, 0.0, -5862.139136], [0.0, 0.250552, -9218.398944]]
+15:50:28.550 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '2'
+15:50:28.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, 17033.184, -y, -8047.820000000001] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:50:28.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:50:28.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:50:28.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: 17033.184
+15:50:28.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:50:28.550 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: -8047.820000000001
+15:50:28.554 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 1997300413
+15:50:35.118 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:50:37.523 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (17033.0, -8048.0)
+15:50:37.523 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: 17033.0  -8048.0
+15:50:37.523 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Refined transform after tile '2': AffineTransform[[0.250552, 0.0, -5862.323135999999], [0.0, 0.250552, -9218.578944]]
+15:50:37.527 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Secondary alignment: moving to refinement tile '233'
+15:50:37.527 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe, -x, -1260.1839999999993, -y, 4927.82] (via folder: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:50:37.528 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 0: C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\move_stageXY.exe
+15:50:37.528 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 1: -x
+15:50:37.528 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 2: -1260.1839999999993
+15:50:37.528 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 3: -y
+15:50:37.528 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Arg 4: 4927.82
+15:50:37.532 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - Created tifCounter with identity: 2060614955
+15:50:42.291 [JavaFX Application Thread] [INFO ] qupath.ext.qpsc.service.CliExecutor - → Running external command: [C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts\get_stageXY.exe]  (resolved via C:\Users\lociuser\Codes\smartpath\smart-wsi-scanner\.venv\Scripts)
+15:50:44.766 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - getStagePositionXY raw output: (-1260.0, 4928.0)
+15:50:44.767 [JavaFX Application Thread] [INFO ] q.e.q.controller.QPScopeController - XY coordinates: -1260.0  4928.0
+15:50:44.767 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformationController - Refined transform after tile '233': AffineTransform[[0.250552, 0.0, -5862.139136], [0.0, 0.250552, -9218.398944]]
+15:50:44.767 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Alignment transform complete (full-res→stage): AffineTransform[[0.250552, 0.0, -5862.139136], [0.0, 0.250552, -9218.398944]]
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Using green box at (449.0, 38.0, 368.0, 235.0) in displayed macro image
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Macro→FullRes transform: scale(356.17391304347825, 348.59574468085106), translate(-449.0, -38.0)
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Green box corners map to full-res: (449.0, 38.0) → (0.0, 0.0), (817.0, 273.0) → (131072.0, 81920.0)
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Created macro→stage transform: AffineTransform[[89.24008626086957, 0.0, -45930.93786713043], [0.0, 87.3413610212766, -12537.370662808511]]
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Testing transform with ground truth values:
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow -   Top center: macro (700.0, 43.0) → stage (16537.122515478266, -8781.692138893617), expected (~16286, ~-8112)
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow -   Center left: macro (486.0, 202.0) → stage (-2560.255944347824, 5105.584263489362), expected (~-1275, ~4664)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Ground truth validation failed:
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Input: (486.0, 202.0)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Expected: (-1275.0, 4664.0)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Actual: (-2560.255944347824, 5105.584263489362)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Error: 1358.9994496845313 µm (X: 1285.255944347824, Y: 441.58426348936155)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Ground truth validation failed:
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Input: (700.0, 43.0)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Expected: (16286.0, -8112.0)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Actual: (16537.122515478266, -8781.692138893617)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions -   Error: 715.2272916185733 µm (X: 251.122515478266, Y: 669.6921388936171)
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.c.MicroscopeAlignmentWorkflow - Ground truth validation failed - transform may be incorrect!
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions - Final Macro→Stage transform details:
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Matrix: [m00=89.24008626086956, m10=0.0, m01=0.0, m11=87.3413610212766, m02=-45930.93786713043, m12=-12537.370662808511]
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Scale X: 89.24008626086956, Scale Y: 87.3413610212766
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Shear X: 0.0, Shear Y: 0.0
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Translate X: -45930.93786713043, Translate Y: -12537.370662808511
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Determinant: 7794.350591680474
+15:50:44.768 [JavaFX Application Thread] [INFO ] q.e.q.u.TransformationFunctions -   Type: TRANSLATION | GENERAL_SCALE
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (0.0, 0.0) → (-45930.93786713043, -12537.370662808511) - X valid: false, Y valid: false
+15:50:44.768 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (938.0, 0.0) → (37776.263045565225, -12537.370662808511) - X valid: false, Y valid: false
+15:50:44.769 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (0.0, 312.0) → (-45930.93786713043, 14713.133975829789) - X valid: false, Y valid: false
+15:50:44.769 [JavaFX Application Thread] [WARN ] q.e.q.u.TransformationFunctions - Transform validation failed at (938.0, 312.0) → (37776.263045565225, 14713.133975829789) - X valid: false, Y valid: false
+15:50:44.769 [JavaFX Application Thread] [WARN ] q.e.q.c.MicroscopeAlignmentWorkflow - Transform validation failed - may produce out-of-bounds coordinates!
+15:50:44.771 [JavaFX Application Thread] [INFO ] q.e.q.u.AffineTransformManager - Saved transform preset: Ocus40_PPM2
+15:50:44.771 [JavaFX Application Thread] [INFO ] q.e.q.c.MicroscopeAlignmentWorkflow - Saved macro→stage transform: Ocus40_PPM2
