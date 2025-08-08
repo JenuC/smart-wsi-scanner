@@ -113,7 +113,7 @@ def main():
     """Launch the modern UI interface"""
     #from smart_wsi_scanner.modern_snap_ui import main
     #from smart_wsi_scanner.customtkinter_snap_ui import main
-    from smart_wsi_scanner.ttkbootstrap_snap_ui import main as control
+    from smart_wsi_scanner.ui_ttkbootstrap_snap_ui import main as control
     control()
     #snap_with_preview()
     

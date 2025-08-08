@@ -10,96 +10,37 @@ A smart whole slide image scanner with hardware abstraction and configuration ma
 - Autofocus capabilities
 - Image acquisition and processing
 
-## Installation
+``` python
+from smart_wsi_scanner.qupath import QuPathProject, QuPathScanner
+from smart_wsi_scanner.config import ConfigManager, sp_position
+from smart_wsi_scanner.smartpath import smartpath, init_hardware
 
-### Prerequisites
+# Load connections hardware:pycromanager/pymmcore/pymmcore-plus
+microscope = MicroscopeHardware()
+if not microscope.core: fail
 
-- Python 3.12 or higher
-- pip or uv package manager
+# Configurations
+config_manager = ConfigManager() # knows resources
+microscope_settings = config_manager.load_config("config_CAMM.yml")
 
-### Using uv (recommended)
+# Create a QuPath project (exist_ok=True)
+project = QuPathProject(
+    projects_folder_path=r"C:\Users\lociuser\Codes\MikeN\data\slides",
+    sample_label="Example_Sample",
+    scan_type="20x_bf_1",
+    region="region_1"
+)
 
-```bash
-# Create a new virtual environment with Python 3.12
-uv venv -p 3.12
+# Initialize smartpath
+sp = smartpath(microscope,microscope_settings) # has current state and settings
 
-# Activate the virtual environment
-# On Windows:
-.venv/Scripts/activate
-# On Unix/MacOS:
-source .venv/bin/activate
+# positions passed or created
+positions = QuPathScanner.generate_grid_positions()
+#Get autofocus positions
+af_indices, min_distance = QuPathScanner.get_autofocus_positions(positions)
+# Scan positions
+QuPathScanner.scan_positions()
 
-# Install the package
-uv pip install -e .
-```
-
-### Using pip
-
-```bash
-# Create a virtual environment
-python -m venv .venv
-
-# Activate the virtual environment
-# On Windows:
-.venv/Scripts/activate
-# On Unix/MacOS:
-source .venv/bin/activate
-
-# Install the package
-pip install -e .
-```
-
-## Usage
-
-```python
-from smart_wsi_scanner import smartpath, PycromanagerHardware, ConfigManager
-from pycromanager import Core
-
-# Initialize hardware and config manager
-core = Core()
-hardware = PycromanagerHardware(core, settings)
-config_manager = ConfigManager()
-
-# Create smartpath instance
-sp = smartpath(hardware, config_manager)
-
-# Load a specific configuration
-sp.load_config("my_microscope_config")
-
-# Move to a position
-position = sp_position(x=100, y=100, z=0)
-sp.move_to_position(position)
-
-# Capture an image
-image, metadata = sp.snap_image()
-
-# Save current configuration
-sp.save_config("new_config")
-```
-
-## Development
-
-### Setting up development environment
-
-```bash
-# Install development dependencies
-uv pip install -e ".[dev]"
-```
-
-### Running tests
-
-```bash
-pytest
-```
-
-### Code formatting
-
-```bash
-# Format code
-black .
-
-# Run linter
-ruff check .
 ```
 
 ## License
