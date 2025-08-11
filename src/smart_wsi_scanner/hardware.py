@@ -44,20 +44,20 @@ class MicroscopeHardware(ABC):
         """Get current stage position."""
         pass
     
-    @abstractmethod
-    def snap_image(self) -> Tuple[np.ndarray, Dict[str, Any]]:
-        """Capture image and return image data with metadata."""
-        pass
+    # @abstractmethod
+    # def snap_image(self) -> Tuple[np.ndarray, Dict[str, Any]]:
+    #     """Capture image and return image data with metadata."""
+    #     pass
     
-    @abstractmethod
-    def set_objective(self, objective_name: str) -> None:
-        """Change objective lens."""
-        pass
+    # @abstractmethod
+    # def set_objective(self, objective_name: str) -> None:
+    #     """Change objective lens."""
+    #     pass
     
-    @abstractmethod
-    def autofocus(self, **kwargs) -> float:
-        """Perform autofocus and return best focus position."""
-        pass
+    # @abstractmethod
+    # def autofocus(self, **kwargs) -> float:
+    #     """Perform autofocus and return best focus position."""
+    #     pass
 
 class PycromanagerHardware(MicroscopeHardware):
     """Implementation for Pycromanager-based microscopes."""
@@ -92,61 +92,6 @@ class PycromanagerHardware(MicroscopeHardware):
             self.core.get_position()
         )
         
-    def snap_image(self) -> Tuple[np.ndarray, Dict[str, Any]]:
-        if self.core.is_sequence_running():
-            self.studio.live().set_live_mode(False)
-        self.core.snap_image()
-        tagged_image = self.core.get_tagged_image()
-        tags = OrderedDict(sorted(tagged_image.tags.items()))
-        
-        color_camera = False
-        # Handle QCamera specific processing
-        if self.core.get_property("Core", "Camera") == "QCamera":
-            if self.core.get_property("QCamera", "Color") == "ON":
-                color_camera = True
-        if self.core.get_property("Core", "Camera") == "MicroPublisher6":
-            if self.core.get_property("MicroPublisher6", "Color") == "ON":
-                color_camera = True
-        if color_camera:
-            newshape=[tags["Height"], tags["Width"], 4]
-            pixels = tagged_image.pix.reshape(newshape)
-            pixels = pixels[:, :, 0:3]  # Remove alpha
-            pixels = np.flip(pixels, 2)  # Flip channels
-            return pixels, tags
-        else:
-            newshape=[tags["Height"], tags["Width"]]
-            pixels = tagged_image.pix.reshape(newshape)
-            return pixels, tags
-        
-    def set_objective(self, objective_name: str) -> None:
-        current_slider_position = self.core.get_property(*self.settings.obj_slider)
-        if objective_name != current_slider_position:
-            if objective_name.startswith("4X"):
-                self.core.set_focus_device(self.settings.stage.z_stage)
-                self.core.set_position(self.settings.imaging_mode.z)
-                self.core.wait_for_device(self.settings.stage.z_stage)
-                self.core.set_property(*self.settings.obj_slider, objective_name)
-                self.core.set_focus_device(self.settings.stage.f_stage)
-                self.core.set_position(self.settings.imaging_mode.f)
-                self.core.wait_for_system()
-            elif objective_name.startswith("20X"):
-                self.core.set_property(*self.settings.obj_slider, objective_name)
-                self.core.wait_for_device(self.settings.obj_slider[0])
-                self.core.set_focus_device(self.settings.stage.z_stage)
-                self.core.set_position(self.settings.imaging_mode.z)
-                self.core.set_focus_device(self.settings.stage.f_stage)
-                self.core.set_position(self.settings.imaging_mode.f)
-                self.core.wait_for_system()
-                
-            self.core.set_focus_device(self.settings.stage.z_stage)
-            
-    def autofocus(self, **kwargs) -> float:
-        from .smartpath import smartpath
-        return smartpath.autofocus(self.core, self.settings, **kwargs)
-        
-    def _is_coordinate_in_range(self, position: sp_position) -> bool:
-        from .smartpath import smartpath
-        return smartpath.is_coordinate_in_range(self.settings, position)
 
 class PymmcoreplusHardware(MicroscopeHardware):
     """Implementation for pymmcoreplus-based microscopes."""
@@ -182,59 +127,6 @@ class PymmcoreplusHardware(MicroscopeHardware):
             self.core.getPosition()
         )
         
-    def snap_image(self) -> Tuple[np.ndarray, Dict[str, Any]]:
-        self.core.snapImage()
-        img = self.core.getImage()
-        tags = {
-            "Width": self.core.getImageWidth(),
-            "Height": self.core.getImageHeight(),
-            "PixelType": self.core.getPixelType(),
-            "BytesPerPixel": self.core.getBytesPerPixel(),
-            "BitDepth": self.core.getBitDepth(),
-        }
-        
-        # Handle color cameras
-        if self.core.getProperty("Core", "Camera") in ["QCamera", "MicroPublisher6"]:
-            if self.core.getProperty("Color") == "ON":
-                img = np.reshape(img, (tags["Height"], tags["Width"], 4))
-                img = img[:, :, 0:3]  # Remove alpha
-                img = np.flip(img, 2)  # Flip channels
-            else:
-                img = np.reshape(img, (tags["Height"], tags["Width"]))
-        else:
-            img = np.reshape(img, (tags["Height"], tags["Width"]))
-            
-        return img, tags
-        
-    def set_objective(self, objective_name: str) -> None:
-        current_slider_position = self.core.getProperty(*self.settings.obj_slider)
-        if objective_name != current_slider_position:
-            if objective_name.startswith("4X"):
-                self.core.setFocusDevice(self.settings.stage.z_stage)
-                self.core.setPosition(self.settings.imaging_mode.z)
-                self.core.waitForDevice(self.settings.stage.z_stage)
-                self.core.setProperty(*self.settings.obj_slider, objective_name)
-                self.core.setFocusDevice(self.settings.stage.f_stage)
-                self.core.setPosition(self.settings.imaging_mode.f)
-                self.core.waitForSystem()
-            elif objective_name.startswith("20X"):
-                self.core.setProperty(*self.settings.obj_slider, objective_name)
-                self.core.waitForDevice(self.settings.obj_slider[0])
-                self.core.setFocusDevice(self.settings.stage.z_stage)
-                self.core.setPosition(self.settings.imaging_mode.z)
-                self.core.setFocusDevice(self.settings.stage.f_stage)
-                self.core.setPosition(self.settings.imaging_mode.f)
-                self.core.waitForSystem()
-                
-            self.core.setFocusDevice(self.settings.stage.z_stage)
-            
-    def autofocus(self, **kwargs) -> float:
-        from .smartpath import smartpath
-        return smartpath.autofocus(self.core, self.settings, **kwargs)
-        
-    def _is_coordinate_in_range(self, position: sp_position) -> bool:
-        from .smartpath import smartpath
-        return smartpath.is_coordinate_in_range(self.settings, position)
 
 class PymmcoreHardware(MicroscopeHardware):
     """Implementation for pymmcore-based microscopes."""
@@ -270,59 +162,31 @@ class PymmcoreHardware(MicroscopeHardware):
             self.core.getPosition()
         )
         
-    def snap_image(self) -> Tuple[np.ndarray, Dict[str, Any]]:
-        self.core.snapImage()
-        img = self.core.getImage()
-        tags = {
-            "Width": self.core.getImageWidth(),
-            "Height": self.core.getImageHeight(),
-            "PixelType": self.core.getPixelType(),
-            "BytesPerPixel": self.core.getBytesPerPixel(),
-            "BitDepth": self.core.getBitDepth(),
-        }
-        
-        # Handle color cameras
-        if self.core.getProperty("Core", "Camera") in ["QCamera", "MicroPublisher6"]:
-            if self.core.getProperty("Color") == "ON":
-                img = np.reshape(img, (tags["Height"], tags["Width"], 4))
-                img = img[:, :, 0:3]  # Remove alpha
-                img = np.flip(img, 2)  # Flip channels
-            else:
-                img = np.reshape(img, (tags["Height"], tags["Width"]))
-        else:
-            img = np.reshape(img, (tags["Height"], tags["Width"]))
-            
-        return img, tags
-        
-    def set_objective(self, objective_name: str) -> None:
-        current_slider_position = self.core.getProperty(*self.settings.obj_slider)
-        if objective_name != current_slider_position:
-            if objective_name.startswith("4X"):
-                self.core.setFocusDevice(self.settings.stage.z_stage)
-                self.core.setPosition(self.settings.imaging_mode.z)
-                self.core.waitForDevice(self.settings.stage.z_stage)
-                self.core.setProperty(*self.settings.obj_slider, objective_name)
-                self.core.setFocusDevice(self.settings.stage.f_stage)
-                self.core.setPosition(self.settings.imaging_mode.f)
-                self.core.waitForSystem()
-            elif objective_name.startswith("20X"):
-                self.core.setProperty(*self.settings.obj_slider, objective_name)
-                self.core.waitForDevice(self.settings.obj_slider[0])
-                self.core.setFocusDevice(self.settings.stage.z_stage)
-                self.core.setPosition(self.settings.imaging_mode.z)
-                self.core.setFocusDevice(self.settings.stage.f_stage)
-                self.core.setPosition(self.settings.imaging_mode.f)
-                self.core.waitForSystem()
-                
-            self.core.setFocusDevice(self.settings.stage.z_stage)
-            
-    def autofocus(self, **kwargs) -> float:
-        from .smartpath import smartpath
-        return smartpath.autofocus(self.core, self.settings, **kwargs)
-        
-    def _is_coordinate_in_range(self, position: sp_position) -> bool:
-        from .smartpath import smartpath
-        return smartpath.is_coordinate_in_range(self.settings, position)
+def is_mm_running() -> bool:
+    """Check if Micro-Manager is running as a Windows executable."""
+    import platform
+    import psutil
+
+    if platform.system() != "Windows":
+        return False
+
+    for proc in psutil.process_iter(["name"]):
+        try:
+            if proc.exe().find("Micro-Manager") > 0:
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return False
+
+def init_pycromanager():
+    """Initialize Pycromanager connection."""
+    if not is_mm_running():
+        print("Micro-Manager is not running. Please start Micro-Manager before initializing.")
+        return None, None
+    core = Core()
+    studio = Studio()
+    core.set_timeout_ms(20000)
+    return core, studio
 
 def create_hardware(settings: sp_microscope_settings, config_path: Optional[str] = None) -> MicroscopeHardware:
     """Create a hardware instance using the best available backend.
@@ -375,3 +239,176 @@ def create_hardware(settings: sp_microscope_settings, config_path: Optional[str]
             warnings.warn(f"Failed to initialize pymmcore: {e}")
     
     raise ImportError("No suitable Micro-Manager backend found. Please install one of: pycromanager, pymmcore_plus, or pymmcore") 
+
+class CAMM():
+
+    def __init__(self, settings: sp_microscope_settings, core: [CMMCore,CMMCorePlus,Core]):
+        self.settings = settings
+        self.core = core
+
+
+    def snap_image_pymmcoreplus(self) -> Tuple[np.ndarray, Dict[str, Any]]:
+        self.core.snapImage()
+        img = self.core.getImage()
+        tags = {
+            "Width": self.core.getImageWidth(),
+            "Height": self.core.getImageHeight(),
+            "PixelType": self.core.getPixelType(),
+            "BytesPerPixel": self.core.getBytesPerPixel(),
+            "BitDepth": self.core.getBitDepth(),
+        }
+        
+        # Handle color cameras
+        if self.core.getProperty("Core", "Camera") in ["QCamera", "MicroPublisher6"]:
+            if self.core.getProperty("Color") == "ON":
+                img = np.reshape(img, (tags["Height"], tags["Width"], 4))
+                img = img[:, :, 0:3]  # Remove alpha
+                img = np.flip(img, 2)  # Flip channels
+            else:
+                img = np.reshape(img, (tags["Height"], tags["Width"]))
+        else:
+            img = np.reshape(img, (tags["Height"], tags["Width"]))
+            
+        return img, tags
+        
+    def set_objective_pymmcoreplus(self, objective_name: str) -> None:
+        current_slider_position = self.core.getProperty(*self.settings.obj_slider)
+        if objective_name != current_slider_position:
+            if objective_name.startswith("4X"):
+                self.core.setFocusDevice(self.settings.stage.z_stage)
+                self.core.setPosition(self.settings.imaging_mode.z)
+                self.core.waitForDevice(self.settings.stage.z_stage)
+                self.core.setProperty(*self.settings.obj_slider, objective_name)
+                self.core.setFocusDevice(self.settings.stage.f_stage)
+                self.core.setPosition(self.settings.imaging_mode.f)
+                self.core.waitForSystem()
+            elif objective_name.startswith("20X"):
+                self.core.setProperty(*self.settings.obj_slider, objective_name)
+                self.core.waitForDevice(self.settings.obj_slider[0])
+                self.core.setFocusDevice(self.settings.stage.z_stage)
+                self.core.setPosition(self.settings.imaging_mode.z)
+                self.core.setFocusDevice(self.settings.stage.f_stage)
+                self.core.setPosition(self.settings.imaging_mode.f)
+                self.core.waitForSystem()
+                
+            self.core.setFocusDevice(self.settings.stage.z_stage)
+            
+    def autofocus_pymmcoreplus(self, **kwargs) -> float:
+        from .smartpath import smartpath
+        return smartpath.autofocus(self.core, self.settings, **kwargs)
+        
+    def _is_coordinate_in_range_pymmcoreplus(self, position: sp_position) -> bool:
+        from .smartpath import smartpath
+        return smartpath.is_coordinate_in_range(self.settings, position)
+
+
+    def snap_image_pymmcore(self) -> Tuple[np.ndarray, Dict[str, Any]]:
+        self.core.snapImage()
+        img = self.core.getImage()
+        tags = {
+            "Width": self.core.getImageWidth(),
+            "Height": self.core.getImageHeight(),
+            "PixelType": self.core.getPixelType(),
+            "BytesPerPixel": self.core.getBytesPerPixel(),
+            "BitDepth": self.core.getBitDepth(),
+        }
+        
+        # Handle color cameras
+        if self.core.getProperty("Core", "Camera") in ["QCamera", "MicroPublisher6"]:
+            if self.core.getProperty("Color") == "ON":
+                img = np.reshape(img, (tags["Height"], tags["Width"], 4))
+                img = img[:, :, 0:3]  # Remove alpha
+                img = np.flip(img, 2)  # Flip channels
+            else:
+                img = np.reshape(img, (tags["Height"], tags["Width"]))
+        else:
+            img = np.reshape(img, (tags["Height"], tags["Width"]))
+            
+        return img, tags
+        
+    def set_objective_pymmcore(self, objective_name: str) -> None:
+        current_slider_position = self.core.getProperty(*self.settings.obj_slider)
+        if objective_name != current_slider_position:
+            if objective_name.startswith("4X"):
+                self.core.setFocusDevice(self.settings.stage.z_stage)
+                self.core.setPosition(self.settings.imaging_mode.z)
+                self.core.waitForDevice(self.settings.stage.z_stage)
+                self.core.setProperty(*self.settings.obj_slider, objective_name)
+                self.core.setFocusDevice(self.settings.stage.f_stage)
+                self.core.setPosition(self.settings.imaging_mode.f)
+                self.core.waitForSystem()
+            elif objective_name.startswith("20X"):
+                self.core.setProperty(*self.settings.obj_slider, objective_name)
+                self.core.waitForDevice(self.settings.obj_slider[0])
+                self.core.setFocusDevice(self.settings.stage.z_stage)
+                self.core.setPosition(self.settings.imaging_mode.z)
+                self.core.setFocusDevice(self.settings.stage.f_stage)
+                self.core.setPosition(self.settings.imaging_mode.f)
+                self.core.waitForSystem()
+                
+            self.core.setFocusDevice(self.settings.stage.z_stage)
+            
+    def autofocus_pymmcore(self, **kwargs) -> float:
+        from .smartpath import smartpath
+        return smartpath.autofocus(self.core, self.settings, **kwargs)
+        
+    def _is_coordinate_in_range_pymmcore(self, position: sp_position) -> bool:
+        from .smartpath import smartpath
+        return smartpath.is_coordinate_in_range(self.settings, position)
+
+
+    def snap_image_pycromanager(self) -> Tuple[np.ndarray, Dict[str, Any]]:
+        if self.core.is_sequence_running():
+            self.studio.live().set_live_mode(False)
+        self.core.snap_image()
+        tagged_image = self.core.get_tagged_image()
+        tags = OrderedDict(sorted(tagged_image.tags.items()))
+        
+        color_camera = False
+        # Handle QCamera specific processing
+        if self.core.get_property("Core", "Camera") == "QCamera":
+            if self.core.get_property("QCamera", "Color") == "ON":
+                color_camera = True
+        if self.core.get_property("Core", "Camera") == "MicroPublisher6":
+            if self.core.get_property("MicroPublisher6", "Color") == "ON":
+                color_camera = True
+        if color_camera:
+            newshape=[tags["Height"], tags["Width"], 4]
+            pixels = tagged_image.pix.reshape(newshape)
+            pixels = pixels[:, :, 0:3]  # Remove alpha
+            pixels = np.flip(pixels, 2)  # Flip channels
+            return pixels, tags
+        else:
+            newshape=[tags["Height"], tags["Width"]]
+            pixels = tagged_image.pix.reshape(newshape)
+            return pixels, tags
+        
+    def set_objective_pycromanager(self, objective_name: str) -> None:
+        current_slider_position = self.core.get_property(*self.settings.obj_slider)
+        if objective_name != current_slider_position:
+            if objective_name.startswith("4X"):
+                self.core.set_focus_device(self.settings.stage.z_stage)
+                self.core.set_position(self.settings.imaging_mode.z)
+                self.core.wait_for_device(self.settings.stage.z_stage)
+                self.core.set_property(*self.settings.obj_slider, objective_name)
+                self.core.set_focus_device(self.settings.stage.f_stage)
+                self.core.set_position(self.settings.imaging_mode.f)
+                self.core.wait_for_system()
+            elif objective_name.startswith("20X"):
+                self.core.set_property(*self.settings.obj_slider, objective_name)
+                self.core.wait_for_device(self.settings.obj_slider[0])
+                self.core.set_focus_device(self.settings.stage.z_stage)
+                self.core.set_position(self.settings.imaging_mode.z)
+                self.core.set_focus_device(self.settings.stage.f_stage)
+                self.core.set_position(self.settings.imaging_mode.f)
+                self.core.wait_for_system()
+                
+            self.core.set_focus_device(self.settings.stage.z_stage)
+            
+    def autofocus_pycromanager(self, **kwargs) -> float:
+        from .smartpath import smartpath
+        return smartpath.autofocus(self.core, self.settings, **kwargs)
+        
+    def _is_coordinate_in_range_pycromanager(self, position: sp_position) -> bool:
+        from .smartpath import smartpath
+        return smartpath.is_coordinate_in_range(self.settings, position)

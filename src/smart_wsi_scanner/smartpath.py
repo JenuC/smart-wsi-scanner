@@ -1,87 +1,34 @@
-import numpy as np
-import warnings
+# Standard library imports
+import difflib  # Used by smartpath class for metadata comparison
+import os  # Used by smartpath_qpscope class for file operations
+import pathlib  # Used by qpscope_project class
+import pprint  # Used by smartpath class for metadata formatting
+import re  # Used by smartpath_qpscope class for coordinate parsing
+import uuid  # Used by smartpath_qpscope and qpscope_project classes
+import warnings  # Used by smartpath class for validation warnings
+from collections import OrderedDict  # Used by smartpath class for image tags
 
-# used for mm-pix.tags
-from collections import OrderedDict
-import matplotlib.pyplot as plt
+# Third-party imports
+import matplotlib  # Used by smartpath_qpscope class for visualization
+import matplotlib.patches  # Used by smartpath_qpscope class for visualization
+import matplotlib.pyplot as plt  # Used by smartpath class for autofocus plots and smartpath_qpscope for visualization
+import numpy as np  # Used by all classes for array operations
+import scipy.interpolate  # Used by smartpath class for autofocus interpolation
+import tifffile as tf  # Used by smartpath_qpscope class for image writing
+from pycromanager import Core, Studio  # Used by smartpath class for microscope control
+from scipy.spatial.distance import cdist  # Used by smartpath_qpscope class for distance calculations
+from skimage import color  # Used by smartpath class for image processing
+from skimage.filters import sobel  # Used by smartpath class for autofocus
 
-
-# is_background and autofocus
-from skimage import color
-
-# autofocus
-from skimage.filters import sobel
-
-# from skimage.measure import shannon_entropy
-
-# white balance
-import scipy.interpolate
-from .config import sp_microscope_settings, sp_position, sp_imaging_mode
-
-# flat-field
-# from skimage.util import view_as_windows, crop, img_as_float, exposure
-
-# background image
-# import tifffile as tf
-
-# metadata
-import difflib
-import pprint
-
-from pycromanager import Core, Studio
+# Local imports
+from .config import sp_microscope_settings, sp_position, sp_imaging_mode  # Used by all classes
 
 
-def is_mm_running() -> bool:
-    """Check if Micro-Manager is running as a Windows executable."""
-    import platform
-    import psutil
-
-    if platform.system() != "Windows":
-        return False
-
-    for proc in psutil.process_iter(["name"]):
-        try:
-            if proc.exe().find("Micro-Manager") > 0:
-                return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
-    return False
 
 
-def init_pycromanager():
-    """Initialize Pycromanager connection."""
-    if not is_mm_running():
-        print("Micro-Manager is not running. Please start Micro-Manager before initializing.")
-        return None, None
-    core = Core()
-    studio = Studio()
-    core.set_timeout_ms(20000)
-    return core, studio
 
-
-# Initialize core and studio only when needed
-_core = None
-_studio = None
-
-
-def get_core():
-    """Get or initialize the core instance."""
-    global _core, _studio
-    if _core is None:
-        _core, _studio = init_pycromanager()
-    return _core
-
-
-def get_studio():
-    """Get or initialize the studio instance."""
-    global _core, _studio
-    if _studio is None:
-        _core, _studio = init_pycromanager()
-    return _studio
-
-
-class smartpath:
-    def __init__(self, core):
+class sp_metadata:
+    def __init__(self, core: CMMCore | CMMCorePlus |Core):
         self.core = core
 
     def get_mm_metadata_string(self, pretty_print=False):
@@ -134,8 +81,7 @@ class smartpath:
             A string containing the differences between the dictionaries,
             formatted with line-by-line diffs
         """
-        import difflib
-        import pprint
+
 
         d1_lines = pprint.pformat(d1).splitlines()
         d2_lines = pprint.pformat(d2).splitlines()
@@ -167,6 +113,15 @@ class smartpath:
             return changes
         else:
             return ""
+
+
+
+class smartpath:
+    """Main class for smart microscope path operations and image acquisition."""
+    
+    def __init__(self, core):
+        self.core = core
+
 
     @staticmethod
     def is_coordinate_in_range(
@@ -376,30 +331,15 @@ class smartpath:
 
         img_wb = img.astype(np.float64) * gain / [r1, g1, b1]
         return np.clip(img_wb, 0, 255).astype(np.uint8)
-import pprint
-from smart_wsi_scanner.smartpath import sp_microscope_settings, sp_position, smartpath, Core
-import numpy as np
-
-# af_min_distance
-import matplotlib
-import matplotlib.pyplot as plt
-
-# slide scan
-import tifffile as tf
-import os
-
-# QuPath Helper
-import re
-
-# qupath_helper
-from scipy.spatial.distance import cdist
 
 
-import uuid
-import pathlib
-
+# ============================================================================
+# smartpath_qpscope Class - QuPath Integration and Scanning Functionality
+# ============================================================================
 
 class smartpath_qpscope:
+    """Class for QuPath integration and advanced scanning functionality."""
+    
     def __init__(self):
         pass
 
@@ -595,7 +535,13 @@ class smartpath_qpscope:
         return dx
 
 
+# ============================================================================
+# qpscope_project Class - Project Management
+# ============================================================================
+
 class qpscope_project:
+    """Class for managing QuPath project structure and file paths."""
+    
     def __init__(
         self,
         projectsFolderPath: str = r"C:\Users\lociuser\Codes\MikeN\data\slides",
