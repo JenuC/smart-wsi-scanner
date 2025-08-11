@@ -16,22 +16,23 @@ Enhanced Features:
 import socket
 import threading
 import struct
-from smart_wsi_scanner.smartpath import init_pycromanager
-from smart_wsi_scanner.config import ConfigManager, sp_position
-from smart_wsi_scanner.hardware import PycromanagerHardware
 import sys
-from smart_wsi_scanner.qp_server_config import Command, TCP_PORT, END_MARKER
 import pathlib
-import re
-from smart_wsi_scanner.smartpath import smartpath
-from smart_wsi_scanner.smartpath_qpscope import smartpath_qpscope
-from pprint import pprint as dict_printer
-import shutil
 import time
 import enum
 from threading import Lock
 import logging
 from datetime import datetime
+
+from smart_wsi_scanner.config import ConfigManager, sp_position
+from smart_wsi_scanner.hardware import PycromanagerHardware, init_pycromanager
+from smart_wsi_scanner.qp_server_config import Command, TCP_PORT, END_MARKER
+
+from smart_wsi_scanner.qp_acquisition import (
+    acquisition_workflow,
+    # thor_to_ppm,
+    # set_angle as acquisition_set_angle,
+)
 
 
 # Configure logging
@@ -73,7 +74,7 @@ acquisition_locks = {}  # addr -> Lock
 acquisition_cancel_events = {}  # addr -> Event
 
 
-def _pycromanager():
+def int_pycromanager_with_logger():
     """Initialize Pycro-Manager connection to Micro-Manager."""
     logger.info("Initializing Pycro-Manager connection...")
     core, studio = init_pycromanager()
@@ -88,9 +89,8 @@ def _pycromanager():
 logger.info("Loading configuration...")
 config_manager = ConfigManager()
 ppm_settings = config_manager.get_config("config_PPM")
-core, studio = _pycromanager()
+core, studio = int_pycromanager_with_logger()
 hardware = PycromanagerHardware(core, ppm_settings, studio)
-brushless = "KBD101_Thor_Rotation"  # Rotation stage device name
 logger.info("Hardware initialization complete")
 
 
@@ -122,380 +122,35 @@ class ExtendedCommand:
     CANCEL = b"cancel__"  # Cancel acquisition
 
 
-# ============================================================================
-# Rotation Stage Control Functions
-# ============================================================================
-
-
-def ppm_to_thor(angle):
-    """Convert PPM angle (in degrees) to Thor rotation stage position."""
-    return -2 * angle + 276
-
-
-def thor_to_ppm(kinesis_pos):
-    """Convert Thor rotation stage position to PPM angle (in degrees)."""
-    return (276 - kinesis_pos) / 2
-
-
-def set_angle(theta):
-    """Set the rotation stage to a specific angle and wait for completion."""
-    theta_thor = ppm_to_thor(theta)
-    logger.debug(f"Setting rotation angle to {theta}° (Thor position: {theta_thor})")
-    core.set_position(brushless, theta_thor)
-    core.wait_for_device(brushless)
-    logger.debug(f"Rotation complete at {theta}°")
-
-
-# ============================================================================
-# Tile Configuration Processing
-# ============================================================================
-
-
-def read_tile_config(tile_config_path):
-    """Read tile positions from a QuPath-generated TileConfiguration.txt file."""
-    positions = []
-    if tile_config_path.exists():
-        logger.debug(f"Reading tile configuration from {tile_config_path}")
-        with open(tile_config_path, "r") as f:
-            for line in f:
-                pattern = r"^([\w\-\.]+); ; \(\s*([-\d.]+),\s*([-\d.]+)"
-                m = re.match(pattern, line)
-                if m:
-                    filename = m.group(1)
-                    x = float(m.group(2))
-                    y = float(m.group(3))
-                    z = core.get_position()
-                    positions.append([sp_position(x, y, z), filename])
-        logger.info(f"Loaded {len(positions)} tile positions from configuration")
-    else:
-        logger.error(f"Tile configuration file {tile_config_path} does not exist.")
-    return positions
-
-
-# ============================================================================
-# Argument Parsing Functions
-# ============================================================================
-
-
-def parse_angles_exposures(angles_str, exposures_str=None):
-    """Parse angle and exposure strings from various formats."""
-    angles = []
-    exposures = []
-
-    # Parse angles
-    if isinstance(angles_str, list):
-        angles = angles_str
-    elif isinstance(angles_str, str):
-        angles_str = angles_str.strip("()")
-        if "," in angles_str:
-            angles = [float(x.strip()) for x in angles_str.split(",")]
-        else:
-            angles = [float(x) for x in angles_str.split()]
-
-    # Parse exposures if provided
-    if exposures_str:
-        if isinstance(exposures_str, list):
-            exposures = exposures_str
-        elif isinstance(exposures_str, str):
-            exposures_str = exposures_str.strip("()")
-            if "," in exposures_str:
-                exposures = [int(x.strip()) for x in exposures_str.split(",")]
-            else:
-                exposures = [int(x) for x in exposures_str.split()]
-
-    # Default exposures if not provided
-    if not exposures and angles:
-        exposures = []
-        for angle in angles:
-            if angle == 90.0:
-                exposures.append(10)
-            elif angle == 0.0:
-                exposures.append(800)
-            else:
-                exposures.append(500)
-
-    logger.debug(f"Parsed angles: {angles}, exposures: {exposures}")
-    return angles, exposures
-
-
-def parse_acquisition_message(message):
-    """Parse acquisition message supporting both legacy and new flag-based formats."""
-    logger.debug(f"Parsing acquisition message: {message[:200]}...")
-
-    # Remove END_MARKER if present
-    message = message.replace(" END_MARKER", "").replace("END_MARKER", "").strip()
-
-    # Check if it's flag-based format
-    if "--" in message:
-        # Parse flag-based format
-        logger.debug("Detected flag-based format")
-        params = {}
-
-        # Split by spaces but preserve quoted strings
-        import shlex
-
-        try:
-            # For Windows compatibility, temporarily replace backslashes
-            # This prevents shlex from treating them as escape characters
-            temp_message = message.replace("\\", "|||BACKSLASH|||")
-            parts = shlex.split(temp_message)
-            # Restore backslashes
-            parts = [part.replace("|||BACKSLASH|||", "\\") for part in parts]
-        except:
-            # Fallback to simple split if shlex fails
-            parts = message.split()
-
-        i = 0
-        while i < len(parts):
-            if parts[i] == "--yaml" and i + 1 < len(parts):
-                params["yaml_file_path"] = parts[i + 1]
-                i += 2
-            elif parts[i] == "--projects" and i + 1 < len(parts):
-                params["projects_folder_path"] = parts[i + 1]
-                i += 2
-            elif parts[i] == "--sample" and i + 1 < len(parts):
-                params["sample_label"] = parts[i + 1]
-                i += 2
-            elif parts[i] == "--scan-type" and i + 1 < len(parts):
-                params["scan_type"] = parts[i + 1]
-                i += 2
-            elif parts[i] == "--region" and i + 1 < len(parts):
-                params["region_name"] = parts[i + 1]
-                i += 2
-            elif parts[i] == "--angles" and i + 1 < len(parts):
-                params["angles_str"] = parts[i + 1]
-                i += 2
-            elif parts[i] == "--exposures" and i + 1 < len(parts):
-                params["exposures_str"] = parts[i + 1]
-                i += 2
-            elif parts[i] == "--laser-power" and i + 1 < len(parts):
-                params["laser_power"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--laser-wavelength" and i + 1 < len(parts):
-                params["laser_wavelength"] = int(parts[i + 1])
-                i += 2
-            elif parts[i] == "--dwell-time" and i + 1 < len(parts):
-                params["dwell_time"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--averaging" and i + 1 < len(parts):
-                params["averaging"] = int(parts[i + 1])
-                i += 2
-            elif parts[i] == "--z-stack":
-                params["z_stack_enabled"] = True
-                i += 1
-            elif parts[i] == "--z-start" and i + 1 < len(parts):
-                params["z_start"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--z-end" and i + 1 < len(parts):
-                params["z_end"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--z-step" and i + 1 < len(parts):
-                params["z_step"] = float(parts[i + 1])
-                i += 2
-            else:
-                logger.debug(f"Unknown flag or argument: {parts[i]}")
-                i += 1
-
-        # Parse angles and exposures if present
-        angles, exposures = parse_angles_exposures(
-            params.get("angles_str", "()"), params.get("exposures_str", None)
-        )
-        params["angles"] = angles
-        params["exposures"] = exposures
-
-        # Validate required parameters
-        required = [
-            "yaml_file_path",
-            "projects_folder_path",
-            "sample_label",
-            "scan_type",
-            "region_name",
-        ]
-        missing = [key for key in required if key not in params]
-        if missing:
-            raise ValueError(f"Missing required parameters: {missing}")
-
-        logger.info(f"Parsed flag-based parameters: {params}")
-        return params
-
-
-# ============================================================================
-# Enhanced Acquisition Workflow with Progress and Cancellation
-# ============================================================================
-
-
 def acquisitionWorkflow(message, client_addr):
-    """
-    Execute the main image acquisition workflow with progress tracking and cancellation support.
+    """Deprecated: acquisition moved to qp_acquisition.acquisition_workflow"""
 
-    Args:
-        message: Command string containing acquisition parameters
-        client_addr: Client address tuple for tracking state
-    """
-    logger.info(f"=== ACQUISITION WORKFLOW STARTED for client {client_addr} ===")
+    def _update_progress(current: int, total: int):
+        with acquisition_locks[client_addr]:
+            acquisition_progress[client_addr] = (current, total)
 
-    try:
-        # Parse the acquisition parameters
-        params = parse_acquisition_message(message)
-
-        modality = "_".join(params["scan_type"].split("_")[:2])
-
-        logger.info(f"Acquisition parameters:")
-        logger.info(f"  Client: {client_addr}")
-        logger.info(f"  Modality: {modality}")
-        logger.info(f"  Sample label: {params['sample_label']}")
-        logger.info(f"  Scan type: {params['scan_type']}")
-        logger.info(f"  Region: {params['region_name']}")
-        logger.info(f"  Angles: {params['angles']} degrees")
-        logger.info(f"  Exposures: {params['exposures']} ms")
-
-        # load the yaml file
-        if not params["yaml_file_path"]:
-            raise ValueError("YAML file path is required")
-        if not pathlib.Path(params["yaml_file_path"]).exists():
-            raise FileNotFoundError(f"YAML file {params['yaml_file_path']} does not exist")
-        ppm_settings = config_manager.load_yaml(params["yaml_file_path"])
-
-        # Set up output paths
-        project_path = pathlib.Path(params["projects_folder_path"]) / params["sample_label"]
-        output_path = project_path / params["scan_type"] / params["region_name"]
-        if not output_path.exists():
-            output_path.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Created output directory: {output_path}")
-
-        # Read tile positions
-        tile_config_path = output_path / "TileConfiguration.txt"
-        positions = read_tile_config(tile_config_path)
-
-        if not positions:
-            logger.error(f"No positions found in {tile_config_path}")
-            with acquisition_locks[client_addr]:
+    def _set_state(state_str: str):
+        with acquisition_locks[client_addr]:
+            try:
+                acquisition_states[client_addr] = AcquisitionState[state_str]
+            except KeyError:
                 acquisition_states[client_addr] = AcquisitionState.FAILED
-            return
 
-        # Create subdirectories for each angle
-        if params["angles"]:
-            for angle in params["angles"]:
-                angle_dir = output_path / str(angle)
-                angle_dir.mkdir(exist_ok=True)
-                shutil.copy2(tile_config_path, angle_dir / "TileConfiguration.txt")
-                logger.debug(f"Created angle directory: {angle_dir}")
+    def _is_cancelled() -> bool:
+        return acquisition_cancel_events[client_addr].is_set()
 
-        # Initialize smartpath
-        sp = smartpath(core)
-
-        # Calculate total images and update progress
-        total_images = (
-            len(positions) * len(params["angles"]) if params["angles"] else len(positions)
-        )
-        with acquisition_locks[client_addr]:
-            acquisition_progress[client_addr] = (0, total_images)
-        logger.info(
-            f"Starting acquisition of {total_images} total images ({len(positions)} positions × {len(params['angles'])} angles)"
-        )
-
-        image_count = 0
-
-        # Main acquisition loop
-        for pos_idx, (pos, filename) in enumerate(positions):
-            # Check for cancellation
-            if acquisition_cancel_events[client_addr].is_set():
-                logger.warning(f"Acquisition cancelled by client {client_addr}")
-                with acquisition_locks[client_addr]:
-                    acquisition_states[client_addr] = AcquisitionState.CANCELLED
-                return
-
-            logger.info(f"Position {pos_idx + 1}/{len(positions)}: {filename}")
-
-            # Move to position
-            logger.debug(f"Moving to position: X={pos.x}, Y={pos.y}, Z={pos.z}")
-            hardware.move_to_position(pos)
-
-            if params["angles"]:
-                # Multi-angle acquisition
-                for angle_idx, angle in enumerate(params["angles"]):
-                    # Check for cancellation
-                    if acquisition_cancel_events[client_addr].is_set():
-                        logger.warning(f"Acquisition cancelled by client {client_addr}")
-                        with acquisition_locks[client_addr]:
-                            acquisition_states[client_addr] = AcquisitionState.CANCELLED
-                        return
-
-                    # Set rotation angle
-                    set_angle(angle)
-
-                    # Set exposure time if specified
-                    if angle_idx < len(params["exposures"]):
-                        exposure_ms = params["exposures"][angle_idx]
-                        core.set_exposure(exposure_ms)
-                        logger.debug(f"Set exposure to {exposure_ms}ms for angle {angle}°")
-
-                    # Acquire image
-                    logger.debug(f"Acquiring image at angle {angle}°")
-                    image, metadata = hardware.snap_image()
-
-                    # Save image
-                    image_path = output_path / str(angle) / filename
-                    if image_path.parent.exists():
-                        smartpath_qpscope.ome_writer(
-                            filename=str(image_path),
-                            pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,
-                            data=image,
-                        )
-                        image_count += 1
-                        logger.info(f"Saved tile {image_count}/{total_images}: {image_path}")
-
-                        # Update progress
-                        with acquisition_locks[client_addr]:
-                            acquisition_progress[client_addr] = (image_count, total_images)
-                    else:
-                        logger.error(f"Failed to save {image_path} - parent directory missing")
-            else:
-                # Single image acquisition
-                logger.debug("Acquiring single image (no rotation)")
-                image, metadata = hardware.snap_image()
-                image_path = output_path / filename
-
-                if image_path.parent.exists():
-                    smartpath_qpscope.ome_writer(
-                        filename=str(image_path),
-                        pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,
-                        data=image,
-                    )
-                    image_count += 1
-                    logger.info(f"Saved tile {image_count}/{total_images}: {image_path}")
-
-                    # Update progress
-                    with acquisition_locks[client_addr]:
-                        acquisition_progress[client_addr] = (image_count, total_images)
-
-        # Save device properties
-        current_props = sp.get_device_properties(core)
-        props_path = output_path / "MMproperties.txt"
-        with open(props_path, "w") as fid:
-            dict_printer(current_props, stream=fid)
-        logger.info(f"Saved device properties to {props_path}")
-
-        logger.info(f"=== ACQUISITION COMPLETED SUCCESSFULLY ===")
-        logger.info(f"Total images saved: {image_count}/{total_images}")
-        logger.info(f"Output directory: {output_path}")
-
-        # Update final state
-        with acquisition_locks[client_addr]:
-            acquisition_states[client_addr] = AcquisitionState.COMPLETED
-
-    except Exception as e:
-        logger.error(f"=== ACQUISITION FAILED ===")
-        logger.error(f"Error: {str(e)}", exc_info=True)
-
-        # Update state to failed
-        with acquisition_locks[client_addr]:
-            acquisition_states[client_addr] = AcquisitionState.FAILED
-
-
-# ============================================================================
-# Enhanced Client Connection Handler
-# ============================================================================
+    return acquisition_workflow(
+        message,
+        client_addr,
+        core=core,
+        hardware=hardware,
+        config_manager=config_manager,
+        logger=logger,
+        update_progress=_update_progress,
+        set_state=_set_state,
+        is_cancelled=_is_cancelled,
+        brushless_device=brushless,
+    )
 
 
 def handle_client(conn, addr):
@@ -584,7 +239,7 @@ def handle_client(conn, addr):
                 coords = conn.recv(4)
                 angle = struct.unpack("!f", coords)[0]
                 logger.info(f"Client {addr} requested rotation to {angle}°")
-                set_angle(angle)
+                acquisition_set_angle(core, brushless, angle)
                 logger.info(f"Rotation completed to {angle}°")
                 continue
 
@@ -748,11 +403,6 @@ def handle_client(conn, addr):
 
         conn.close()
         logger.info(f"<<< Client {addr} disconnected and cleaned up")
-
-
-# ============================================================================
-# Main Server Loop
-# ============================================================================
 
 
 def main():

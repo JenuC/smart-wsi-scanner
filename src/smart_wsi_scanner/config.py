@@ -6,6 +6,19 @@ import os
 from pathlib import Path
 
 
+class sp:
+    def __init__(self) -> None:
+        self.microscope_settings = sp_microscope_settings
+        self.position = sp_position
+        self.imaging_mode = sp_imaging_mode
+        self.detector = sp_detector
+        self.stage = sp_stage_settings
+        self.objective_lens = sp_objective_lens
+        self.camm_settings = sp_camm_settings
+        self.ppm_settings = sp_ppm_settings
+        self.limits = _limits
+
+
 ## property constraints
 @dataclass
 class _limits:
@@ -25,11 +38,17 @@ class sp_position:
 
     def __post_init__(self):
         if self.x is not None and not isinstance(self.x, (float, int)):
-            print("X WRONG")
+            print(
+                f"Invalid type for x: expected float or int, got {type(self.x).__name__} ({self.x!r})"
+            )
         if self.y is not None and not isinstance(self.y, (float, int)):
-            print("Y WRONG")
+            print(
+                f"Invalid type for y: expected float or int, got {type(self.y).__name__} ({self.y!r})"
+            )
         if self.z is not None and not isinstance(self.z, (float, int)):
-            print("Z WRONG")
+            print(
+                f"Invalid type for z: expected float or int, got {type(self.z).__name__} ({self.z!r})"
+            )
 
     def populate_missing(self, current_position: "sp_position") -> None:
         """Populate missing coordinates with values from current_position."""
@@ -54,9 +73,9 @@ class sp_position:
 
 @dataclass
 class sp_stage_settings:
-    xlimit: Optional[_limits] = field(default=None)
-    ylimit: Optional[_limits] = field(default=None)
-    zlimit: Optional[_limits] = field(default=None)
+    x_limit: Optional[_limits] = field(default=None)
+    y_limit: Optional[_limits] = field(default=None)
+    z_limit: Optional[_limits] = field(default=None)
 
 
 @dataclass
@@ -76,14 +95,22 @@ class sp_detector:
 @dataclass
 class sp_imaging_mode:
     name: Optional[str] = field(default=None)
-    pixelsize: Optional[float] = field(default=None)
+    pixel_size: Optional[float] = field(default=None)
 
 
 ## microscope settings
 
 
 @dataclass
+class sp_microscope:
+    name: Optional[str] = field(default=None)
+    type: Optional[str] = field(default=None)
+
+
+@dataclass
 class sp_microscope_settings:
+    path: Optional[str] = field(default=None)
+    microscope: Optional[sp_microscope] = field(default=None)
     stage: Optional[sp_stage_settings] = field(default=None)
     lens: Optional[sp_objective_lens] = field(default=None)
     detector: Optional[sp_detector] = field(default=None)

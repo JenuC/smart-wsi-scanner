@@ -2,16 +2,19 @@
 
 __version__ = "0.1.0"
 
-from .hardware import MicroscopeHardware, PycromanagerHardware
-from .config import ConfigManager, sp_microscope_settings, sp_position, sp_imaging_mode
-from .smartpath import smartpath
+from .hardware import MicroscopeHardware
+from .hardware_pycromanager import (
+    PycromanagerHardware,
+    init_pycromanager,
+)
+from .config import ConfigManager, sp
+
 
 __all__ = [
     "MicroscopeHardware",
-    "PycromanagerHardware",
     "ConfigManager",
-    "sp_microscope_settings",
-    "sp_position",
-    "sp_imaging_mode",
-    "smartpath",
-] 
+    "sp",
+    ## pycromanager specific imports
+    "PycromanagerHardware",
+    "init_pycromanager",
+]
