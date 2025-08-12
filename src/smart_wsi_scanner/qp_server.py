@@ -75,6 +75,7 @@ acquisition_cancel_events = {}  # addr -> Event
 
 
 def int_pycromanager_with_logger():
+def int_pycromanager_with_logger():
     """Initialize Pycro-Manager connection to Micro-Manager."""
     logger.info("Initializing Pycro-Manager connection...")
     core, studio = init_pycromanager()
@@ -89,6 +90,7 @@ def int_pycromanager_with_logger():
 logger.info("Loading configuration...")
 config_manager = ConfigManager()
 ppm_settings = config_manager.get_config("config_PPM")
+core, studio = int_pycromanager_with_logger()
 core, studio = int_pycromanager_with_logger()
 hardware = PycromanagerHardware(core, ppm_settings, studio)
 logger.info("Hardware initialization complete")
@@ -130,7 +132,14 @@ def acquisitionWorkflow(message, client_addr):
             acquisition_progress[client_addr] = (current, total)
 
     def _set_state(state_str: str):
+            acquisition_progress[client_addr] = (current, total)
+
+    def _set_state(state_str: str):
         with acquisition_locks[client_addr]:
+            try:
+                acquisition_states[client_addr] = AcquisitionState[state_str]
+            except KeyError:
+                acquisition_states[client_addr] = AcquisitionState.FAILED
             try:
                 acquisition_states[client_addr] = AcquisitionState[state_str]
             except KeyError:

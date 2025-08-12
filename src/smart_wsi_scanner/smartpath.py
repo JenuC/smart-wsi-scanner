@@ -27,7 +27,7 @@ from .config import sp_microscope_settings, sp_position, sp_imaging_mode  # Used
 
 class smartpath_qpscope:
     """Class for QuPath integration and advanced scanning functionality."""
-
+    
     def __init__(self):
         pass
 
@@ -227,10 +227,9 @@ class smartpath_qpscope:
 # qpscope_project Class - Project Management
 # ============================================================================
 
-
 class qpscope_project:
     """Class for managing QuPath project structure and file paths."""
-
+    
     def __init__(
         self,
         projectsFolderPath: str = r"C:\Users\lociuser\Codes\MikeN\data\slides",
