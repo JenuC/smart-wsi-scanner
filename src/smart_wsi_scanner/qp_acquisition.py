@@ -12,33 +12,17 @@ import re
 import shutil
 import time
 
-from .config import sp_position
+from .config import sp_position, sp_microscope_settings
 from .hardware import MicroscopeHardware
-from .smartpath import smartpath, smartpath_qpscope
-
-
-def read_tile_config(tile_config_path: pathlib.Path, core) -> List[Tuple[sp_position, str]]:
-    """Read tile positions from a QuPath-generated TileConfiguration.txt file."""
-    positions: List[Tuple[sp_position, str]] = []
-    if tile_config_path.exists():
-        with open(tile_config_path, "r") as f:
-            for line in f:
-                pattern = r"^([\w\-\.]+); ; \(\s*([\-\d.]+),\s*([\-\d.]+)"
-                m = re.match(pattern, line)
-                if m:
-                    filename = m.group(1)
-                    x = float(m.group(2))
-                    y = float(m.group(3))
-                    z = core.get_position()
-                    positions.append((sp_position(x, y, z), filename))
-    return positions
+from .hardware_pycromanager import PycromanagerHardware
+from .qp_utils import TileConfigUtils, TifWriterUtils, AutofocusUtils
+import shlex
 
 
 def parse_angles_exposures(angles_str, exposures_str=None) -> Tuple[List[float], List[int]]:
     """Parse angle and exposure strings from various formats."""
     angles: List[float] = []
     exposures: List[int] = []
-
     # Parse angles
     if isinstance(angles_str, list):
         angles = angles_str
@@ -69,7 +53,6 @@ def parse_angles_exposures(angles_str, exposures_str=None) -> Tuple[List[float],
                 exposures.append(800)
             else:
                 exposures.append(500)
-
     return angles, exposures
 
 
@@ -84,7 +67,6 @@ def parse_acquisition_message(message: str) -> dict:
         params = {}
 
         # Split by spaces but preserve quoted strings
-        import shlex
 
         try:
             # For Windows compatibility, temporarily replace backslashes
@@ -119,30 +101,6 @@ def parse_acquisition_message(message: str) -> dict:
             elif parts[i] == "--exposures" and i + 1 < len(parts):
                 params["exposures_str"] = parts[i + 1]
                 i += 2
-            elif parts[i] == "--laser-power" and i + 1 < len(parts):
-                params["laser_power"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--laser-wavelength" and i + 1 < len(parts):
-                params["laser_wavelength"] = int(parts[i + 1])
-                i += 2
-            elif parts[i] == "--dwell-time" and i + 1 < len(parts):
-                params["dwell_time"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--averaging" and i + 1 < len(parts):
-                params["averaging"] = int(parts[i + 1])
-                i += 2
-            elif parts[i] == "--z-stack":
-                params["z_stack_enabled"] = True
-                i += 1
-            elif parts[i] == "--z-start" and i + 1 < len(parts):
-                params["z_start"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--z-end" and i + 1 < len(parts):
-                params["z_end"] = float(parts[i + 1])
-                i += 2
-            elif parts[i] == "--z-step" and i + 1 < len(parts):
-                params["z_step"] = float(parts[i + 1])
-                i += 2
             else:
                 i += 1
 
@@ -171,21 +129,17 @@ def parse_acquisition_message(message: str) -> dict:
     raise ValueError("Unsupported acquisition message format")
 
 
-def acquisition_workflow(
+def _acquisition_workflow(
     message: str,
     client_addr,
-    *,
-    core,
-    hardware: MicroscopeHardware,
+    hardware: PycromanagerHardware,
     config_manager,
     logger,
     update_progress: Callable[[int, int], None],
     set_state: Callable[[str], None],
     is_cancelled: Callable[[], bool],
-    brushless_device: Optional[str] = None,
 ):
     """Execute the main image acquisition workflow with progress and cancellation.
-
     The server provides callbacks for status/progress and cancellation checks.
     """
 
@@ -222,7 +176,7 @@ def acquisition_workflow(
 
         # Read tile positions
         tile_config_path = output_path / "TileConfiguration.txt"
-        positions = read_tile_config(tile_config_path, core)
+        positions = TileConfigUtils.read_tile_config(tile_config_path, hardware.core)  # type:ignore
 
         if not positions:
             logger.error(f"No positions found in {tile_config_path}")
@@ -235,9 +189,6 @@ def acquisition_workflow(
                 angle_dir = output_path / str(angle)
                 angle_dir.mkdir(exist_ok=True)
                 shutil.copy2(tile_config_path, angle_dir / "TileConfiguration.txt")
-
-        # Initialize smartpath
-        sp = smartpath(core)
 
         # Calculate total images and update progress
         total_images = (
@@ -274,13 +225,13 @@ def acquisition_workflow(
                         return
 
                     # Set rotation angle
-                    if brushless_device is not None:
-                        set_angle(core, brushless_device, angle)
+                    hardware.set_psg_ticks(angle)  # type:Ignore
+                    # set_angle(hardware, brushless_device, angle)
 
                     # Set exposure time if specified
                     if angle_idx < len(params["exposures"]):
                         exposure_ms = params["exposures"][angle_idx]
-                        core.set_exposure(exposure_ms)
+                        hardware.core.set_exposure(exposure_ms)  # type:ignore
 
                     # Acquire image
                     image, metadata = hardware.snap_image()  # type: ignore[attr-defined]
@@ -288,7 +239,7 @@ def acquisition_workflow(
                     # Save image
                     image_path = output_path / str(angle) / filename
                     if image_path.parent.exists():
-                        smartpath_qpscope.ome_writer(
+                        TifWriterUtils.ome_writer(
                             filename=str(image_path),
                             pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,  # type: ignore[attr-defined]
                             data=image,
@@ -303,7 +254,7 @@ def acquisition_workflow(
                 image_path = output_path / filename
 
                 if image_path.parent.exists():
-                    smartpath_qpscope.ome_writer(
+                    TifWriterUtils.ome_writer(
                         filename=str(image_path),
                         pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,  # type: ignore[attr-defined]
                         data=image,
@@ -312,7 +263,7 @@ def acquisition_workflow(
                     update_progress(image_count, total_images)
 
         # Save device properties
-        current_props = sp.get_device_properties(core)
+        current_props = hardware.get_device_properties()  # type:ignore
         props_path = output_path / "MMproperties.txt"
         with open(props_path, "w") as fid:
             from pprint import pprint as dict_printer

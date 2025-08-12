@@ -100,32 +100,6 @@ def disconnect():
         print("Disconnected from server.")
 
 
-def acquisition_workflow():
-    """Run the acquisition workflow."""
-
-    if len(sys.argv) > 5:
-        (
-            _,
-            yaml_file_path,
-            projects_folder_path,
-            sample_label,
-            scan_type,
-            region_name,
-            angles_str,
-        ) = sys.argv
-    else:
-        print(
-            "Usage: acq workflow needs following: <yaml_file_path> <projects_folder_path> <sample_label> <scan_type> <region_name> [angles_str]"
-        )
-        return
-    data = [yaml_file_path, projects_folder_path, sample_label, scan_type, region_name, angles_str]
-    message = ",".join(data) + "," + END_MARKER
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
-        s.sendall(Command.ACQUIRE.value + message.encode())
-        print("Acquisition workflow started.")
-
-
 def get():
     message = ",".join(["MicroPublisher6", "Color - Blue scale"]) + "," + END_MARKER
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

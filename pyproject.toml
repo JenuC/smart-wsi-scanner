@@ -75,8 +75,6 @@ move_stageXY = "smart_wsi_scanner.qp_client:move_stageXY"
 move_stageZ = "smart_wsi_scanner.qp_client:move_stageZ"
 get_stageR = "smart_wsi_scanner.qp_client:get_stageR"
 move_stageR = "smart_wsi_scanner.qp_client:move_stageR"
-acquisition_workflow = "smart_wsi_scanner.qp_client:acquisition_workflow"
-snap = "smart_wsi_scanner.qp_snap:main"
 
 [build-system]
 requires = ["hatchling"]

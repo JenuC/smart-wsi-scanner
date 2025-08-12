@@ -25,14 +25,9 @@ import logging
 from datetime import datetime
 
 from smart_wsi_scanner.config import ConfigManager, sp_position
-from smart_wsi_scanner.hardware import PycromanagerHardware, init_pycromanager
-from smart_wsi_scanner.qp_server_config import Command, TCP_PORT, END_MARKER
-
-from smart_wsi_scanner.qp_acquisition import (
-    acquisition_workflow,
-    # thor_to_ppm,
-    # set_angle as acquisition_set_angle,
-)
+from smart_wsi_scanner.hardware_pycromanager import PycromanagerHardware, init_pycromanager
+from smart_wsi_scanner.qp_server_config import Command, ExtendedCommand, TCP_PORT, END_MARKER
+from smart_wsi_scanner.qp_acquisition import _acquisition_workflow
 
 
 # Configure logging
@@ -74,8 +69,7 @@ acquisition_locks = {}  # addr -> Lock
 acquisition_cancel_events = {}  # addr -> Event
 
 
-def int_pycromanager_with_logger():
-def int_pycromanager_with_logger():
+def init_pycromanager_with_logger():
     """Initialize Pycro-Manager connection to Micro-Manager."""
     logger.info("Initializing Pycro-Manager connection...")
     core, studio = init_pycromanager()
@@ -90,48 +84,15 @@ def int_pycromanager_with_logger():
 logger.info("Loading configuration...")
 config_manager = ConfigManager()
 ppm_settings = config_manager.get_config("config_PPM")
-core, studio = int_pycromanager_with_logger()
-core, studio = int_pycromanager_with_logger()
-hardware = PycromanagerHardware(core, ppm_settings, studio)
+core, studio = init_pycromanager_with_logger()
+hardware = PycromanagerHardware(core, studio, ppm_settings)  # type:ignore
 logger.info("Hardware initialization complete")
 
 
-# ============================================================================
-# Enhanced Command Enumeration
-# ============================================================================
-
-
-# Extend the Command enum with new commands
-class ExtendedCommand:
-    """Extended commands for enhanced acquisition control."""
-
-    # Existing commands from Command enum
-    GETXY = Command.GETXY.value
-    GETZ = Command.GETZ.value
-    MOVEZ = Command.MOVEZ.value
-    MOVE = Command.MOVE.value
-    GETR = Command.GETR.value
-    MOVER = Command.MOVER.value
-    SHUTDOWN = Command.SHUTDOWN.value
-    DISCONNECT = Command.DISCONNECT.value
-    ACQUIRE = Command.ACQUIRE.value
-    GET = Command.GET.value
-    SET = Command.SET.value
-
-    # New commands (8 bytes each)
-    STATUS = b"status__"  # Get acquisition status
-    PROGRESS = b"progress"  # Get acquisition progress
-    CANCEL = b"cancel__"  # Cancel acquisition
-
-
 def acquisitionWorkflow(message, client_addr):
-    """Deprecated: acquisition moved to qp_acquisition.acquisition_workflow"""
 
     def _update_progress(current: int, total: int):
         with acquisition_locks[client_addr]:
-            acquisition_progress[client_addr] = (current, total)
-
-    def _set_state(state_str: str):
             acquisition_progress[client_addr] = (current, total)
 
     def _set_state(state_str: str):
@@ -148,17 +109,15 @@ def acquisitionWorkflow(message, client_addr):
     def _is_cancelled() -> bool:
         return acquisition_cancel_events[client_addr].is_set()
 
-    return acquisition_workflow(
-        message,
-        client_addr,
-        core=core,
+    return _acquisition_workflow(
+        message=message,
+        client_addr=client_addr,
         hardware=hardware,
         config_manager=config_manager,
         logger=logger,
         update_progress=_update_progress,
         set_state=_set_state,
         is_cancelled=_is_cancelled,
-        brushless_device=brushless,
     )
 
 
@@ -217,8 +176,7 @@ def handle_client(conn, addr):
 
             if data == ExtendedCommand.GETR:
                 logger.debug(f"Client {addr} requested rotation angle")
-                kinesis_pos = core.get_position(brushless)
-                angle = thor_to_ppm(kinesis_pos)
+                angle = hardware.get_psg_ticks()
                 response = struct.pack("!f", angle)
                 conn.sendall(response)
                 logger.debug(f"Sent rotation angle to {addr}: {angle}°")
@@ -248,7 +206,7 @@ def handle_client(conn, addr):
                 coords = conn.recv(4)
                 angle = struct.unpack("!f", coords)[0]
                 logger.info(f"Client {addr} requested rotation to {angle}°")
-                acquisition_set_angle(core, brushless, angle)
+                hardware.set_psg_ticks(angle)
                 logger.info(f"Rotation completed to {angle}°")
                 continue
 

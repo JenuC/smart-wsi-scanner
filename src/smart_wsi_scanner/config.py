@@ -38,11 +38,17 @@ class sp_position:
 
     def __post_init__(self):
         if self.x is not None and not isinstance(self.x, (float, int)):
-            print(f"Invalid type for x: expected float or int, got {type(self.x).__name__} ({self.x!r})")
+            print(
+                f"Invalid type for x: expected float or int, got {type(self.x).__name__} ({self.x!r})"
+            )
         if self.y is not None and not isinstance(self.y, (float, int)):
-            print(f"Invalid type for y: expected float or int, got {type(self.y).__name__} ({self.y!r})")
+            print(
+                f"Invalid type for y: expected float or int, got {type(self.y).__name__} ({self.y!r})"
+            )
         if self.z is not None and not isinstance(self.z, (float, int)):
-            print(f"Invalid type for z: expected float or int, got {type(self.z).__name__} ({self.z!r})")
+            print(
+                f"Invalid type for z: expected float or int, got {type(self.z).__name__} ({self.z!r})"
+            )
 
     def populate_missing(self, current_position: "sp_position") -> None:
         """Populate missing coordinates with values from current_position."""

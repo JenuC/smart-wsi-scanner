@@ -12,14 +12,16 @@ acquisition-configs/*
 ## python specific
 .ipynb_checkpoints/
 *.pyc
-.vscode/*
-.venv/*
-*.log
+.vscode
+.venv
+
+## server log files
+*.log 
 
 ## coverage
 .coverage
 
 ## 
-.vscode
 *.tif
 *.egg-info
+__pycache__

@@ -50,10 +50,10 @@ class PycromanagerHardware(MicroscopeHardware):
         self.studio = studio
         self.settings = settings
         print(self.settings.microscope)
-        if self.settings.microscope.name == "PPM":
+        if self.settings.microscope.name == "PPM":  # type: ignore
             self.set_psg_ticks = self._ppm_set_psgticks
             self.get_psg_ticks = self._ppm_get_psgticks
-        if settings.microscope.name == "CAMM":
+        if settings.microscope.name == "CAMM":  # type: ignore
             self.swap_objective_lens = self._camm_swap_objective_lens
 
     def move_to_position(self, position: sp_position) -> None:
@@ -117,6 +117,22 @@ class PycromanagerHardware(MicroscopeHardware):
 
         return pixels, tags
 
+    def get_fov(self) -> tuple[float, float]:
+        """returns field of view in settings.pixelsize units fov_x, fov_y"""
+        camera = self.core.get_property("Core", "Camera")  # type: ignore
+        if camera in ["QCamera", "MicroPublisher6"]:
+            height = self.core.get_property(camera, "LSM-Resolution")  # type: ignore
+            width = height
+        elif camera == "OSc-LSM":
+            height = self.core.get_property(camera, "X-dimension")  # type: ignore
+            width = self.core.get_property(camera, "Y-dimension")  # type: ignore
+        else:
+            raise ValueError(f"Unknown camera type: {camera}")
+        pixel_size_um = self.core.get_pixel_size_um()  # type: ignore
+        fov_y = height * pixel_size_um
+        fov_x = width * pixel_size_um
+        return fov_x, fov_y
+
     def autofocus(
         self,
         n_steps=5,
@@ -126,7 +142,7 @@ class PycromanagerHardware(MicroscopeHardware):
         score_metric=skimage.filters.sobel,
         pop_a_plot=False,
         move_stage_to_estimate=True,
-    ) -> float:
+    ) -> float:  # type: ignore
         """
         score metric options : shannon_entropy, sobel
         """
@@ -176,7 +192,7 @@ class PycromanagerHardware(MicroscopeHardware):
         if white_balance_profile is None:
             # load from profile
             # white_balance_profile = self.settings.white_balance.ppm.uncrossed
-            white_balance_profile = self.settings.white_balance.default.default
+            white_balance_profile = self.settings.white_balance.default.default  # type: ignore
 
         if img is None:
             raise ValueError("Input image 'img' must not be None for white balancing.")

@@ -24,3 +24,26 @@ for command in Command:
         raise ValueError(f"Command {command.name} must be exactly 8 bytes long.")
     if not isinstance(command.value, bytes):
         raise TypeError(f"Command {command.name} must be of type bytes.")
+
+
+# Extend the Command enum with new commands
+class ExtendedCommand:
+    """Extended commands for enhanced acquisition control."""
+
+    # Existing commands from Command enum
+    GETXY = Command.GETXY.value
+    GETZ = Command.GETZ.value
+    MOVEZ = Command.MOVEZ.value
+    MOVE = Command.MOVE.value
+    GETR = Command.GETR.value
+    MOVER = Command.MOVER.value
+    SHUTDOWN = Command.SHUTDOWN.value
+    DISCONNECT = Command.DISCONNECT.value
+    ACQUIRE = Command.ACQUIRE.value
+    GET = Command.GET.value
+    SET = Command.SET.value
+
+    # New commands (8 bytes each)
+    STATUS = b"status__"  # Get acquisition status
+    PROGRESS = b"progress"  # Get acquisition progress
+    CANCEL = b"cancel__"  # Cancel acquisition
