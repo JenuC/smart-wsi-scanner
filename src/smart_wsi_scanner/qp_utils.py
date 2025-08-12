@@ -1,7 +1,7 @@
 import pathlib
 import re
-from typing import Callable, List, Tuple, Optional
-from .config import sp_position, sp_microscope_settings
+from typing import List, Tuple, Optional
+from .config import sp_position
 import numpy as np
 from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt

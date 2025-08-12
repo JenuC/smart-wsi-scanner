@@ -1,12 +1,10 @@
 """Hardware abstraction layer for microscope control."""
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, Any, Optional
-import numpy as np
-from collections import OrderedDict
+from typing import Optional
 import warnings
 
-from .config import sp_microscope_settings, sp_position, sp_imaging_mode
+from .config import sp_microscope_settings, sp_position
 
 
 

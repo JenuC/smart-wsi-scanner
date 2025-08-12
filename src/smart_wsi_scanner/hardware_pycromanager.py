@@ -1,7 +1,3 @@
-import difflib  # Used by smartpath class for metadata comparison
-import os  # Used by smartpath_qpscope class for file operations
-import pathlib  # Used by qpscope_project class
-import pprint  # Used by smartpath class for metadata formatting
 import warnings  # Used by smartpath class for validation warnings
 from collections import OrderedDict  # Used by smartpath class for image tags
 

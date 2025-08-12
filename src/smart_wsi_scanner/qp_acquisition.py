@@ -8,12 +8,9 @@ from __future__ import annotations
 
 from typing import Callable, List, Tuple, Optional
 import pathlib
-import re
 import shutil
-import time
 
-from .config import sp_position, sp_microscope_settings
-from .hardware import MicroscopeHardware
+from .config import sp_position
 from .hardware_pycromanager import PycromanagerHardware
 from .qp_utils import TileConfigUtils, TifWriterUtils, AutofocusUtils
 import shlex
