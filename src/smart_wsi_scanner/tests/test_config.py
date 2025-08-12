@@ -1,7 +1,6 @@
 """Tests for the configuration system."""
 
-import pytest
-from ..config import sp_position, sp_microscope_settings, ConfigManager
+from ..config import sp_position, ConfigManager
 
 def test_position_creation():
     """Test creating a position object."""

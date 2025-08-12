@@ -3,7 +3,8 @@
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
-from ..hardware import PycromanagerHardware, MicroscopeHardware
+from ..hardware import MicroscopeHardware
+from ..hardware_pycromanager import PycromanagerHardware
 from ..config import sp_position, sp_microscope_settings
 
 @pytest.fixture

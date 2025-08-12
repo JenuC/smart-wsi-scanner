@@ -26,7 +26,7 @@ from datetime import datetime
 
 from smart_wsi_scanner.config import ConfigManager, sp_position
 from smart_wsi_scanner.hardware_pycromanager import PycromanagerHardware, init_pycromanager
-from smart_wsi_scanner.qp_server_config import Command, ExtendedCommand, TCP_PORT, END_MARKER
+from smart_wsi_scanner.qp_server_config import ExtendedCommand, TCP_PORT, END_MARKER
 from smart_wsi_scanner.qp_acquisition import _acquisition_workflow
 
 
