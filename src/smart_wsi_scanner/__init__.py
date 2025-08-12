@@ -8,7 +8,7 @@ from .hardware_pycromanager import (
     init_pycromanager,
 )
 from .config import ConfigManager, sp
-
+from .qp_utils import TifWriterUtils, TileConfigUtils, AutofocusUtils, QuPathProject
 
 __all__ = [
     "MicroscopeHardware",

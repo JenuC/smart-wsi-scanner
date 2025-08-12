@@ -201,6 +201,20 @@ def _acquisition_workflow(
 
         image_count = 0
 
+        # find autofocus positions:
+        fov = hardware.get_fov()
+        try:
+            xy_positions = [(pos.x, pos.y) for pos, filename in positions]
+            af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
+                fov, xy_positions, ntiles=3
+            )
+        except Exception as e:
+            print("! falling back to older tileconfig-reader")
+            xy_positions = TileConfigUtils.read_TileConfiguration_coordinates(tile_config_path)
+            af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
+                fov, xy_positions, ntiles=3
+            )
+
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
             # Check for cancellation
@@ -214,6 +228,9 @@ def _acquisition_workflow(
             # Move to position
             logger.debug(f"Moving to position: X={pos.x}, Y={pos.y}, Z={pos.z}")
             hardware.move_to_position(pos)
+
+            if pos_idx in af_positions:
+                hardware.autofocus(move_stage_to_estimate=True)
 
             if params["angles"]:
                 # Multi-angle acquisition
@@ -235,6 +252,9 @@ def _acquisition_workflow(
 
                     # Acquire image
                     image, metadata = hardware.snap_image()  # type: ignore[attr-defined]
+
+                    # white balance
+                    image = hardware.white_balance(image)
 
                     # Save image
                     image_path = output_path / str(angle) / filename
