@@ -17,6 +17,7 @@ class Command(Enum):
     ACQUIRE = b"acquire_"
     SHUTDOWN = b"shutdown"
     DISCONNECT = b"quitclnt"
+    FOV = b"getfov__"
 
 
 for command in Command:
@@ -39,6 +40,7 @@ class ExtendedCommand:
     MOVER = Command.MOVER.value
     SHUTDOWN = Command.SHUTDOWN.value
     DISCONNECT = Command.DISCONNECT.value
+    GETFOV = Command.FOV.value
     ACQUIRE = Command.ACQUIRE.value
     GET = Command.GET.value
     SET = Command.SET.value

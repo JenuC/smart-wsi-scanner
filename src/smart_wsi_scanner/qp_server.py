@@ -174,6 +174,20 @@ def handle_client(conn, addr):
                 logger.debug(f"Sent Z position to {addr}: {current_position_xyz.z}")
                 continue
 
+            if data == ExtendedCommand.GETFOV:
+                logger.debug(f"Client {addr} requested Field of View")
+                try:
+                    current_fov_x, current_fov_y = hardware.get_fov()
+                    response = struct.pack("!ff", current_fov_x, current_fov_y)
+                    conn.sendall(response)
+                    logger.debug(f"Sent FOV to {addr}: ({current_fov_x}, {current_fov_y})")
+                except Exception as e:
+                    logger.error(f"Failed to get FOV: {e}")
+                    # Send error response or default values
+                    response = struct.pack("!ff", 0.0, 0.0)  # or some error indicator
+                    conn.sendall(response)
+                continue
+
             if data == ExtendedCommand.GETR:
                 logger.debug(f"Client {addr} requested rotation angle")
                 angle = hardware.get_psg_ticks()
