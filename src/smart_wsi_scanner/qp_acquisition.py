@@ -252,8 +252,9 @@ def _acquisition_workflow(
                         exposure_ms = params["exposures"][angle_idx]
                         hardware.core.set_exposure(exposure_ms)  # type:ignore
 
+                    ## FORCE debeyering for mm2:
                     # Acquire image
-                    image, metadata = hardware.snap_image()  # type: ignore[attr-defined]
+                    image, metadata = hardware.snap_image(debeyering=True)  # type: ignore[attr-defined]
 
                     # white balance
                     image = hardware.white_balance(image)

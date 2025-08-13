@@ -11,6 +11,7 @@ import skimage.color
 import skimage.filters  # Used by smartpath class for autofocus
 import scipy.interpolate  # Used by smartpath class for autofocus interpolation
 import matplotlib.pyplot as plt  # Used by smartpath class for autofocus plots
+from .debeyering import CPUDebayer
 
 
 def obj_2_list(name):
@@ -73,10 +74,16 @@ class PycromanagerHardware(MicroscopeHardware):
             self.core.get_x_position(), self.core.get_y_position(), self.core.get_position()  # type: ignore
         )
 
-    def snap_image(self, background_correction=False, remove_alpha=True):
+    def snap_image(self, background_correction=False, remove_alpha=True, debayering=False):
         """Snaps an Image using MM Core and returns img,tags"""
         if self.core.is_sequence_running() and self.studio is not None:  # type: ignore
             self.studio.live().set_live_mode(False)  # type: ignore
+
+        camera = self.get_device_properties()["Core"]["Camera"]
+
+        if debayering and (camera == "MicroPublisher6"):
+            self.set_device_properties()[camera]["Color"] == "OFF"  # type:ignore
+
         self.core.snap_image()  # type: ignore
 
         tagged_image = self.core.get_tagged_image()  # type: ignore
@@ -94,7 +101,19 @@ class PycromanagerHardware(MicroscopeHardware):
         else:
             pixels = pixels.reshape(height, width)
 
-        camera = self.get_device_properties()["Core"]["Camera"]
+        if debayering and (camera == "MicroPublisher6"):
+            debayerx = CPUDebayer(
+                pattern="GRBG",
+                image_bit_clipmax=65535,
+                image_dtype=np.uint16,
+                convolution_mode="wrap",
+            )
+            pixels = debayerx.debayer(pixels)
+            pixels = ((pixels / 65535) * 255).astype(np.uint8)
+
+            self.set_device_properties()[camera]["Color"] == "ON"  # type:ignore
+            return pixels, tags
+
         if camera in ["QCamera", "MicroPublisher6"]:
             # flip BGRA to ARGB
             pixels = pixels[:, :, ::-1]
