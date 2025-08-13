@@ -4,6 +4,3 @@
 [submodule "src/smart_wsi_scanner/dreams"]
 	path = src/smart_wsi_scanner/dreams
 	url = https://github.com/JenuC/dreams
-[submodule "src/smart_wsi_scanner/debeyering"]
-	path = src/smart_wsi_scanner/debeyering
-	url = https://github.com/jenuc/debeyering
