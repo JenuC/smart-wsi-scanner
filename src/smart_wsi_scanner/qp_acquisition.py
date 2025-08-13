@@ -162,7 +162,7 @@ def _acquisition_workflow(
             raise ValueError("YAML file path is required")
         if not pathlib.Path(params["yaml_file_path"]).exists():
             raise FileNotFoundError(f"YAML file {params['yaml_file_path']} does not exist")
-        ppm_settings = config_manager.load_yaml(params["yaml_file_path"])  # type: ignore[attr-defined]
+        ppm_settings = config_manager.load_config(params["yaml_file_path"])  # type: ignore[attr-defined]
 
         # Set up output paths
         project_path = pathlib.Path(params["projects_folder_path"]) / params["sample_label"]
@@ -227,8 +227,13 @@ def _acquisition_workflow(
             hardware.move_to_position(pos)
 
             if pos_idx in af_positions:
-                hardware.autofocus(move_stage_to_estimate=True)
-
+                logger.debug(f"Performing Autofocus at X={pos.x}, Y={pos.y}, Z={pos.z}")
+                new_z = hardware.autofocus(
+                    move_stage_to_estimate=True,
+                    n_steps=ppm_settings.autofocus.n_steps,
+                    search_range=ppm_settings.autofocus.search_range,
+                )
+                logger.debug(f"New Z {new_z}")
             if params["angles"]:
                 # Multi-angle acquisition
                 for angle_idx, angle in enumerate(params["angles"]):
@@ -258,7 +263,7 @@ def _acquisition_workflow(
                     if image_path.parent.exists():
                         TifWriterUtils.ome_writer(
                             filename=str(image_path),
-                            pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,  # type: ignore[attr-defined]
+                            pixel_size_um=hardware.core.get_pixel_size_um(),  # type: ignore[attr-defined]
                             data=image,
                         )
                         image_count += 1
@@ -273,7 +278,7 @@ def _acquisition_workflow(
                 if image_path.parent.exists():
                     TifWriterUtils.ome_writer(
                         filename=str(image_path),
-                        pixel_size_um=ppm_settings.imagingMode.BF_10x.pixelSize_um,  # type: ignore[attr-defined]
+                        pixel_size_um=hardware.core.get_pixel_size_um(),  # type: ignore[attr-defined]
                         data=image,
                     )
                     image_count += 1

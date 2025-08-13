@@ -73,7 +73,7 @@ class PycromanagerHardware(MicroscopeHardware):
             self.core.get_x_position(), self.core.get_y_position(), self.core.get_position()  # type: ignore
         )
 
-    def snap(self, background_correction=False, remove_alpha=True):
+    def snap_image(self, background_correction=False, remove_alpha=True):
         """Snaps an Image using MM Core and returns img,tags"""
         if self.core.is_sequence_running() and self.studio is not None:  # type: ignore
             self.studio.live().set_live_mode(False)  # type: ignore
@@ -116,12 +116,12 @@ class PycromanagerHardware(MicroscopeHardware):
     def get_fov(self) -> tuple[float, float]:
         """returns field of view in settings.pixelsize units fov_x, fov_y"""
         camera = self.core.get_property("Core", "Camera")  # type: ignore
-        if camera in ["QCamera", "MicroPublisher6"]:
-            height = self.core.get_property(camera, "LSM-Resolution")  # type: ignore
+        if camera == "OSc-LSM":
+            height = int(self.core.get_property(camera, "LSM-Resolution"))  # type: ignore
             width = height
-        elif camera == "OSc-LSM":
-            height = self.core.get_property(camera, "X-dimension")  # type: ignore
-            width = self.core.get_property(camera, "Y-dimension")  # type: ignore
+        elif camera in ["QCamera", "MicroPublisher6"]:
+            height = int(self.core.get_property(camera, "Y-dimension"))  # type: ignore
+            width = int(self.core.get_property(camera, "X-dimension"))  # type: ignore
         else:
             raise ValueError(f"Unknown camera type: {camera}")
         pixel_size_um = self.core.get_pixel_size_um()  # type: ignore
@@ -153,7 +153,7 @@ class PycromanagerHardware(MicroscopeHardware):
                 )
                 self.move_to_position(new_pos)
                 # print(smartpath.get_current_position(core))
-                img, tags = self.snap()
+                img, tags = self.snap_image()
                 img_gray = skimage.color.rgb2gray(img)
                 score = score_metric(img_gray)
                 if score.ndim == 2:
