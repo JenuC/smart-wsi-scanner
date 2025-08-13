@@ -82,7 +82,7 @@ class PycromanagerHardware(MicroscopeHardware):
         camera = self.get_device_properties()["Core"]["Camera"]
 
         if debayering and (camera == "MicroPublisher6"):
-            self.set_device_properties()[camera]["Color"] == "OFF"  # type:ignore
+            self.core.set_property("MicroPublisher6", "Color", "OFF")  # type:ignore
 
         self.core.snap_image()  # type: ignore
 
@@ -104,14 +104,15 @@ class PycromanagerHardware(MicroscopeHardware):
         if debayering and (camera == "MicroPublisher6"):
             debayerx = CPUDebayer(
                 pattern="GRBG",
-                image_bit_clipmax=65535,
+                image_bit_clipmax=(2**14) - 1,
                 image_dtype=np.uint16,
                 convolution_mode="wrap",
             )
             pixels = debayerx.debayer(pixels)
-            pixels = ((pixels / 65535) * 255).astype(np.uint8)
+            pixels = ((pixels / (2**14) - 1) * 255).astype(np.uint8)
 
-            self.set_device_properties()[camera]["Color"] == "ON"  # type:ignore
+            self.core.set_property("MicroPublisher6", "Color", "ON")  # type:ignore
+
             return pixels, tags
 
         if camera in ["QCamera", "MicroPublisher6"]:
