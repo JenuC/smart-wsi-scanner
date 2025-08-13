@@ -11,7 +11,7 @@ import skimage.color
 import skimage.filters  # Used by smartpath class for autofocus
 import scipy.interpolate  # Used by smartpath class for autofocus interpolation
 import matplotlib.pyplot as plt  # Used by smartpath class for autofocus plots
-from .debeyering import CPUDebayer
+from .debayering import CPUDebayer
 
 
 def obj_2_list(name):
@@ -123,6 +123,7 @@ class PycromanagerHardware(MicroscopeHardware):
                     pixels = pixels[:, :, 1:]  # ARGB the alpha-channel is all zeros by default?
                     ## TODO verify if QCamera is BGRA
                 if background_correction:
+                    ## currently implemented in the qp-acquisition
                     pass
 
         elif camera == "OSc-LSM":
