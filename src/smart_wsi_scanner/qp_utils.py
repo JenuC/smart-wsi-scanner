@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches
 import tifffile as tf
 import uuid
+import skimage.morphology
+import skimage.filters
 
 ## read tile configuration file ( two versions)
 
@@ -88,12 +90,12 @@ class AutofocusUtils:
         return positions_d
 
     @staticmethod
-    def get_autofocus_positions(fov, positions: list[tuple[float, float]], ntiles: float):
+    def get_autofocus_positions(fov, positions: list[tuple[float, float]], n_tiles: float):
 
         fov_x, fov_y = fov
 
         # Compute the minimum required distance between autofocus positions,
-        af_min_distance = cdist([[0, 0]], [[fov_x * ntiles, fov_y * ntiles]])[0][0]
+        af_min_distance = cdist([[0, 0]], [[fov_x * n_tiles, fov_y * n_tiles]])[0][0]
 
         # for each tile, if dist is higher, perform autofocus
         af_positions = []
@@ -155,6 +157,55 @@ class AutofocusUtils:
         ax.set_ylabel("Y position (um)")
         plt.show()
         return af_positions, af_min_distance
+
+    @staticmethod
+    def autofocus_profile_laplacian_variance(self, image):
+        """Fast general sharpness metric - ~5ms for 2500x1900"""
+        laplacian = skimage.filters.laplace(image)
+        return laplacian.var()
+
+    @staticmethod
+    def autofocus_profile_sobel(self, image):
+        """Fast general sharpness metric - ~5ms for 2500x1900"""
+        laplacian = skimage.filters.sobel(image)
+        return laplacian.var()
+
+    @staticmethod
+    def autofocus_profile_brenner_gradient(self, image):
+        """Fastest option - ~3ms for 2500x1900"""
+        gy, gx = np.gradient(image.astype(np.float32))
+        return np.mean(gx**2 + gy**2)
+
+    @staticmethod
+    def autofocus_profile_robust_sharpness_metric(self, image):
+        """Particle-resistant but slower - ~20ms for 2500x1900"""
+        # Median filter to remove particles (this is the slow part)
+        filtered = skimage.filters.median(image, skimage.morphology.disk(3))
+
+        # Calculate sharpness on filtered image
+        laplacian = skimage.filters.laplace(filtered)
+
+        # Exclude very dark regions from calculation
+        threshold = skimage.filters.threshold_otsu(image)
+        mask = image > (threshold * 0.5)
+
+        return laplacian[mask].var() if mask.any() else laplacian.var()
+
+    @staticmethod
+    def autofocus_profile_hybrid_sharpness_metric(self, image):
+        """Compromise: Fast with some particle resistance - ~8ms"""
+        # Gaussian blur to reduce particle influence (faster than median)
+        smoothed = skimage.filters.gaussian(image, sigma=1.5)
+
+        # Use Brenner gradient on smoothed image
+        gy, gx = np.gradient(smoothed.astype(np.float32))
+        gradient_magnitude = gx**2 + gy**2
+
+        # Soft masking: reduce weight of very dark/bright regions
+        normalized = (image - image.min()) / (image.max() - image.min() + 1e-10)
+        weight_mask = 1 - np.abs(normalized - 0.5) * 2  # Peak at mid-gray
+
+        return np.mean(gradient_magnitude * weight_mask)
 
 
 class TifWriterUtils:

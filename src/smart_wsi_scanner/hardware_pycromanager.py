@@ -109,7 +109,7 @@ class PycromanagerHardware(MicroscopeHardware):
                 convolution_mode="wrap",
             )
             pixels = debayerx.debayer(pixels)
-            pixels = ((pixels / ((2**14)+1) ) * 255).astype(np.uint8)
+            pixels = ((pixels / ((2**14) + 1)) * 255).astype(np.uint8)
             pixels = np.clip(pixels, 0, 255).astype(np.uint8)
             self.core.set_property("MicroPublisher6", "Color", "ON")  # type:ignore
 
@@ -175,7 +175,10 @@ class PycromanagerHardware(MicroscopeHardware):
                 self.move_to_position(new_pos)
                 # print(smartpath.get_current_position(core))
                 img, tags = self.snap_image()
-                img_gray = skimage.color.rgb2gray(img)
+                green1 = img[0::2, 0::2]
+                green2 = img[1::2, 1::2]
+                img_gray = ((green1 + green2) / 2.0).astype(np.float32)
+                # img_gray = skimage.color.rgb2gray(img)
                 score = score_metric(img_gray)
                 if score.ndim == 2:
                     score = np.mean(score)

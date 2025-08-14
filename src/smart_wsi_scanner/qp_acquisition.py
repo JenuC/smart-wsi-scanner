@@ -14,6 +14,7 @@ from .config import sp_position
 from .hardware_pycromanager import PycromanagerHardware
 from .qp_utils import TileConfigUtils, TifWriterUtils, AutofocusUtils
 import shlex
+import skimage.filters
 
 
 def parse_angles_exposures(angles_str, exposures_str=None) -> Tuple[List[float], List[int]]:
@@ -222,20 +223,22 @@ def _acquisition_workflow(
         angles_wb = {
             angle: [float(x) for x in wb_list[0].split()] for angle, wb_list in angles_wb_.items()
         }
+
         # find autofocus positions:
         fov = hardware.get_fov()
         try:
             xy_positions = [(pos.x, pos.y) for pos, filename in positions]
             af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, ntiles=3  # type:ignore
+                fov, xy_positions, n_tiles=ppm_settings.autofocus.n_tiles  # type:ignore
             )
         except Exception as e:
             print("! falling back to older tileconfig-reader")
             xy_positions = TileConfigUtils.read_TileConfiguration_coordinates(tile_config_path)
             af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, ntiles=3  # type:ignore
+                fov, xy_positions, n_tiles=ppm_settings.autofocus.n_tiles  # type:ignore
             )
         print(af_positions)
+
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
             # Check for cancellation
@@ -260,6 +263,8 @@ def _acquisition_workflow(
                     move_stage_to_estimate=True,
                     n_steps=ppm_settings.autofocus.n_steps,
                     search_range=ppm_settings.autofocus.search_range,
+                    interp_strength=100,
+                    score_metric=AutofocusUtils.autofocus_profile_laplacian_variance,
                 )
                 logger.info(f"New Z {new_z}")
             if params["angles"]:
@@ -284,11 +289,11 @@ def _acquisition_workflow(
                     ## FORCE debayering for mm2:
                     # Acquire image
                     image, metadata = hardware.snap_image(debayering=True)  # type: ignore[attr-defined]
-                    logger.debug(f"debeyer on ")
+                    logger.info(f"Debayer on ndim{image.ndim} mean {image.mean((0,1))}")
                     # white balance
 
                     image = hardware.white_balance(image, white_balance_profile=angles_wb[angle])
-                    logger.debug(f"whitebalance applied {angles_wb[angle]}")
+                    logger.info(f"whitebalance applied {angles_wb[angle]}")
                     # Save image
                     image_path = output_path / str(angle) / filename
                     if image_path.parent.exists():
@@ -310,7 +315,7 @@ def _acquisition_workflow(
                     TifWriterUtils.ome_writer(
                         filename=str(image_path),
                         pixel_size_um=hardware.core.get_pixel_size_um(),  # type: ignore[attr-defined]
-                        data=image,
+                        data=image,  # type:ignore
                     )
                     image_count += 1
                     update_progress(image_count, total_images)
