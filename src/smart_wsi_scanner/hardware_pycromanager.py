@@ -104,21 +104,21 @@ class PycromanagerHardware(MicroscopeHardware):
         if debayering and (camera == "MicroPublisher6"):
             debayerx = CPUDebayer(
                 pattern="GRBG",
-                image_bit_clipmax=(2**14) - 1,
+                image_bit_clipmax=(2**16) - 1,
                 image_dtype=np.uint16,
                 convolution_mode="wrap",
             )
             pixels = debayerx.debayer(pixels)
-            pixels = ((pixels / (2**14) - 1) * 255).astype(np.uint8)
-
+            pixels = ((pixels / ((2**14)+1) ) * 255).astype(np.uint8)
+            pixels = np.clip(pixels, 0, 255).astype(np.uint8)
             self.core.set_property("MicroPublisher6", "Color", "ON")  # type:ignore
 
             return pixels, tags
 
         if camera in ["QCamera", "MicroPublisher6"]:
             # flip BGRA to ARGB
-            pixels = pixels[:, :, ::-1]
-            if self.get_device_properties()[camera]["Color"] == "ON":
+            if nchannels > 1:
+                pixels = pixels[:, :, ::-1]
                 if (camera == "MicroPublisher6") and (remove_alpha):
                     pixels = pixels[:, :, 1:]  # ARGB the alpha-channel is all zeros by default?
                     ## TODO verify if QCamera is BGRA
