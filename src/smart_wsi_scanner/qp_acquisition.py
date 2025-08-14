@@ -138,6 +138,18 @@ def _acquisition_workflow(
 ):
     """Execute the main image acquisition workflow with progress and cancellation.
     The server provides callbacks for status/progress and cancellation checks.
+    # Parse the acquisition parameters
+        ## load the yaml file
+        ## Set up output paths
+    # Read tile positions
+        ## Create subdirectories for each angle
+        ## Calculate total images and update progress
+        ## load white balance values for angles from the yaml
+        ## find autofocus positions for range from the yaml
+    # Main acquisition loop
+        ## TODO ideally the pos-list needs to be parsed/ estimated before acq
+    ## Move to position- set Angle - set Expsoure - Debayer  - WhiteBalance - Save
+
     """
 
     logger.info(f"=== ACQUISITION WORKFLOW STARTED for client {client_addr} ===")
@@ -163,7 +175,7 @@ def _acquisition_workflow(
         if not pathlib.Path(params["yaml_file_path"]).exists():
             raise FileNotFoundError(f"YAML file {params['yaml_file_path']} does not exist")
         ppm_settings = config_manager.load_config(params["yaml_file_path"])  # type: ignore[attr-defined]
-
+        hardware.settings = ppm_settings
         # Set up output paths
         project_path = pathlib.Path(params["projects_folder_path"]) / params["sample_label"]
         output_path = project_path / params["scan_type"] / params["region_name"]
@@ -198,20 +210,32 @@ def _acquisition_workflow(
 
         image_count = 0
 
+        ## white balance values for angles
+
+        [float(x) for x in ppm_settings.white_balance.ppm.crossed[0].split(" ")]
+        angles_wb_ = {
+            0: hardware.settings.white_balance.ppm.crossed,
+            90: hardware.settings.white_balance.ppm.uncrossed,
+            5.0: hardware.settings.white_balance.ppm.positive,
+            -5.0: hardware.settings.white_balance.ppm.negative,
+        }
+        angles_wb = {
+            angle: [float(x) for x in wb_list[0].split()] for angle, wb_list in angles_wb_.items()
+        }
         # find autofocus positions:
         fov = hardware.get_fov()
         try:
             xy_positions = [(pos.x, pos.y) for pos, filename in positions]
             af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, ntiles=3
+                fov, xy_positions, ntiles=3  # type:ignore
             )
         except Exception as e:
             print("! falling back to older tileconfig-reader")
             xy_positions = TileConfigUtils.read_TileConfiguration_coordinates(tile_config_path)
             af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, ntiles=3
+                fov, xy_positions, ntiles=3  # type:ignore
             )
-
+        print(af_positions)
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
             # Check for cancellation
@@ -222,21 +246,26 @@ def _acquisition_workflow(
 
             logger.info(f"Position {pos_idx + 1}/{len(positions)}: {filename}")
 
+            # tile config is not handling Z, so we need the z as the last set autofocus z value
+            # ensure Z is not loaded from the pos-list (that uses a single z value when tile config was passed)
+            # TODO ideally the pos-list needs to be parsed and autofocus positions and z needs to estimated separately
+            pos.z = hardware.get_current_position().z
             # Move to position
-            logger.debug(f"Moving to position: X={pos.x}, Y={pos.y}, Z={pos.z}")
+            logger.info(f"Moving to position: X={pos.x}, Y={pos.y}, Z={pos.z}")
             hardware.move_to_position(pos)
 
             if pos_idx in af_positions:
-                logger.debug(f"Performing Autofocus at X={pos.x}, Y={pos.y}, Z={pos.z}")
+                logger.info(f"Performing Autofocus at X={pos.x}, Y={pos.y}, Z={pos.z}")
                 new_z = hardware.autofocus(
                     move_stage_to_estimate=True,
                     n_steps=ppm_settings.autofocus.n_steps,
                     search_range=ppm_settings.autofocus.search_range,
                 )
-                logger.debug(f"New Z {new_z}")
+                logger.info(f"New Z {new_z}")
             if params["angles"]:
                 # Multi-angle acquisition
                 for angle_idx, angle in enumerate(params["angles"]):
+
                     # Check for cancellation
                     if is_cancelled():
                         logger.warning(f"Acquisition cancelled by client {client_addr}")
@@ -255,10 +284,11 @@ def _acquisition_workflow(
                     ## FORCE debayering for mm2:
                     # Acquire image
                     image, metadata = hardware.snap_image(debayering=True)  # type: ignore[attr-defined]
-
+                    logger.debug(f"debeyer on ")
                     # white balance
-                    image = hardware.white_balance(image)
 
+                    image = hardware.white_balance(image, white_balance_profile=angles_wb[angle])
+                    logger.debug(f"whitebalance applied {angles_wb[angle]}")
                     # Save image
                     image_path = output_path / str(angle) / filename
                     if image_path.parent.exists():
@@ -272,7 +302,7 @@ def _acquisition_workflow(
                     else:
                         logger.error(f"Failed to save {image_path} - parent directory missing")
             else:
-                # Single image acquisition
+                # Single image acquisition: no angles specified
                 image, metadata = hardware.snap_image()  # type: ignore[attr-defined]
                 image_path = output_path / filename
 
