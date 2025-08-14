@@ -17,6 +17,10 @@ import shlex
 import skimage.filters
 
 
+def calculate_luminance_gain(r, g, b):
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+
 def parse_angles_exposures(angles_str, exposures_str=None) -> Tuple[List[float], List[int]]:
     """Parse angle and exposure strings from various formats."""
     angles: List[float] = []
@@ -266,7 +270,7 @@ def _acquisition_workflow(
                     interp_strength=100,
                     score_metric=AutofocusUtils.autofocus_profile_laplacian_variance,
                 )
-                logger.info(f"New Z {new_z}")
+                logger.info(f" Autofocus :: New Z {new_z}")
             if params["angles"]:
                 # Multi-angle acquisition
                 for angle_idx, angle in enumerate(params["angles"]):
@@ -280,20 +284,28 @@ def _acquisition_workflow(
                     # Set rotation angle
                     hardware.set_psg_ticks(angle)  # type:Ignore
                     # set_angle(hardware, brushless_device, angle)
-
+                    logger.info(f" Angle set to {hardware.get_psg_ticks():.1f}")
                     # Set exposure time if specified
                     if angle_idx < len(params["exposures"]):
                         exposure_ms = params["exposures"][angle_idx]
                         hardware.core.set_exposure(exposure_ms)  # type:ignore
-
+                    logger.info(f"  Exposure set to {hardware.core.get_exposure()}")  # type:ignore
                     ## FORCE debayering for mm2:
                     # Acquire image
                     image, metadata = hardware.snap_image(debayering=True)  # type: ignore[attr-defined]
-                    logger.info(f"Debayer on ndim{image.ndim} mean {image.mean((0,1))}")
+                    logger.info(f"  Debayer on ndim {image.ndim} mean {image.mean((0,1))}")
                     # white balance
+                    gain = calculate_luminance_gain(*angles_wb[angle])
+
                     ## TODO : WB need to be done before debayer uint conversion
-                    image = hardware.white_balance(image, white_balance_profile=angles_wb[angle])
-                    logger.info(f"whitebalance applied {angles_wb[angle]}")
+                    image = hardware.white_balance(
+                        image, white_balance_profile=angles_wb[angle], gain=gain
+                    )
+
+                    logger.info(
+                        f"  Whitebalance applied RGB = {angles_wb[angle]}, gain = {gain:.2f}"
+                    )
+                    logger.info(f"  Whitebalance applied {image.ndim} mean {image.mean((0,1))}")
                     # Save image
                     image_path = output_path / str(angle) / filename
                     if image_path.parent.exists():

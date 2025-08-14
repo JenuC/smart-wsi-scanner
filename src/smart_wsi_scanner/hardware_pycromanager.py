@@ -108,9 +108,12 @@ class PycromanagerHardware(MicroscopeHardware):
                 image_dtype=np.uint16,
                 convolution_mode="wrap",
             )
+
             pixels = debayerx.debayer(pixels)
+            print("before uint16-uint14 scaling", pixels.mean((0, 1)))
             pixels = ((pixels / ((2**14) + 1)) * 255).astype(np.uint8)
             pixels = np.clip(pixels, 0, 255).astype(np.uint8)
+            print("after uint14-uint8 scaling", pixels.mean((0, 1)))
             self.core.set_property("MicroPublisher6", "Color", "ON")  # type:ignore
 
             return pixels, tags
@@ -225,7 +228,7 @@ class PycromanagerHardware(MicroscopeHardware):
 
         img_wb = img.astype(np.float64) * gain / [r1, g1, b1]
 
-        img_wb = img_wb * (255.0 / img_wb.max())
+        # img_wb = img_wb * (255.0 / img_wb.max())
 
         return np.clip(img_wb, 0, 255).astype(np.uint8)
 
