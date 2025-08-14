@@ -224,6 +224,9 @@ class PycromanagerHardware(MicroscopeHardware):
             r1, g1, b1 = white_balance_profile
 
         img_wb = img.astype(np.float64) * gain / [r1, g1, b1]
+
+        img_wb = img_wb * (255.0 / img_wb.max())
+
         return np.clip(img_wb, 0, 255).astype(np.uint8)
 
     def get_device_properties(self, scope: str = "used") -> dict:

@@ -159,25 +159,25 @@ class AutofocusUtils:
         return af_positions, af_min_distance
 
     @staticmethod
-    def autofocus_profile_laplacian_variance(self, image):
+    def autofocus_profile_laplacian_variance(image):
         """Fast general sharpness metric - ~5ms for 2500x1900"""
         laplacian = skimage.filters.laplace(image)
         return laplacian.var()
 
     @staticmethod
-    def autofocus_profile_sobel(self, image):
+    def autofocus_profile_sobel(image):
         """Fast general sharpness metric - ~5ms for 2500x1900"""
         laplacian = skimage.filters.sobel(image)
         return laplacian.var()
 
     @staticmethod
-    def autofocus_profile_brenner_gradient(self, image):
+    def autofocus_profile_brenner_gradient(image):
         """Fastest option - ~3ms for 2500x1900"""
         gy, gx = np.gradient(image.astype(np.float32))
         return np.mean(gx**2 + gy**2)
 
     @staticmethod
-    def autofocus_profile_robust_sharpness_metric(self, image):
+    def autofocus_profile_robust_sharpness_metric(image):
         """Particle-resistant but slower - ~20ms for 2500x1900"""
         # Median filter to remove particles (this is the slow part)
         filtered = skimage.filters.median(image, skimage.morphology.disk(3))
@@ -192,7 +192,7 @@ class AutofocusUtils:
         return laplacian[mask].var() if mask.any() else laplacian.var()
 
     @staticmethod
-    def autofocus_profile_hybrid_sharpness_metric(self, image):
+    def autofocus_profile_hybrid_sharpness_metric(image):
         """Compromise: Fast with some particle resistance - ~8ms"""
         # Gaussian blur to reduce particle influence (faster than median)
         smoothed = skimage.filters.gaussian(image, sigma=1.5)

@@ -291,7 +291,7 @@ def _acquisition_workflow(
                     image, metadata = hardware.snap_image(debayering=True)  # type: ignore[attr-defined]
                     logger.info(f"Debayer on ndim{image.ndim} mean {image.mean((0,1))}")
                     # white balance
-
+                    ## TODO : WB need to be done before debayer uint conversion
                     image = hardware.white_balance(image, white_balance_profile=angles_wb[angle])
                     logger.info(f"whitebalance applied {angles_wb[angle]}")
                     # Save image
