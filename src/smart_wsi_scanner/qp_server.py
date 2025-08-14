@@ -37,7 +37,7 @@ log_dir = base_dir / "server_logfiles"
 log_dir.mkdir(parents=True, exist_ok=True)  # Create it if it doesn't exist
 filename = log_dir / f'qp_server_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler(filename), logging.StreamHandler()],
 )
