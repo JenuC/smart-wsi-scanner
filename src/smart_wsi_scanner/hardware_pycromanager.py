@@ -104,7 +104,7 @@ class PycromanagerHardware(MicroscopeHardware):
         if debayering and (camera == "MicroPublisher6"):
             debayerx = CPUDebayer(
                 pattern="GRBG",
-                image_bit_clipmax=(2**16) - 1,
+                image_bit_clipmax=(2**14) - 1,
                 image_dtype=np.uint16,
                 convolution_mode="wrap",
             )

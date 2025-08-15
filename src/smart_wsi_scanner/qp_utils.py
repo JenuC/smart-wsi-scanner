@@ -1,4 +1,5 @@
 import pathlib
+import shutil
 import re
 from typing import List, Tuple, Optional
 from .config import sp_position
@@ -10,6 +11,7 @@ import tifffile as tf
 import uuid
 import skimage.morphology
 import skimage.filters
+import cv2
 
 ## read tile configuration file ( two versions)
 
@@ -237,6 +239,97 @@ class TifWriterUtils:
         for k in set([key.split("-")[0] for key in tags]):
             dx.update({k: {key: tags[key] for key in tags if key.startswith(k)}})
         return dx
+
+    # TODO MIKE ADDED, SHOULD PROBABLY GO SOMEWHERE ELSE
+    @staticmethod
+    def create_birefringence_tile(
+        pos_image: np.ndarray,
+        neg_image: np.ndarray,
+        output_dir: pathlib.Path,
+        filename: str,
+        pixel_size_um: float,
+        tile_config_source: Optional[pathlib.Path] = None,
+        logger=None,
+    ) -> np.ndarray:
+        """Create a single birefringence image from positive and negative angle images.
+
+        Args:
+            pos_image: Positive angle image
+            neg_image: Negative angle image
+            output_dir: Directory to save birefringence image
+            filename: Output filename
+            pixel_size_um: Pixel size for OME-TIFF metadata
+            tile_config_source: Path to source TileConfiguration.txt to copy (optional)
+            logger: Logger instance (optional)
+
+        Returns:
+            The birefringence image array
+        """
+        # Create output directory if it doesn't exist
+        if not output_dir.exists():
+            output_dir.mkdir(exist_ok=True)
+
+            # Copy TileConfiguration.txt if source provided
+            if tile_config_source and tile_config_source.exists():
+                shutil.copy2(tile_config_source, output_dir / "TileConfiguration.txt")
+                if logger:
+                    logger.debug(f"Copied TileConfiguration.txt to {output_dir}")
+
+        # Calculate birefringence
+        output_path = output_dir / filename
+        
+        biref_img = TifWriterUtils.ppm_angle_difference(pos_image, neg_image)
+        tf.imwrite(str(output_path)[:-4] + "_gray.tif", biref_img.astype(np.float32))
+        biref_img = biref_img * 255 / biref_img.max()
+        biref_img = np.clip(biref_img, 0, 255).astype(np.uint8)
+
+        # Save the image        
+        TifWriterUtils.ome_writer(
+            filename=str(output_path),
+            pixel_size_um=pixel_size_um,
+            data=np.stack([biref_img] * 3, axis=-1),
+        )
+
+        if logger:
+            logger.info(f"  Created birefringence image: {filename}")
+
+        return biref_img
+
+    @staticmethod
+    def subtraction_image(pos_image, neg_image):
+        return pos_image.astype(np.float32) - neg_image.astype(np.float32)
+
+    @staticmethod
+    def ppm_angle_difference(img1, img2):
+        """
+        Calculate angle difference for polarized microscopy images.
+        Color represents retardation angle via interference colors.
+        """
+        # Convert to float for calculations
+        img1_f = img1.astype(np.float32) / 255.0
+        img2_f = img2.astype(np.float32) / 255.0
+
+        # Method 1: Direct RGB difference (simple but effective)
+        rgb_diff = np.sqrt(np.sum((img1_f - img2_f) ** 2, axis=2))
+
+        # Method 2: Hue-based for interference color progression
+        # hsv1 = cv2.cvtColor(img1, cv2.COLOR_RGB2HSV)
+        # hsv2 = cv2.cvtColor(img2, cv2.COLOR_RGB2HSV)
+
+        # Hue difference with special handling for Michel-Lévy sequence
+        # hue_diff = np.abs(hsv1[:, :, 0] - hsv2[:, :, 0])
+        # hue_diff = np.minimum(hue_diff, 180 - hue_diff)
+
+        # Weight by saturation (gray areas have no birefringence)
+        # saturation_mask = (hsv1[:, :, 1] + hsv2[:, :, 1]) / 2.0 / 255.0
+        # weighted_diff = hue_diff * saturation_mask
+
+        return rgb_diff
+
+    @staticmethod
+    def apply_brightness_correction(image: np.ndarray, correction_factor: float) -> np.ndarray:
+        """Apply brightness correction to an image."""
+        return np.clip(image * correction_factor, 0, 255).astype(np.uint8)
 
 
 class QuPathProject:
