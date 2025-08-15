@@ -351,6 +351,132 @@ def handle_client(conn, addr):
 
                 continue
 
+            if data == ExtendedCommand.BGACQUIRE:
+                logger.info(f"Client {addr} requested background acquisition")
+                
+                # Read the message using the same pattern as ACQUIRE command
+                message_parts = []
+                total_bytes = 0
+                start_time = time.time()
+                
+                conn.settimeout(5.0)
+                
+                try:
+                    while True:
+                        chunk = conn.recv(1024)
+                        if not chunk:
+                            logger.error(f"Connection closed while reading background acquisition message")
+                            conn.sendall(b"FAILED:Connection closed")
+                            break
+                            
+                        message_parts.append(chunk.decode("utf-8"))
+                        total_bytes += len(chunk)
+                        
+                        full_message = "".join(message_parts)
+                        
+                        if "END_MARKER" in full_message:
+                            message = full_message.replace("END_MARKER", "").strip()
+                            
+                            # Parse the message without using shlex
+                            # We'll use a simple but effective approach
+                            params = {}
+                            
+                            # Split by known flags to avoid issues with spaces in paths
+                            # This approach looks for the flag patterns and extracts values between them
+                            flags = ["--yaml", "--output", "--modality", "--angles", "--exposures"]
+                            
+                            for i, flag in enumerate(flags):
+                                if flag in message:
+                                    # Find where this flag starts
+                                    start_idx = message.index(flag) + len(flag)
+                                    
+                                    # Find where the next flag starts (or use end of string)
+                                    end_idx = len(message)
+                                    for next_flag in flags[i+1:]:
+                                        if next_flag in message[start_idx:]:
+                                            next_pos = message.index(next_flag, start_idx)
+                                            if next_pos < end_idx:
+                                                end_idx = next_pos
+                                                break
+                                    
+                                    # Extract the value and clean it up
+                                    value = message[start_idx:end_idx].strip()
+                                    
+                                    # Map to the parameter name
+                                    if flag == "--yaml":
+                                        params["yaml_file_path"] = value
+                                    elif flag == "--output":
+                                        params["output_folder_path"] = value
+                                    elif flag == "--modality":
+                                        params["modality"] = value
+                                    elif flag == "--angles":
+                                        params["angles_str"] = value
+                                    elif flag == "--exposures":
+                                        params["exposures_str"] = value
+                            
+                            # NOW we validate and execute - inside the END_MARKER block
+                            # Validate required parameters
+                            required = ["yaml_file_path", "output_folder_path", "modality"]
+                            missing = [key for key in required if key not in params]
+                            if missing:
+                                error_msg = f"Missing required parameters: {missing}"
+                                logger.error(error_msg)
+                                conn.sendall(f"FAILED:{error_msg}".encode())
+                                break
+                            
+                            # Execute background acquisition
+                            try:
+                                from smart_wsi_scanner.qp_acquisition import background_acquisition_workflow
+                                
+                                output_path = background_acquisition_workflow(
+                                    yaml_file_path=params["yaml_file_path"],
+                                    output_folder_path=params["output_folder_path"],
+                                    modality=params["modality"],
+                                    angles_str=params.get("angles_str", "()"),
+                                    exposures_str=params.get("exposures_str", None),
+                                    hardware=hardware,
+                                    config_manager=config_manager,
+                                    logger=logger,
+                                )
+                                
+                                # Send success response with output path
+                                response = f"SUCCESS:{output_path}".encode()
+                                conn.sendall(response)
+                                logger.info(f"Background acquisition completed successfully")
+                                
+                            except Exception as e:
+                                logger.error(f"Background acquisition failed: {str(e)}", exc_info=True)
+                                response = f"FAILED:{str(e)}".encode()
+                                conn.sendall(response)
+                            
+                            # We found and processed the END_MARKER, so break the while loop
+                            break
+                        
+                        # Safety checks for the while loop (these stay at the original indentation)
+                        if total_bytes > 10000:  # 10KB max
+                            logger.error(f"Background acquisition message too large: {total_bytes} bytes")
+                            conn.sendall(b"FAILED:Message too large")
+                            break
+                            
+                        if time.time() - start_time > 10:
+                            logger.error(f"Timeout reading background acquisition message")
+                            conn.sendall(b"FAILED:Timeout waiting for complete message")
+                            break
+                            
+                except socket.timeout:
+                    logger.error(f"Timeout reading background acquisition message from {addr}")
+                    conn.sendall(b"FAILED:Timeout reading message")
+                except Exception as e:
+                    logger.error(f"Error in background acquisition: {str(e)}", exc_info=True)
+                    conn.sendall(f"FAILED:{str(e)}".encode())
+                finally:
+                    conn.settimeout(None)  # Reset to blocking mode
+                
+                # This continue is for the main client handling loop
+                continue
+
+
+
             # Legacy GET/SET commands (not implemented)
             if data == ExtendedCommand.GET:
                 logger.debug("GET property not yet implemented")

@@ -211,6 +211,184 @@ class PycromanagerHardware(MicroscopeHardware):
             self.move_to_position(current_pos)
             raise e
 
+    #TODO DANGER MIKE ADDED CODE, FOR INITIAL SEARCH, MAYBE?
+    def autofocus_adaptive_search(
+        self,
+        initial_step_size=10,    # Initial step size in microns
+        min_step_size=2,         # Minimum step size before stopping
+        focus_threshold=0.95,    # Threshold for "good enough" focus (relative to max seen)
+        max_total_steps=25,      # Safety limit on total acquisitions
+        score_metric=None,
+        pop_a_plot=False,
+        move_stage_to_estimate=True,
+    ) -> float:
+        """
+        Adaptive autofocus that starts at current Z and searches outward.
+        Minimizes acquisitions by stopping when focus is "good enough".
+        """
+        # Import the autofocus utilities
+        from .qp_utils import AutofocusUtils
+        
+        # Use Laplacian variance from AutofocusUtils by default
+        if score_metric is None:
+            score_metric = AutofocusUtils.autofocus_profile_laplacian_variance
+        
+        current_pos = self.get_current_position()
+        initial_z = current_pos.z
+        
+        # Get Z limits with safer attribute access
+        z_min = -1000
+        z_max = 1000
+        if hasattr(self.settings, 'stage') and hasattr(self.settings.stage, 'z_limit'):
+            if hasattr(self.settings.stage.z_limit, 'low'): #type: ignore
+                z_min = self.settings.stage.z_limit.low #type: ignore
+            if hasattr(self.settings.stage.z_limit, 'high'): #type: ignore
+                z_max = self.settings.stage.z_limit.high #type: ignore
+        
+        # Keep track of all measurements
+        z_positions = []
+        scores = []
+        
+        # Helper function to acquire and score at a position
+        def measure_at_z(z):
+            if z < z_min + 5 or z > z_max - 5:  # Stay away from limits
+                return -np.inf
+            
+            self.move_to_position(sp_position(current_pos.x, current_pos.y, z))
+            img, tags = self.snap_image()
+            
+            # Check if image acquisition failed
+            if img is None:
+                print(f"Failed to acquire image at Z={z}")
+                return -np.inf
+            
+            # Process image - check shape instead of ndim for safety
+            if len(img.shape) == 2:  # Bayer pattern
+                green1 = img[0::2, 0::2]
+                green2 = img[1::2, 1::2]
+                img_gray = ((green1 + green2) / 2.0).astype(np.float32)
+            elif len(img.shape) == 3:  # RGB image
+                img_gray = skimage.color.rgb2gray(img)
+            else:
+                img_gray = img.astype(np.float32)
+            
+            score = score_metric(img_gray)
+            if hasattr(score, 'ndim') and score.ndim == 2:
+                score = np.mean(score)
+            
+            return float(score)
+        
+        # Start with current position
+        current_score = measure_at_z(initial_z)
+        if current_score == -np.inf:
+            print("Failed to acquire initial image")
+            return initial_z #type: ignore
+        
+        z_positions.append(initial_z)
+        scores.append(current_score)
+        
+        best_z = initial_z
+        best_score = current_score
+        
+        # Adaptive search
+        step_size = initial_step_size
+        search_direction = None  # Will be determined by first measurements
+        total_steps = 1
+        
+        while step_size >= min_step_size and total_steps < max_total_steps:
+            # Measure above and below current best
+            z_above = best_z + step_size #type: ignore
+            z_below = best_z - step_size #type: ignore
+            
+            # Only measure positions we haven't checked yet
+            positions_to_check = []
+            if not any(abs(z - z_above) < 0.1 for z in z_positions) and z_above < z_max - 5:
+                positions_to_check.append(('above', z_above))
+            if not any(abs(z - z_below) < 0.1 for z in z_positions) and z_below > z_min + 5:
+                positions_to_check.append(('below', z_below))
+            
+            if not positions_to_check:
+                # Can't go further, reduce step size
+                step_size /= 2
+                continue
+            
+            # Measure new positions
+            improved = False
+            for direction, z_pos in positions_to_check:
+                score = measure_at_z(z_pos)
+                if score == -np.inf:
+                    continue  # Skip failed acquisitions
+                    
+                z_positions.append(z_pos)
+                scores.append(score)
+                total_steps += 1
+                
+                if score > best_score:
+                    best_score = score
+                    best_z = z_pos
+                    improved = True
+                    search_direction = direction
+            
+            # Check if we're "good enough"
+            if len(scores) > 3:  # Need some history
+                max_seen = max(scores)
+                if best_score >= focus_threshold * max_seen:
+                    print(f"Found acceptable focus after {total_steps} steps")
+                    break
+            
+            if improved:
+                # Continue in the improving direction with same step size
+                if search_direction == 'above':
+                    next_z = best_z + step_size #type: ignore
+                    if next_z < z_max - 5 and not any(abs(z - next_z) < 0.1 for z in z_positions):
+                        continue
+                else:  # below
+                    next_z = best_z - step_size #type: ignore
+                    if next_z > z_min + 5 and not any(abs(z - next_z) < 0.1 for z in z_positions):
+                        continue
+            else:
+                # No improvement at this step size, refine
+                step_size /= 2
+        
+        # Optional: Do a final fine interpolation around the best point
+        if len(z_positions) > 2:
+            # Sort by position for interpolation
+            sorted_indices = np.argsort(z_positions)
+            z_sorted = np.array(z_positions)[sorted_indices]
+            scores_sorted = np.array(scores)[sorted_indices]
+            
+            # Find points around the best
+            best_idx = np.where(z_sorted == best_z)[0][0]
+            start_idx = max(0, best_idx - 2)
+            end_idx = min(len(z_sorted), best_idx + 3)
+            
+            if end_idx - start_idx >= 3:  # Need at least 3 points
+                z_local = z_sorted[start_idx:end_idx]
+                scores_local = scores_sorted[start_idx:end_idx]
+                
+                # Quadratic interpolation
+                interp_z = np.linspace(z_local[0], z_local[-1], 50)
+                interp_scores = scipy.interpolate.interp1d(z_local, scores_local, kind='quadratic')(interp_z)
+                best_z = interp_z[np.argmax(interp_scores)]
+        
+        if pop_a_plot:
+            plt.figure(figsize=(10, 6))
+            plt.scatter(z_positions, scores, c=range(len(scores)), cmap='viridis', s=50)
+            plt.plot(best_z, max(scores), 'r*', markersize=15) #type: ignore
+            plt.xlabel('Z position (µm)')
+            plt.ylabel('Focus score')
+            plt.title(f'Adaptive autofocus: {total_steps} acquisitions')
+            plt.colorbar(label='Acquisition order')
+            plt.show()
+        
+        print(f"Autofocus complete: Z={best_z:.1f} after {total_steps} acquisitions")
+        
+        if move_stage_to_estimate:
+            self.move_to_position(sp_position(current_pos.x, current_pos.y, best_z))
+        
+        return best_z #type: ignore
+
+
     def white_balance(self, img=None, background_image=None, gain=1.0, white_balance_profile=None):
         if white_balance_profile is None:
             # load from profile

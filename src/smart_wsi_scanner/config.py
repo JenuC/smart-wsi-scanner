@@ -17,7 +17,7 @@ class sp:
         self.camm_settings = sp_camm_settings
         self.ppm_settings = sp_ppm_settings
         self.limits = _limits
-
+        self.background_correction = sp_background_correction
 
 ## property constraints
 @dataclass
@@ -106,7 +106,12 @@ class sp_microscope:
     name: Optional[str] = field(default=None)
     type: Optional[str] = field(default=None)
 
-
+@dataclass
+class sp_background_correction:
+    """Settings for background/flat-field correction"""
+    enabled: bool = field(default=False)
+    method: str = field(default="divide")  # "divide" or "subtract"
+    background_folder: Optional[str] = field(default=None)
 @dataclass
 class sp_microscope_settings:
     path: Optional[str] = field(default=None)
@@ -115,7 +120,7 @@ class sp_microscope_settings:
     lens: Optional[sp_objective_lens] = field(default=None)
     detector: Optional[sp_detector] = field(default=None)
     imaging_mode: Optional[sp_imaging_mode] = field(default=None)
-
+    background_correction: Optional[sp_background_correction] = field(default=None)
 
 ## instrument specific adaptation
 
@@ -125,6 +130,7 @@ class sp_camm_settings(sp_microscope_settings):
     slide_size: Optional[sp_objective_lens] = field(default=None)
     lamp: Optional[sp_stage_settings] = field(default=None)
     objective_slider: Optional[sp_detector] = field(default=None)
+
 
 
 class sp_ppm_settings(sp_microscope_settings):

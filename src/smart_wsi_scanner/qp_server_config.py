@@ -49,3 +49,4 @@ class ExtendedCommand:
     STATUS = b"status__"  # Get acquisition status
     PROGRESS = b"progress"  # Get acquisition progress
     CANCEL = b"cancel__"  # Cancel acquisition
+    BGACQUIRE = b"bgacquir"  # Acquire background images

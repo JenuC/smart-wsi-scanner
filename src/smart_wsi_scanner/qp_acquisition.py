@@ -12,7 +12,7 @@ import shutil
 
 from .config import sp_position
 from .hardware_pycromanager import PycromanagerHardware
-from .qp_utils import TileConfigUtils, TifWriterUtils, AutofocusUtils
+from .qp_utils import BackgroundCorrectionUtils, TileConfigUtils, TifWriterUtils, AutofocusUtils
 import shlex
 import skimage.filters
 
@@ -181,6 +181,49 @@ def _acquisition_workflow(
             raise FileNotFoundError(f"YAML file {params['yaml_file_path']} does not exist")
         ppm_settings = config_manager.load_config(params["yaml_file_path"])  # type: ignore[attr-defined]
         hardware.settings = ppm_settings
+        
+        # Extract modality from scan type
+        modality = BackgroundCorrectionUtils.get_modality_from_scan_type(params["scan_type"])
+        logger.info(f"Using modality: {modality}")
+
+        # Load background images if correction is enabled
+        background_images = {}
+        background_correction_enabled = False
+
+        if hasattr(ppm_settings, 'background_correction') and ppm_settings.background_correction:
+            bc_settings = ppm_settings.background_correction
+            
+            if bc_settings.enabled and bc_settings.background_folder:
+                # Load background images for this modality
+                background_dir = pathlib.Path(bc_settings.background_folder)
+                
+                if background_dir.exists():
+                    # Validate first
+                    is_valid, missing = BackgroundCorrectionUtils.validate_background_images(
+                        background_dir,
+                        modality,
+                        params["angles"],
+                        logger
+                    )
+                    
+                    if is_valid:
+                        background_images, background_scaling_factors = BackgroundCorrectionUtils.load_background_images(
+                            background_dir,
+                            modality,
+                            params["angles"],
+                            logger
+                        )
+                        
+                        if background_images and background_scaling_factors:
+                            background_correction_enabled = True
+                            logger.info(f"Background correction enabled with {len(background_images)} images")
+                            logger.info(f"Method: {bc_settings.method}")
+                            logger.info(f"Scaling factors: {background_scaling_factors}")
+                    else:
+                        logger.error(f"Cannot proceed with background correction - missing images for angles: {missing}")
+                        logger.warning("Continuing without background correction")
+                else:
+                    logger.warning(f"Background directory not found: {background_dir}")
         # Set up output paths
         project_path = pathlib.Path(params["projects_folder_path"]) / params["sample_label"]
         output_path = project_path / params["scan_type"] / params["region_name"]
@@ -197,7 +240,6 @@ def _acquisition_workflow(
             set_state("FAILED")
             return
 
-        # Create subdirectories for each angle
         if params["angles"]:
             for angle in params["angles"]:
                 angle_dir = output_path / str(angle)
@@ -272,6 +314,8 @@ def _acquisition_workflow(
                 )
                 logger.info(f" Autofocus :: New Z {new_z}")
             if params["angles"]:
+                #storage for birefringence image calculation
+                angle_images = {}
                 # Multi-angle acquisition
                 for angle_idx, angle in enumerate(params["angles"]):
 
@@ -293,7 +337,21 @@ def _acquisition_workflow(
                     ## FORCE debayering for mm2:
                     # Acquire image
                     image, metadata = hardware.snap_image(debayering=True)  # type: ignore[attr-defined]
-                    logger.info(f"  Debayer on ndim {image.ndim} mean {image.mean((0,1))}")
+                    logger.info(f"  Debayer on ndim {image.ndim} mean {image.mean((0,1))}") # type:ignore
+                    
+                    # Apply background correction if available
+                    if background_correction_enabled and angle in background_images:
+                        bc_method = ppm_settings.background_correction.method
+                        
+                        image = BackgroundCorrectionUtils.apply_flat_field_correction(
+                            image, 
+                            background_images[angle],
+                            background_scaling_factors[angle],
+                            method=bc_method
+
+                        )
+                        logger.info(f"  Applied {bc_method} flat-field correction with factor {background_scaling_factors[angle]:.3f}")
+                        
                     # white balance
                     gain = calculate_luminance_gain(*angles_wb[angle])
 
@@ -301,10 +359,11 @@ def _acquisition_workflow(
                     image = hardware.white_balance(
                         image, white_balance_profile=angles_wb[angle], gain=gain
                     )
+                    #TODO MIKE EDIT DANGER WHITEBALANCE FUDGING
+                    if angle < 0:  # This catches all negative angles
+                        image = TifWriterUtils.apply_brightness_correction(image, 1.42)
+                        logger.info(f"  Applied 12% brightness boost to {angle}° image")
 
-                    logger.info(
-                        f"  Whitebalance applied RGB = {angles_wb[angle]}, gain = {gain:.2f}"
-                    )
                     logger.info(f"  Whitebalance applied {image.ndim} mean {image.mean((0,1))}")
                     # Save image
                     image_path = output_path / str(angle) / filename
@@ -316,8 +375,34 @@ def _acquisition_workflow(
                         )
                         image_count += 1
                         update_progress(image_count, total_images)
+                        
+                        # Store image for birefringence calculation
+                        angle_images[angle] = image
                     else:
                         logger.error(f"Failed to save {image_path} - parent directory missing")
+                # Create birefringence image for this tile after all angles acquired
+                positive_angles = [a for a in angle_images.keys() if a > 0 and a != 90]
+                negative_angles = [a for a in angle_images.keys() if a < 0]
+
+                if positive_angles and negative_angles:
+                    pos_angle = min(positive_angles)
+                    neg_angle = max(negative_angles)
+                    
+                    # Set up birefringence directory and tile config source
+                    biref_dir = output_path / f"{pos_angle}.biref"
+                    tile_config_source = output_path / str(pos_angle) / "TileConfiguration.txt"
+                    
+                    # Create birefringence image
+                    TifWriterUtils.create_birefringence_tile(
+                        pos_image=angle_images[pos_angle],
+                        neg_image=angle_images[neg_angle],
+                        output_dir=biref_dir,
+                        filename=filename,
+                        pixel_size_um=hardware.core.get_pixel_size_um(),#type: ignore
+                        tile_config_source=tile_config_source,
+                        logger=logger
+                    )
+
             else:
                 # Single image acquisition: no angles specified
                 image, metadata = hardware.snap_image()  # type: ignore[attr-defined]
@@ -349,3 +434,114 @@ def _acquisition_workflow(
         logger.error(f"=== ACQUISITION FAILED ===")
         logger.error(f"Error: {str(e)}", exc_info=True)
         set_state("FAILED")
+
+
+def background_acquisition_workflow(
+    yaml_file_path: str,
+    output_folder_path: str,
+    modality: str,
+    angles_str: str,
+    exposures_str: Optional[str],
+    hardware: PycromanagerHardware,
+    config_manager,
+    logger,
+):
+    """
+    Acquire background images for flat-field correction.
+    
+    IMPORTANT: Position the microscope at a blank area before calling this function.
+    The system will acquire images at the current position.
+    
+    Args:
+        yaml_file_path: Path to microscope configuration YAML
+        output_folder_path: Base folder for backgrounds (will create modality subfolder)
+        modality: Modality identifier (e.g., "PPM_20x")
+        angles_str: String of angles like "(0,90,5,-5)"
+        exposures_str: Optional string of exposures like "(800,10,500,500)". 
+                If None, defaults will be used based on angles.
+        hardware: Microscope hardware interface
+        config_manager: Configuration manager
+        logger: Logger instance
+    """
+    logger.info("=== BACKGROUND ACQUISITION WORKFLOW STARTED ===")
+    logger.warning("Ensure microscope is positioned at a clean, blank area!")
+    
+    # Get and log current position for reference
+    current_pos = hardware.get_current_position()
+    logger.info(f"Acquiring backgrounds at position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}")
+    
+    try:
+        # Parse angles and exposures
+        angles, exposures = parse_angles_exposures(angles_str, exposures_str)
+        
+        # Load the microscope configuration
+        if not pathlib.Path(yaml_file_path).exists():
+            raise FileNotFoundError(f"YAML file {yaml_file_path} does not exist")
+        
+        settings = config_manager.load_config(yaml_file_path)
+        hardware.settings = settings
+        
+        # Create output directory structure with modality
+        output_path = pathlib.Path(output_folder_path) / "backgrounds" / modality
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"Saving backgrounds to: {output_path}")
+        
+        # Load white balance settings
+        angles_wb_ = {
+            0: hardware.settings.white_balance.ppm.crossed,
+            90: hardware.settings.white_balance.ppm.uncrossed,
+            5.0: hardware.settings.white_balance.ppm.positive,
+            -5.0: hardware.settings.white_balance.ppm.negative,
+        }
+        angles_wb = {
+            angle: [float(x) for x in wb_list[0].split()] 
+            for angle, wb_list in angles_wb_.items()
+        }
+        
+        # Acquire background for each angle
+        for angle_idx, angle in enumerate(angles):
+            # Create angle subdirectory
+            angle_dir = output_path / str(angle)
+            angle_dir.mkdir(exist_ok=True)
+            
+            # Set rotation angle if PPM
+            if hasattr(hardware, 'set_psg_ticks'):
+                hardware.set_psg_ticks(angle)
+                logger.info(f"Set angle to {angle}°")
+            
+            # Set exposure time
+            if angle_idx < len(exposures):
+                exposure_ms = exposures[angle_idx]
+                hardware.core.set_exposure(exposure_ms)
+                logger.info(f"Set exposure to {exposure_ms}ms")
+            
+            # Acquire image with debayering
+            image, metadata = hardware.snap_image(debayering=True)
+            
+            # Apply white balance to background
+            if angle in angles_wb:
+                gain = calculate_luminance_gain(*angles_wb[angle])
+                image = hardware.white_balance(
+                    image, 
+                    white_balance_profile=angles_wb[angle], 
+                    gain=gain
+                )
+                logger.info(f"Applied white balance to background")
+            
+            # Save background image
+            background_path = angle_dir / "background.tif"
+            TifWriterUtils.ome_writer(
+                filename=str(background_path),
+                pixel_size_um=hardware.core.get_pixel_size_um(),
+                data=image,
+            )
+            
+            logger.info(f"Saved background for {angle}° to {background_path}")
+            
+        logger.info("=== BACKGROUND ACQUISITION COMPLETE ===")
+        return str(output_path)
+        
+    except Exception as e:
+        logger.error(f"Background acquisition failed: {str(e)}", exc_info=True)
+        raise
