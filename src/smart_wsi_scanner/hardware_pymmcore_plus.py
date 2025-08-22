@@ -21,7 +21,8 @@ def obj_2_list(name):
 def init_pymmcore_plus():
     """Initialize PyMMCorePlus connection."""
     core = CMMCorePlus.instance()
-    core.loadSystemConfiguration("TODO")
+    # FIXME: Use the right file
+    core.loadSystemConfiguration()
     return core
 
 

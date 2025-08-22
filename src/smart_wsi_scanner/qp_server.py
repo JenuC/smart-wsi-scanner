@@ -13,7 +13,6 @@ Enhanced Features:
 - Improved state management and logging
 """
 
-import socket
 import threading
 import struct
 import sys
@@ -24,8 +23,12 @@ from threading import Lock
 import logging
 from datetime import datetime
 
+from qtpy.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
+from pymmcore_gui import create_mmgui
+from qtpy.QtWidgets import QApplication
+
 from smart_wsi_scanner.config import ConfigManager, sp_position
-from smart_wsi_scanner.hardware_pycromanager import PyMMCorePlusHardware, init_pymmcore_plus
+from smart_wsi_scanner.hardware_pymmcore_plus import PyMMCorePlusHardware, init_pymmcore_plus
 from smart_wsi_scanner.qp_server_config import ExtendedCommand, TCP_PORT, END_MARKER
 from smart_wsi_scanner.qp_acquisition import _acquisition_workflow
 
@@ -78,7 +81,7 @@ def init_pymmcore_plus_with_logger():
         logger.info("PyMMCorePlus initialized successfully")
         return core
     except Exception as e:
-        logger.error("Failed to initialize PyMMCorePlus")
+        logger.error("Failed to initialize PyMMCorePlus", e)
         sys.exit(1)
 
 
@@ -123,7 +126,7 @@ def acquisitionWorkflow(message, client_addr):
     )
 
 
-def handle_client(conn, addr):
+def handle_client(socket: QTcpSocket, addr):
     """
     Handle commands from a connected QuPath client with enhanced acquisition control.
     """
@@ -137,363 +140,343 @@ def handle_client(conn, addr):
 
     acquisition_thread = None
 
-    try:
-        while True:
-            # All commands are 8 bytes
-            data = conn.recv(8)
-            if not data:
-                logger.info(f"Client {addr} disconnected (no data)")
-                break
+    def handle_command() -> None:
+        data = socket.read(8)
+        if not data:
+            return
 
-            logger.debug(f"Received command from {addr}: {data}")
+        logger.debug(f"Received command from {addr}: {data}")
 
-            # Connection management commands
-            if data == ExtendedCommand.DISCONNECT:
-                logger.info(f"Client {addr} requested to disconnect")
-                break
+        # Connection management commands
+        if data == ExtendedCommand.DISCONNECT:
+            logger.info(f"Client {addr} requested to disconnect")
+            socket.disconnect()
+            return
 
-            if data == ExtendedCommand.SHUTDOWN:
-                logger.warning(f"Client {addr} requested server shutdown")
-                shutdown_event.set()
-                break
+        if data == ExtendedCommand.SHUTDOWN:
+            logger.warning(f"Client {addr} requested server shutdown")
+            QApplication.instance().quit()
+            return
 
-            # Position query commands
-            if data == ExtendedCommand.GETXY:
-                logger.debug(f"Client {addr} requested XY position")
-                current_position_xyz = hardware.get_current_position()
-                response = struct.pack("!ff", current_position_xyz.x, current_position_xyz.y)
-                conn.sendall(response)
-                logger.debug(
-                    f"Sent XY position to {addr}: ({current_position_xyz.x}, {current_position_xyz.y})"
-                )
-                continue
+        # Position query commands
+        if data == ExtendedCommand.GETXY:
+            logger.debug(f"Client {addr} requested XY position")
+            current_position_xyz = hardware.get_current_position()
+            response = struct.pack("!ff", current_position_xyz.x, current_position_xyz.y)
+            socket.write(response)
+            logger.debug(
+                f"Sent XY position to {addr}: ({current_position_xyz.x}, {current_position_xyz.y})"
+            )
+            return
 
-            if data == ExtendedCommand.GETZ:
-                logger.debug(f"Client {addr} requested Z position")
-                current_position_xyz = hardware.get_current_position()
-                response = struct.pack("!f", current_position_xyz.z)
-                conn.sendall(response)
-                logger.debug(f"Sent Z position to {addr}: {current_position_xyz.z}")
-                continue
+        if data == ExtendedCommand.GETZ:
+            logger.debug(f"Client {addr} requested Z position")
+            current_position_xyz = hardware.get_current_position()
+            response = struct.pack("!f", current_position_xyz.z)
+            socket.write(response)
+            logger.debug(f"Sent Z position to {addr}: {current_position_xyz.z}")
+            return
 
-            if data == ExtendedCommand.GETFOV:
-                logger.debug(f"Client {addr} requested Field of View")
-                try:
-                    current_fov_x, current_fov_y = hardware.get_fov()
-                    response = struct.pack("!ff", current_fov_x, current_fov_y)
-                    conn.sendall(response)
-                    logger.debug(f"Sent FOV to {addr}: ({current_fov_x}, {current_fov_y})")
-                except Exception as e:
-                    logger.error(f"Failed to get FOV: {e}")
-                    # Send error response or default values
-                    response = struct.pack("!ff", 0.0, 0.0)  # or some error indicator
-                    conn.sendall(response)
-                continue
+        if data == ExtendedCommand.GETFOV:
+            logger.debug(f"Client {addr} requested Field of View")
+            try:
+                current_fov_x, current_fov_y = hardware.get_fov()
+                response = struct.pack("!ff", current_fov_x, current_fov_y)
+                socket.write(response)
+                logger.debug(f"Sent FOV to {addr}: ({current_fov_x}, {current_fov_y})")
+            except Exception as e:
+                logger.error(f"Failed to get FOV: {e}")
+                # Send error response or default values
+                response = struct.pack("!ff", 0.0, 0.0)  # or some error indicator
+                socket.write(response)
+            return
 
-            if data == ExtendedCommand.GETR:
-                logger.debug(f"Client {addr} requested rotation angle")
-                angle = hardware.get_psg_ticks()
-                response = struct.pack("!f", angle)
-                conn.sendall(response)
-                logger.debug(f"Sent rotation angle to {addr}: {angle}°")
-                continue
+        if data == ExtendedCommand.GETR:
+            logger.debug(f"Client {addr} requested rotation angle")
+            angle = hardware.get_psg_ticks()
+            response = struct.pack("!f", angle)
+            socket.write(response)
+            logger.debug(f"Sent rotation angle to {addr}: {angle}°")
+            return
 
-            # Movement commands
-            if data == ExtendedCommand.MOVE:
-                coords = conn.recv(8)
-                if len(coords) == 8:
-                    x, y = struct.unpack("!ff", coords)
-                    logger.info(f"Client {addr} requested move to: X={x}, Y={y}")
-                    hardware.move_to_position(sp_position(x, y))
-                    logger.info(f"Move completed to X={x}, Y={y}")
-                else:
-                    logger.error(f"Client {addr} sent incomplete move coordinates")
-                continue
+        # Movement commands
+        if data == ExtendedCommand.MOVE:
+            coords = socket.read(8)
+            if len(coords) == 8:
+                x, y = struct.unpack("!ff", coords)
+                logger.info(f"Client {addr} requested move to: X={x}, Y={y}")
+                hardware.move_to_position(sp_position(x, y))
+                logger.info(f"Move completed to X={x}, Y={y}")
+            else:
+                logger.error(f"Client {addr} sent incomplete move coordinates")
+            return
 
-            if data == ExtendedCommand.MOVEZ:
-                z = conn.recv(4)
-                z_position = struct.unpack("!f", z)[0]
-                logger.info(f"Client {addr} requested move to Z={z_position}")
-                hardware.move_to_position(sp_position(z=z_position))
-                logger.info(f"Move completed to Z={z_position}")
-                continue
+        if data == ExtendedCommand.MOVEZ:
+            z = socket.read(4)
+            z_position = struct.unpack("!f", z)[0]
+            logger.info(f"Client {addr} requested move to Z={z_position}")
+            hardware.move_to_position(sp_position(z=z_position))
+            logger.info(f"Move completed to Z={z_position}")
+            return
 
-            if data == ExtendedCommand.MOVER:
-                coords = conn.recv(4)
-                angle = struct.unpack("!f", coords)[0]
-                logger.info(f"Client {addr} requested rotation to {angle}°")
-                hardware.set_psg_ticks(angle)
-                logger.info(f"Rotation completed to {angle}°")
-                continue
+        if data == ExtendedCommand.MOVER:
+            coords = socket.read(4)
+            angle = struct.unpack("!f", coords)[0]
+            logger.info(f"Client {addr} requested rotation to {angle}°")
+            hardware.set_psg_ticks(angle)
+            logger.info(f"Rotation completed to {angle}°")
+            return
 
-            # ============ ACQUISITION STATUS COMMANDS ============
+        # ============ ACQUISITION STATUS COMMANDS ============
 
-            # Status query command
-            if data == ExtendedCommand.STATUS:
+        # Status query command
+        if data == ExtendedCommand.STATUS:
+            with acquisition_locks[addr]:
+                state = acquisition_states[addr]
+            # Send state as 16-byte string (padded)
+            state_str = state.value.ljust(16)[:16]
+            socket.write(state_str.encode())
+            logger.debug(f"Sent acquisition status to {addr}: {state.value}")
+            return
+
+        # Progress query command
+        if data == ExtendedCommand.PROGRESS:
+            with acquisition_locks[addr]:
+                current, total = acquisition_progress[addr]
+            # Send as two integers
+            response = struct.pack("!II", current, total)
+            socket.write(response)
+            logger.debug(f"Sent progress to {addr}: {current}/{total}")
+            return
+
+        # Cancel acquisition command
+        if data == ExtendedCommand.CANCEL:
+            logger.warning(f"Client {addr} requested acquisition cancellation")
+            with acquisition_locks[addr]:
+                if acquisition_states[addr] == AcquisitionState.RUNNING:
+                    acquisition_states[addr] = AcquisitionState.CANCELLING
+                    acquisition_cancel_events[addr].set()
+                    logger.info(f"Cancellation initiated for {addr}")
+            # Send acknowledgment
+            socket.write(b"ACK")
+            return
+
+        # ============ ACQUISITION COMMAND ============
+
+        if data == ExtendedCommand.ACQUIRE:
+            logger.info(f"Client {addr} requested acquisition workflow")
+
+            # Check if already running
+            with acquisition_locks[addr]:
+                if acquisition_states[addr] == AcquisitionState.RUNNING:
+                    logger.warning(f"Acquisition already running for {addr}")
+                    return
+                # Set state to RUNNING immediately
+                acquisition_states[addr] = AcquisitionState.RUNNING
+                acquisition_progress[addr] = (0, 0)
+
+            # Read the full message immediately
+            message_parts = []
+            total_bytes = 0
+            start_time = time.time()
+
+            # Set a timeout for reading
+            socket.waitForReadyRead(5.0)
+
+            try:
+                while True:
+                    # Read in chunks
+                    chunk = socket.read(1024)
+                    if not chunk:
+                        logger.error(
+                            f"Connection closed while reading acquisition message from {addr}"
+                        )
+                        with acquisition_locks[addr]:
+                            acquisition_states[addr] = AcquisitionState.FAILED
+                        break
+
+                    message_parts.append(chunk.decode("utf-8"))
+                    total_bytes += len(chunk)
+
+                    # Check if we have the end marker
+                    full_message = "".join(message_parts)
+                    if "END_MARKER" in full_message:
+                        # Remove the end marker
+                        message = full_message.replace(",END_MARKER", "").replace(
+                            "END_MARKER", ""
+                        )
+                        logger.debug(
+                            f"Received complete acquisition message ({total_bytes} bytes) in {time.time() - start_time:.2f}s"
+                        )
+
+                        # Clear cancellation event
+                        acquisition_cancel_events[addr].clear()
+
+                        # Start acquisition in separate thread
+                        acquisition_thread = threading.Thread(
+                            target=acquisitionWorkflow,
+                            args=(message, addr),
+                            daemon=True,
+                            name=f"Acquisition-{addr}",
+                        )
+                        acquisition_thread.start()
+
+                        logger.info(f"Acquisition thread started for {addr}")
+                        break
+
+                    # Safety check for message size
+                    if total_bytes > 10000:  # 10KB max
+                        logger.error(
+                            f"Acquisition message too large from {addr}: {total_bytes} bytes"
+                        )
+                        with acquisition_locks[addr]:
+                            acquisition_states[addr] = AcquisitionState.FAILED
+                        break
+
+                    # Timeout check
+                    if time.time() - start_time > 10:
+                        logger.error(f"Timeout reading acquisition message from {addr}")
+                        with acquisition_locks[addr]:
+                            acquisition_states[addr] = AcquisitionState.FAILED
+                        break
+
+            except socket.timeout:
+                logger.error(f"Socket timeout reading acquisition message from {addr}")
                 with acquisition_locks[addr]:
-                    state = acquisition_states[addr]
-                # Send state as 16-byte string (padded)
-                state_str = state.value.ljust(16)[:16]
-                conn.sendall(state_str.encode())
-                logger.debug(f"Sent acquisition status to {addr}: {state.value}")
-                continue
-
-            # Progress query command
-            if data == ExtendedCommand.PROGRESS:
+                    acquisition_states[addr] = AcquisitionState.FAILED
+            except Exception as e:
+                logger.error(f"Error reading acquisition message from {addr}: {e}")
                 with acquisition_locks[addr]:
-                    current, total = acquisition_progress[addr]
-                # Send as two integers
-                response = struct.pack("!II", current, total)
-                conn.sendall(response)
-                logger.debug(f"Sent progress to {addr}: {current}/{total}")
-                continue
+                    acquisition_states[addr] = AcquisitionState.FAILED
+            finally:
+                # Reset socket to blocking mode
+                socket.waitForReadyRead(3.6e+6)
 
-            # Cancel acquisition command
-            if data == ExtendedCommand.CANCEL:
-                logger.warning(f"Client {addr} requested acquisition cancellation")
-                with acquisition_locks[addr]:
-                    if acquisition_states[addr] == AcquisitionState.RUNNING:
-                        acquisition_states[addr] = AcquisitionState.CANCELLING
-                        acquisition_cancel_events[addr].set()
-                        logger.info(f"Cancellation initiated for {addr}")
-                # Send acknowledgment
-                conn.sendall(b"ACK")
-                continue
+            return
 
-            # ============ ACQUISITION COMMAND ============
-
-            if data == ExtendedCommand.ACQUIRE:
-                logger.info(f"Client {addr} requested acquisition workflow")
-
-                # Check if already running
-                with acquisition_locks[addr]:
-                    if acquisition_states[addr] == AcquisitionState.RUNNING:
-                        logger.warning(f"Acquisition already running for {addr}")
-                        continue
-                    # Set state to RUNNING immediately
-                    acquisition_states[addr] = AcquisitionState.RUNNING
-                    acquisition_progress[addr] = (0, 0)
-
-                # Read the full message immediately
-                message_parts = []
-                total_bytes = 0
-                start_time = time.time()
-
-                # Set a timeout for reading
-                conn.settimeout(5.0)
-
-                try:
-                    while True:
-                        # Read in chunks
-                        chunk = conn.recv(1024)
-                        if not chunk:
-                            logger.error(
-                                f"Connection closed while reading acquisition message from {addr}"
-                            )
-                            with acquisition_locks[addr]:
-                                acquisition_states[addr] = AcquisitionState.FAILED
-                            break
-
-                        message_parts.append(chunk.decode("utf-8"))
-                        total_bytes += len(chunk)
-
-                        # Check if we have the end marker
-                        full_message = "".join(message_parts)
-                        if "END_MARKER" in full_message:
-                            # Remove the end marker
-                            message = full_message.replace(",END_MARKER", "").replace(
-                                "END_MARKER", ""
-                            )
-                            logger.debug(
-                                f"Received complete acquisition message ({total_bytes} bytes) in {time.time() - start_time:.2f}s"
-                            )
-
-                            # Clear cancellation event
-                            acquisition_cancel_events[addr].clear()
-
-                            # Start acquisition in separate thread
-                            acquisition_thread = threading.Thread(
-                                target=acquisitionWorkflow,
-                                args=(message, addr),
-                                daemon=True,
-                                name=f"Acquisition-{addr}",
-                            )
-                            acquisition_thread.start()
-
-                            logger.info(f"Acquisition thread started for {addr}")
-                            break
-
-                        # Safety check for message size
-                        if total_bytes > 10000:  # 10KB max
-                            logger.error(
-                                f"Acquisition message too large from {addr}: {total_bytes} bytes"
-                            )
-                            with acquisition_locks[addr]:
-                                acquisition_states[addr] = AcquisitionState.FAILED
-                            break
-
-                        # Timeout check
-                        if time.time() - start_time > 10:
-                            logger.error(f"Timeout reading acquisition message from {addr}")
-                            with acquisition_locks[addr]:
-                                acquisition_states[addr] = AcquisitionState.FAILED
-                            break
-
-                except socket.timeout:
-                    logger.error(f"Socket timeout reading acquisition message from {addr}")
-                    with acquisition_locks[addr]:
-                        acquisition_states[addr] = AcquisitionState.FAILED
-                except Exception as e:
-                    logger.error(f"Error reading acquisition message from {addr}: {e}")
-                    with acquisition_locks[addr]:
-                        acquisition_states[addr] = AcquisitionState.FAILED
-                finally:
-                    # Reset socket to blocking mode
-                    conn.settimeout(None)
-
-                continue
-
-            if data == ExtendedCommand.BGACQUIRE:
-                logger.info(f"Client {addr} requested background acquisition")
-                
-                # Read the message using the same pattern as ACQUIRE command
-                message_parts = []
-                total_bytes = 0
-                start_time = time.time()
-                
-                conn.settimeout(5.0)
-                
-                try:
-                    while True:
-                        chunk = conn.recv(1024)
-                        if not chunk:
-                            logger.error(f"Connection closed while reading background acquisition message")
-                            conn.sendall(b"FAILED:Connection closed")
-                            break
-                            
-                        message_parts.append(chunk.decode("utf-8"))
-                        total_bytes += len(chunk)
+        if data == ExtendedCommand.BGACQUIRE:
+            logger.info(f"Client {addr} requested background acquisition")
+            
+            # Read the message using the same pattern as ACQUIRE command
+            message_parts = []
+            total_bytes = 0
+            start_time = time.time()
+            
+            socket.waitForReadyRead(5.0)
+            
+            try:
+                while True:
+                    chunk = socket.read(1024)
+                    if not chunk:
+                        logger.error(f"Connection closed while reading background acquisition message")
+                        socket.write(b"FAILED:Connection closed")
+                        break
                         
-                        full_message = "".join(message_parts)
+                    message_parts.append(chunk.decode("utf-8"))
+                    total_bytes += len(chunk)
+                    
+                    full_message = "".join(message_parts)
+                    
+                    if "END_MARKER" in full_message:
+                        message = full_message.replace("END_MARKER", "").strip()
                         
-                        if "END_MARKER" in full_message:
-                            message = full_message.replace("END_MARKER", "").strip()
-                            
-                            # Parse the message without using shlex
-                            # We'll use a simple but effective approach
-                            params = {}
-                            
-                            # Split by known flags to avoid issues with spaces in paths
-                            # This approach looks for the flag patterns and extracts values between them
-                            flags = ["--yaml", "--output", "--modality", "--angles", "--exposures"]
-                            
-                            for i, flag in enumerate(flags):
-                                if flag in message:
-                                    # Find where this flag starts
-                                    start_idx = message.index(flag) + len(flag)
-                                    
-                                    # Find where the next flag starts (or use end of string)
-                                    end_idx = len(message)
-                                    for next_flag in flags[i+1:]:
-                                        if next_flag in message[start_idx:]:
-                                            next_pos = message.index(next_flag, start_idx)
-                                            if next_pos < end_idx:
-                                                end_idx = next_pos
-                                                break
-                                    
-                                    # Extract the value and clean it up
-                                    value = message[start_idx:end_idx].strip()
-                                    
-                                    # Map to the parameter name
-                                    if flag == "--yaml":
-                                        params["yaml_file_path"] = value
-                                    elif flag == "--output":
-                                        params["output_folder_path"] = value
-                                    elif flag == "--modality":
-                                        params["modality"] = value
-                                    elif flag == "--angles":
-                                        params["angles_str"] = value
-                                    elif flag == "--exposures":
-                                        params["exposures_str"] = value
-                            
-                            # NOW we validate and execute - inside the END_MARKER block
-                            # Validate required parameters
-                            required = ["yaml_file_path", "output_folder_path", "modality"]
-                            missing = [key for key in required if key not in params]
-                            if missing:
-                                error_msg = f"Missing required parameters: {missing}"
-                                logger.error(error_msg)
-                                conn.sendall(f"FAILED:{error_msg}".encode())
-                                break
-                            
-                            # Execute background acquisition
-                            try:
-                                from smart_wsi_scanner.qp_acquisition import background_acquisition_workflow
+                        # Parse the message without using shlex
+                        # We'll use a simple but effective approach
+                        params = {}
+                        
+                        # Split by known flags to avoid issues with spaces in paths
+                        # This approach looks for the flag patterns and extracts values between them
+                        flags = ["--yaml", "--output", "--modality", "--angles", "--exposures"]
+                        
+                        for i, flag in enumerate(flags):
+                            if flag in message:
+                                # Find where this flag starts
+                                start_idx = message.index(flag) + len(flag)
                                 
-                                output_path = background_acquisition_workflow(
-                                    yaml_file_path=params["yaml_file_path"],
-                                    output_folder_path=params["output_folder_path"],
-                                    modality=params["modality"],
-                                    angles_str=params.get("angles_str", "()"),
-                                    exposures_str=params.get("exposures_str", None),
-                                    hardware=hardware,
-                                    config_manager=config_manager,
-                                    logger=logger,
-                                )
+                                # Find where the next flag starts (or use end of string)
+                                end_idx = len(message)
+                                for next_flag in flags[i+1:]:
+                                    if next_flag in message[start_idx:]:
+                                        next_pos = message.index(next_flag, start_idx)
+                                        if next_pos < end_idx:
+                                            end_idx = next_pos
+                                            break
                                 
-                                # Send success response with output path
-                                response = f"SUCCESS:{output_path}".encode()
-                                conn.sendall(response)
-                                logger.info(f"Background acquisition completed successfully")
+                                # Extract the value and clean it up
+                                value = message[start_idx:end_idx].strip()
                                 
-                            except Exception as e:
-                                logger.error(f"Background acquisition failed: {str(e)}", exc_info=True)
-                                response = f"FAILED:{str(e)}".encode()
-                                conn.sendall(response)
-                            
-                            # We found and processed the END_MARKER, so break the while loop
+                                # Map to the parameter name
+                                if flag == "--yaml":
+                                    params["yaml_file_path"] = value
+                                elif flag == "--output":
+                                    params["output_folder_path"] = value
+                                elif flag == "--modality":
+                                    params["modality"] = value
+                                elif flag == "--angles":
+                                    params["angles_str"] = value
+                                elif flag == "--exposures":
+                                    params["exposures_str"] = value
+                        
+                        # NOW we validate and execute - inside the END_MARKER block
+                        # Validate required parameters
+                        required = ["yaml_file_path", "output_folder_path", "modality"]
+                        missing = [key for key in required if key not in params]
+                        if missing:
+                            error_msg = f"Missing required parameters: {missing}"
+                            logger.error(error_msg)
+                            socket.write(f"FAILED:{error_msg}".encode())
                             break
                         
-                        # Safety checks for the while loop (these stay at the original indentation)
-                        if total_bytes > 10000:  # 10KB max
-                            logger.error(f"Background acquisition message too large: {total_bytes} bytes")
-                            conn.sendall(b"FAILED:Message too large")
-                            break
+                        # Execute background acquisition
+                        try:
+                            from smart_wsi_scanner.qp_acquisition import background_acquisition_workflow
                             
-                        if time.time() - start_time > 10:
-                            logger.error(f"Timeout reading background acquisition message")
-                            conn.sendall(b"FAILED:Timeout waiting for complete message")
-                            break
+                            output_path = background_acquisition_workflow(
+                                yaml_file_path=params["yaml_file_path"],
+                                output_folder_path=params["output_folder_path"],
+                                modality=params["modality"],
+                                angles_str=params.get("angles_str", "()"),
+                                exposures_str=params.get("exposures_str", None),
+                                hardware=hardware,
+                                config_manager=config_manager,
+                                logger=logger,
+                            )
                             
-                except socket.timeout:
-                    logger.error(f"Timeout reading background acquisition message from {addr}")
-                    conn.sendall(b"FAILED:Timeout reading message")
-                except Exception as e:
-                    logger.error(f"Error in background acquisition: {str(e)}", exc_info=True)
-                    conn.sendall(f"FAILED:{str(e)}".encode())
-                finally:
-                    conn.settimeout(None)  # Reset to blocking mode
-                
-                # This continue is for the main client handling loop
-                continue
+                            # Send success response with output path
+                            response = f"SUCCESS:{output_path}".encode()
+                            socket.write(response)
+                            logger.info(f"Background acquisition completed successfully")
+                            
+                        except Exception as e:
+                            logger.error(f"Background acquisition failed: {str(e)}", exc_info=True)
+                            response = f"FAILED:{str(e)}".encode()
+                            socket.write(response)
+                        
+                        # We found and processed the END_MARKER, so break the while loop
+                        break
+                    
+                    # Safety checks for the while loop (these stay at the original indentation)
+                    if total_bytes > 10000:  # 10KB max
+                        logger.error(f"Background acquisition message too large: {total_bytes} bytes")
+                        socket.write(b"FAILED:Message too large")
+                        break
+                        
+                    if time.time() - start_time > 10:
+                        logger.error(f"Timeout reading background acquisition message")
+                        socket.write(b"FAILED:Timeout waiting for complete message")
+                        break
+                            
+            except socket.timeout:
+                logger.error(f"Timeout reading background acquisition message from {addr}")
+                socket.write(b"FAILED:Timeout reading message")
+            except Exception as e:
+                logger.error(f"Error in background acquisition: {str(e)}", exc_info=True)
+                socket.write(f"FAILED:{str(e)}".encode())
+            finally:
+                # Reset to blocking mode
+                socket.waitForReadyRead(3.6e+6) # well, one hour anyways
 
-
-
-            # Legacy GET/SET commands (not implemented)
-            if data == ExtendedCommand.GET:
-                logger.debug("GET property not yet implemented")
-                continue
-
-            if data == ExtendedCommand.SET:
-                logger.debug("SET property not yet implemented")
-                continue
-
-            # Unknown command
-            logger.warning(f"Unknown command from {addr}: {data}")
-
-    except Exception as e:
-        logger.error(f"Error handling client {addr}: {str(e)}", exc_info=True)
-    finally:
+    def _on_disconnect() -> None:
         # Cleanup
         if acquisition_thread and acquisition_thread.is_alive():
             logger.info(f"Cancelling acquisition for disconnected client {addr}")
@@ -510,8 +493,12 @@ def handle_client(conn, addr):
         if addr in acquisition_cancel_events:
             del acquisition_cancel_events[addr]
 
-        conn.close()
+        socket.close()
         logger.info(f"<<< Client {addr} disconnected and cleaned up")
+
+    socket.readyRead.connect(handle_command)
+    socket.disconnected.connect(_on_disconnect)
+
 
 
 def main():
@@ -531,34 +518,20 @@ def main():
     logger.info(f"  - Enhanced logging")
     logger.info("=" * 60)
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((HOST, PORT))
-        s.listen()
-        logger.info(f"Server listening on {HOST}:{PORT}")
-        logger.info("Ready for connections...")
+    app = QApplication([])
+    create_mmgui(mmcore=core, exec_app=False)
 
-        threads = []
+    sockets = []
+    server = QTcpServer(app)
+    def handle_new_connection():
+        client_socket: QTcpSocket = server.nextPendingConnection()
+        sockets.append(client_socket)
+        addr = client_socket.peerAddress().toString(), client_socket.peerPort()
+        handle_client(client_socket, addr)
+    server.newConnection.connect(handle_new_connection)
+    server.listen(address=QHostAddress(HOST), port=PORT)
 
-        while not shutdown_event.is_set():
-            try:
-                s.settimeout(1.0)
-                conn, addr = s.accept()
-                thread = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
-                thread.start()
-                threads.append(thread)
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-
-        logger.info("Server shutting down. Waiting for client threads to finish...")
-        shutdown_event.set()
-
-        for t in threads:
-            t.join(timeout=5.0)
-
-        logger.info("Server has shut down.")
+    app.exec_()
 
 
 if __name__ == "__main__":
