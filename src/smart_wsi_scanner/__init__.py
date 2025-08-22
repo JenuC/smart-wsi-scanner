@@ -3,9 +3,9 @@
 __version__ = "0.1.0"
 
 from .hardware import MicroscopeHardware
-from .hardware_pycromanager import (
-    PycromanagerHardware,
-    init_pycromanager,
+from .hardware_pymmcore_plus import (
+    PyMMCorePlusHardware,
+    init_pymmcore_plus,
 )
 from .config import ConfigManager, sp
 from .qp_utils import TifWriterUtils, TileConfigUtils, AutofocusUtils, QuPathProject
@@ -14,7 +14,7 @@ __all__ = [
     "MicroscopeHardware",
     "ConfigManager",
     "sp",
-    ## pycromanager specific imports
-    "PycromanagerHardware",
-    "init_pycromanager",
+    ## pymmcore-plus specific imports
+    "PyMMCorePlusHardware",
+    "init_pymmcore_plus",
 ]

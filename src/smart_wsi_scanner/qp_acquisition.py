@@ -11,7 +11,7 @@ import pathlib
 import shutil
 
 from .config import sp_position
-from .hardware_pycromanager import PycromanagerHardware
+from .hardware_pymmcore_plus import PyMMCorePlusHardware
 from .qp_utils import BackgroundCorrectionUtils, TileConfigUtils, TifWriterUtils, AutofocusUtils
 import shlex
 import skimage.filters
@@ -134,7 +134,7 @@ def parse_acquisition_message(message: str) -> dict:
 def _acquisition_workflow(
     message: str,
     client_addr,
-    hardware: PycromanagerHardware,
+    hardware: PyMMCorePlusHardware,
     config_manager,
     logger,
     update_progress: Callable[[int, int], None],
@@ -442,7 +442,7 @@ def background_acquisition_workflow(
     modality: str,
     angles_str: str,
     exposures_str: Optional[str],
-    hardware: PycromanagerHardware,
+    hardware: PyMMCorePlusHardware,
     config_manager,
     logger,
 ):

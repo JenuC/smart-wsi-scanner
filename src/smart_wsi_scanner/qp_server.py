@@ -25,7 +25,7 @@ import logging
 from datetime import datetime
 
 from smart_wsi_scanner.config import ConfigManager, sp_position
-from smart_wsi_scanner.hardware_pycromanager import PycromanagerHardware, init_pycromanager
+from smart_wsi_scanner.hardware_pycromanager import PyMMCorePlusHardware, init_pymmcore_plus
 from smart_wsi_scanner.qp_server_config import ExtendedCommand, TCP_PORT, END_MARKER
 from smart_wsi_scanner.qp_acquisition import _acquisition_workflow
 
@@ -69,23 +69,25 @@ acquisition_locks = {}  # addr -> Lock
 acquisition_cancel_events = {}  # addr -> Event
 
 
-def init_pycromanager_with_logger():
-    """Initialize Pycro-Manager connection to Micro-Manager."""
-    logger.info("Initializing Pycro-Manager connection...")
-    core, studio = init_pycromanager()
-    if not core:
-        logger.error("Failed to initialize Micro-Manager connection")
+def init_pymmcore_plus_with_logger():
+    """Initialize PyMMCorePlus."""
+    # FIXME: Is there ever a reason NOT to use the logger?
+    logger.info("Initializing PyMMCorePlus...")
+    try:
+        core = init_pymmcore_plus()
+        logger.info("PyMMCorePlus initialized successfully")
+        return core
+    except Exception as e:
+        logger.error("Failed to initialize PyMMCorePlus")
         sys.exit(1)
-    logger.info("Pycro-Manager initialized successfully")
-    return core, studio
 
 
 # Initialize hardware connections
 logger.info("Loading configuration...")
 config_manager = ConfigManager()
 ppm_settings = config_manager.get_config("config_PPM")
-core, studio = init_pycromanager_with_logger()
-hardware = PycromanagerHardware(core, studio, ppm_settings)  # type:ignore
+core = init_pymmcore_plus_with_logger()
+hardware = PyMMCorePlusHardware(core, ppm_settings)  # type:ignore
 logger.info("Hardware initialization complete")
 
 

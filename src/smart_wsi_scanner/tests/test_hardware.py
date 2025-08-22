@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
 from ..hardware import MicroscopeHardware, is_mm_running, is_coordinate_in_range
-from ..hardware_pycromanager import PycromanagerHardware, init_pycromanager, obj_2_list
+from ..hardware_pymmcore_plus import PyMMCorePlusHardware, init_pymmcore_plus, obj_2_list
 from ..config import sp_position, sp_microscope_settings, sp_imaging_mode, _limits, sp_stage_settings, sp_microscope
 
 
@@ -60,7 +60,7 @@ def mock_studio():
 @pytest.fixture
 def hardware(mock_core, mock_studio, mock_settings):
     """Create PycromanagerHardware instance with mocked dependencies."""
-    return PycromanagerHardware(mock_core, mock_studio, mock_settings)
+    return PyMMCorePlusHardware(mock_core, mock_studio, mock_settings)
 
 
 class TestMicroscopeHardware:
@@ -127,7 +127,7 @@ class TestPycromanagerHardware:
     
     def test_initialization(self, mock_core, mock_studio, mock_settings):
         """Test hardware initialization."""
-        hardware = PycromanagerHardware(mock_core, mock_studio, mock_settings)
+        hardware = PyMMCorePlusHardware(mock_core, mock_studio, mock_settings)
         assert isinstance(hardware, MicroscopeHardware)
         assert hardware.core == mock_core
         assert hardware.settings == mock_settings
@@ -290,7 +290,7 @@ class TestPycromanagerUtilities:
         mock_core_class.return_value = mock_core
         mock_studio_class.return_value = mock_studio
         
-        core, studio = init_pycromanager()
+        core, studio = init_pymmcore_plus()
         assert core == mock_core
         assert studio == mock_studio
         mock_core.set_timeout_ms.assert_called_once_with(20000)
@@ -300,7 +300,7 @@ class TestPycromanagerUtilities:
         """Test pycromanager initialization when MM is not running."""
         mock_is_running.return_value = False
         
-        core, studio = init_pycromanager()
+        core, studio = init_pymmcore_plus()
         assert core is None
         assert studio is None
 
@@ -315,7 +315,7 @@ class TestMicroscopeSpecificFeatures:
         settings.stage = MagicMock()
         settings.stage.r_stage = "RotationStage"
         
-        hardware = PycromanagerHardware(mock_core, mock_studio, settings)
+        hardware = PyMMCorePlusHardware(mock_core, mock_studio, settings)
         assert hasattr(hardware, 'set_psg_ticks')
         assert hasattr(hardware, 'get_psg_ticks')
     
@@ -324,7 +324,7 @@ class TestMicroscopeSpecificFeatures:
         settings = MagicMock(spec=sp_microscope_settings)
         settings.microscope = sp_microscope(name="CAMM", type="Standard")
         
-        hardware = PycromanagerHardware(mock_core, mock_studio, settings)
+        hardware = PyMMCorePlusHardware(mock_core, mock_studio, settings)
         assert hasattr(hardware, 'swap_objective_lens')
     
     def test_camm_swap_objective_4x_to_20x(self, mock_core, mock_studio):
@@ -336,7 +336,7 @@ class TestMicroscopeSpecificFeatures:
         settings.stage.z_stage = "ZStage"
         settings.stage.f_stage = "FStage"
         
-        hardware = PycromanagerHardware(mock_core, mock_studio, settings)
+        hardware = PyMMCorePlusHardware(mock_core, mock_studio, settings)
         
         # Mock current objective
         mock_core.get_property.return_value = "4X"
