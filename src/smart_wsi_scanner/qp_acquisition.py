@@ -10,6 +10,8 @@ from typing import Callable, List, Tuple, Optional
 import pathlib
 import shutil
 
+import numpy as np
+
 from .config import sp_position
 from .hardware_pycromanager import PycromanagerHardware
 from .qp_utils import BackgroundCorrectionUtils, TileConfigUtils, TifWriterUtils, AutofocusUtils
@@ -189,7 +191,8 @@ def _acquisition_workflow(
         # Load background images if correction is enabled
         background_images = {}
         background_correction_enabled = False
-
+        
+        angle_wb_corrections = {}  # Store WB corrections calculated from first tile
         if hasattr(ppm_settings, 'background_correction') and ppm_settings.background_correction:
             bc_settings = ppm_settings.background_correction
             
@@ -207,7 +210,7 @@ def _acquisition_workflow(
                     )
                     
                     if is_valid:
-                        background_images, background_scaling_factors = BackgroundCorrectionUtils.load_background_images(
+                        background_images, background_scaling_factors, white_balance_coeffs= BackgroundCorrectionUtils.load_background_images(
                             background_dir,
                             modality,
                             params["angles"],
@@ -219,6 +222,7 @@ def _acquisition_workflow(
                             logger.info(f"Background correction enabled with {len(background_images)} images")
                             logger.info(f"Method: {bc_settings.method}")
                             logger.info(f"Scaling factors: {background_scaling_factors}")
+                            logger.info(f"White balance coefficients: {white_balance_coeffs}")
                     else:
                         logger.error(f"Cannot proceed with background correction - missing images for angles: {missing}")
                         logger.warning("Continuing without background correction")
@@ -351,20 +355,72 @@ def _acquisition_workflow(
 
                         )
                         logger.info(f"  Applied {bc_method} flat-field correction with factor {background_scaling_factors[angle]:.3f}")
+                        logger.info(f"  Post-correction RGB means: {image.mean(axis=(0,1))}")
+                        logger.info(f"  Post-correction RGB max: {image.max(axis=(0,1))}")
+
+                            # Calculate WB from first tile only
+                        if pos_idx == 0:
+                            # Calculate what correction is needed to make it white
+                            bg_color, confidence = BackgroundCorrectionUtils.calculate_background_color_from_mode(image)
+                            
+                            # These are the multipliers needed
+                            if confidence > 0.2:  # Reasonable amount of background found
+                                logger.info(f"  Detected background color: RGB={bg_color}, confidence={confidence:.1%}")
+                                
+                                # Calculate correction needed
+                                target_white = bg_color.mean()  # Or use max(bg_color)
+                                wb_for_division = bg_color / target_white
+                                angle_wb_corrections[angle] = wb_for_division.tolist()
+                                
+                                logger.info(f"  WB coefficients from background: {wb_for_division}")
+                            else:
+                                # Low confidence - try alternative approach
+                                logger.warning(f"  Low background confidence, using percentile approach")
+                                
+                                # Use bright percentile as fallback
+                                percentile_95 = np.percentile(image, 95, axis=(0,1))
+                                target = percentile_95.mean()
+                                wb_for_division = percentile_95 / target
+                                angle_wb_corrections[angle] = wb_for_division.tolist()
                         
-                    # white balance
-                    gain = calculate_luminance_gain(*angles_wb[angle])
+                        # Apply the stored correction
+                        if angle in angle_wb_corrections:
+                            wb_profile = angle_wb_corrections[angle]
+                            gain = calculate_luminance_gain(*wb_profile)
+                            image = hardware.white_balance(
+                                image, 
+                                white_balance_profile=wb_profile, 
+                                gain=gain
+                            )
+                            logger.info(f"  Applied first-tile WB: {wb_profile}")
+                        # Use auto-calculated white balance from background
+                        # if angle in white_balance_coeffs:
+                        #     wb_profile = white_balance_coeffs[angle]
+                        #     gain = calculate_luminance_gain(*wb_profile)
+                        #     image = hardware.white_balance(
+                        #         image, 
+                        #         white_balance_profile=wb_profile, 
+                        #         gain=gain
+                        #     )
+                        #     logger.info(f"  Applied auto white balance: {wb_profile}")
+                        # else:
+                        #     # Fallback to YAML values if needed
+                        #     gain = calculate_luminance_gain(*angles_wb[angle])
+                        #     image = hardware.white_balance(
+                        #         image, 
+                        #         white_balance_profile=angles_wb[angle], 
+                        #         gain=gain
+                        #     )
+                        #     logger.info(f"  Applied YAML white balance")
+                    else:
+                        gain = calculate_luminance_gain(*angles_wb[angle])
+                        # white balance
 
-                    ## TODO : WB need to be done before debayer uint conversion
-                    image = hardware.white_balance(
-                        image, white_balance_profile=angles_wb[angle], gain=gain
-                    )
-                    #TODO MIKE EDIT DANGER WHITEBALANCE FUDGING
-                    if angle < 0:  # This catches all negative angles
-                        image = TifWriterUtils.apply_brightness_correction(image, 1.42)
-                        logger.info(f"  Applied 12% brightness boost to {angle}° image")
-
-                    logger.info(f"  Whitebalance applied {image.ndim} mean {image.mean((0,1))}")
+                        ## TODO : WB need to be done before debayer uint conversion
+                        image = hardware.white_balance(
+                            image, white_balance_profile=angles_wb[angle], gain=gain
+                        )
+                        logger.info(f"  Whitebalance applied {image.ndim} mean {image.mean((0,1))}")
                     # Save image
                     image_path = output_path / str(angle) / filename
                     if image_path.parent.exists():
@@ -487,18 +543,7 @@ def background_acquisition_workflow(
         
         logger.info(f"Saving backgrounds to: {output_path}")
         
-        # Load white balance settings
-        angles_wb_ = {
-            0: hardware.settings.white_balance.ppm.crossed,
-            90: hardware.settings.white_balance.ppm.uncrossed,
-            5.0: hardware.settings.white_balance.ppm.positive,
-            -5.0: hardware.settings.white_balance.ppm.negative,
-        }
-        angles_wb = {
-            angle: [float(x) for x in wb_list[0].split()] 
-            for angle, wb_list in angles_wb_.items()
-        }
-        
+
         # Acquire background for each angle
         for angle_idx, angle in enumerate(angles):
             # Create angle subdirectory
@@ -518,16 +563,6 @@ def background_acquisition_workflow(
             
             # Acquire image with debayering
             image, metadata = hardware.snap_image(debayering=True)
-            
-            # Apply white balance to background
-            if angle in angles_wb:
-                gain = calculate_luminance_gain(*angles_wb[angle])
-                image = hardware.white_balance(
-                    image, 
-                    white_balance_profile=angles_wb[angle], 
-                    gain=gain
-                )
-                logger.info(f"Applied white balance to background")
             
             # Save background image
             background_path = angle_dir / "background.tif"

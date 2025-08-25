@@ -222,7 +222,7 @@ class TifWriterUtils:
             # bigtiff=True
         ) as tif:
             options = {
-                "photometric": "rgb",
+                "photometric": "rgb",  # TODO : need to handle grayscale images
                 "compression": "jpeg",
                 "resolutionunit": "CENTIMETER",
                 "maxworkers": 2,
@@ -277,13 +277,13 @@ class TifWriterUtils:
 
         # Calculate birefringence
         output_path = output_dir / filename
-        
+
         biref_img = TifWriterUtils.ppm_angle_difference(pos_image, neg_image)
         tf.imwrite(str(output_path)[:-4] + "_gray.tif", biref_img.astype(np.float32))
         biref_img = biref_img * 255 / biref_img.max()
         biref_img = np.clip(biref_img, 0, 255).astype(np.uint8)
 
-        # Save the image        
+        # Save the image
         TifWriterUtils.ome_writer(
             filename=str(output_path),
             pixel_size_um=pixel_size_um,
@@ -370,35 +370,76 @@ class BackgroundCorrectionUtils:
     """Utilities for background and flat-field correction with modality support."""
     
     @staticmethod
+    def calculate_background_color_from_mode(image, bin_size=5, mode_tolerance=10):
+        """
+        Find background color using histogram mode approach.
+        
+        Args:
+            image: RGB image array
+            bin_size: Size of histogram bins (smaller = more precise but noisier)
+            mode_tolerance: Pixels within this range of mode are considered background
+        
+        Returns:
+            Tuple of (background_mean_rgb, confidence_score)
+        """
+        # Convert to grayscale for mode detection
+        gray = np.mean(image, axis=2).astype(np.uint8)
+        
+        # Calculate histogram with reasonable bins
+        hist, bins = np.histogram(gray, bins=256//bin_size, range=(0, 255))
+        
+        # Find the mode (highest peak)
+        mode_idx = np.argmax(hist)
+        mode_value = (bins[mode_idx] + bins[mode_idx + 1]) / 2
+        
+        # Find pixels near the mode (likely background)
+        background_mask = np.abs(gray - mode_value) < mode_tolerance
+        
+        # Calculate confidence (what fraction of image is background)
+        confidence = np.sum(background_mask) / gray.size
+        
+        # Get RGB values of background pixels
+        background_pixels = image[background_mask]
+        
+        if len(background_pixels) > 0:
+            background_mean = background_pixels.mean(axis=0)
+        else:
+            # Fallback to image mean if no background found
+            background_mean = image.mean(axis=(0,1))
+            confidence = 0.0
+        
+        return background_mean, confidence
+
+    @staticmethod
     def get_modality_from_scan_type(scan_type: str) -> str:
         """
         Extract modality identifier from scan type.
-        
+
         The scan type format is: ScanType_Objectivex_acquisitionnumber
         We need to extract: ScanType_Objectivex
-        
-        Examples: 
+
+        Examples:
         - "PPM_10x_1" -> "PPM_10x"
         - "PPM_40x_2" -> "PPM_40x"
         - "CAMM_20x_1" -> "CAMM_20x"
         - "PPM_4x_3" -> "PPM_4x"
-        
+
         Args:
             scan_type: Full scan type string
-            
+
         Returns:
             Modality string combining scan type and objective
         """
-        parts = scan_type.split('_')
-        
+        parts = scan_type.split("_")
+
         # We need at least 3 parts: ScanType, Objective, and acquisition number
         if len(parts) >= 3:
             # Extract the first two parts (ScanType and Objective)
             scan_type_part = parts[0]  # e.g., "PPM" or "CAMM"
-            objective_part = parts[1]   # e.g., "10x", "20x", "40x"
-            
+            objective_part = parts[1]  # e.g., "10x", "20x", "40x"
+
             # Validate that the second part contains 'x' (indicating objective magnification)
-            if 'x' in objective_part.lower():
+            if "x" in objective_part.lower():
                 modality = f"{scan_type_part}_{objective_part}"
                 return modality
             else:
@@ -406,109 +447,179 @@ class BackgroundCorrectionUtils:
                 # This provides a fallback for unexpected formats
                 return scan_type
         else:
-            #TODO this should probably throw an error or warning
+            # TODO this should probably throw an error or warning
             return scan_type
-    
-    
+
+    # @staticmethod
+    # def load_background_images(
+    #     background_dir: pathlib.Path, modality: str, angles: List[float], logger=None
+    # ) -> Tuple[dict, dict]:
+    #     """
+    #     Load background images and calculate consistent scaling factors for each angle.
+
+    #     Returns:
+    #         Tuple of (background_images_dict, scaling_factors_dict)
+    #     """
+    #     backgrounds = {}
+    #     scaling_factors = {}
+    #     modality_dir = background_dir / modality
+
+    #     if not modality_dir.exists():
+    #         if logger:
+    #             logger.error(f"Modality directory not found: {modality_dir}")
+    #         return backgrounds, scaling_factors
+
+    #     for angle in angles:
+    #         angle_dir = modality_dir / str(angle)
+    #         background_file = angle_dir / "0.tif"
+
+    #         if background_file.exists():
+    #             try:
+    #                 background_img = tf.imread(str(background_file))
+    #                 backgrounds[angle] = background_img
+
+    #                 # Calculate the scaling factor for this background
+    #                 # This ensures consistent correction across all tiles
+
+    #                 # For 8-bit images, we need a careful approach
+    #                 # We'll use the bright areas of the background as reference
+    #                 bg_float = background_img.astype(np.float32)
+
+    #                 # Find the "typical" bright area intensity
+    #                 # We use percentile to avoid outliers from dust/artifacts
+    #                 bright_percentile = np.percentile(bg_float[bg_float > 50], 90)
+
+    #                 # The scaling factor that would bring typical background to ~240
+    #                 # This leaves headroom for brighter sample areas
+    #                 target_intensity = 250.0  # Conservative target for 8-bit
+    #                 scaling_factor = (
+    #                     target_intensity / bright_percentile if bright_percentile > 0 else 1.0
+    #                 )
+
+    #                 # Store this factor for consistent use across all tiles
+    #                 scaling_factors[angle] = scaling_factor
+
+    #                 if logger:
+    #                     logger.info(f"Loaded background for {modality} {angle}°")
+    #                     logger.info(f"  Background bright areas: {bright_percentile:.1f}")
+    #                     logger.info(f"  Scaling factor: {scaling_factor:.3f}")
+
+    #             except Exception as e:
+    #                 if logger:
+    #                     logger.error(f"Failed to load background {background_file}: {e}")
+    #         else:
+    #             if logger:
+    #                 logger.warning(f"No background found for {modality} {angle}°")
+
+    #     return backgrounds, scaling_factors
     @staticmethod
     def load_background_images(
-        background_dir: pathlib.Path, 
-        modality: str,
-        angles: List[float], 
-        logger=None
-    ) -> Tuple[dict, dict]:
+        background_dir: pathlib.Path, modality: str, angles: List[float], logger=None
+    ) -> Tuple[dict, dict, dict]:  # Changed return type
         """
         Load background images and calculate consistent scaling factors for each angle.
-        
+
         Returns:
-            Tuple of (background_images_dict, scaling_factors_dict)
+            Tuple of (background_images_dict, scaling_factors_dict, white_balance_dict)
         """
         backgrounds = {}
         scaling_factors = {}
+        white_balance_coeffs = {}  # NEW
         modality_dir = background_dir / modality
-        
+
         if not modality_dir.exists():
             if logger:
                 logger.error(f"Modality directory not found: {modality_dir}")
-            return backgrounds, scaling_factors
-        
+            return backgrounds, scaling_factors, white_balance_coeffs  # Updated return
+
         for angle in angles:
             angle_dir = modality_dir / str(angle)
-            background_file = angle_dir / "background.tif"
-            
+            background_file = angle_dir / "0.tif"  # Changed from "0.tif"
+
             if background_file.exists():
                 try:
                     background_img = tf.imread(str(background_file))
                     backgrounds[angle] = background_img
-                    
+
                     # Calculate the scaling factor for this background
                     # This ensures consistent correction across all tiles
-                    
+
                     # For 8-bit images, we need a careful approach
                     # We'll use the bright areas of the background as reference
                     bg_float = background_img.astype(np.float32)
+
+
+                    # Different scaling strategy for polarized vs brightfield
+                    if angle == 90.0:  # Brightfield
+                        # Scale to make background bright
+                        bg_mean_all = bg_float.mean()
+                        target_intensity = 240.0
+                        scaling_factor = target_intensity / bg_mean_all if bg_mean_all > 0 else 1.0
+                        if logger:
+                            logger.info(f"  Background mean intensity at 90 ticks: {bg_mean_all:.1f}")
+                    else:  # Polarized angles (-5, 0, 5)
+                        # Don't scale intensity - preserve dark backgrounds
+                        scaling_factor = 1.0  # No intensity scaling!
                     
-                    # Find the "typical" bright area intensity
-                    # We use percentile to avoid outliers from dust/artifacts
-                    bright_percentile = np.percentile(bg_float[bg_float > 50], 75)
-                    
-                    # The scaling factor that would bring typical background to ~200
-                    # This leaves headroom for brighter sample areas
-                    target_intensity = 200.0  # Conservative target for 8-bit
-                    scaling_factor = target_intensity / bright_percentile if bright_percentile > 0 else 1.0
-                    
-                    # Store this factor for consistent use across all tiles
                     scaling_factors[angle] = scaling_factor
+
+                    # NEW: Calculate white balance from background
+                    # Background should be neutral, so we calculate what correction is needed
+                    bg_mean = background_img.mean(axis=(0, 1))  # Mean R,G,B
                     
+                    # Calculate coefficients to make all channels equal to the brightest
+                    wb_coeffs = bg_mean / (bg_mean.max() + 1e-6)
+                    white_balance_coeffs[angle] = wb_coeffs.tolist()
+
                     if logger:
                         logger.info(f"Loaded background for {modality} {angle}°")
-                        logger.info(f"  Background bright areas: {bright_percentile:.1f}")
+
                         logger.info(f"  Scaling factor: {scaling_factor:.3f}")
-                        
+                        logger.info(f"  Background RGB means: {bg_mean}")
+                        logger.info(f"  Auto WB coefficients: {wb_coeffs}")
+
                 except Exception as e:
                     if logger:
                         logger.error(f"Failed to load background {background_file}: {e}")
             else:
                 if logger:
                     logger.warning(f"No background found for {modality} {angle}°")
-                    
-        return backgrounds, scaling_factors
-        
+
+        return backgrounds, scaling_factors, white_balance_coeffs
+
+
     @staticmethod
     def validate_background_images(
-        background_dir: pathlib.Path,
-        modality: str,
-        required_angles: List[float], 
-        logger=None
+        background_dir: pathlib.Path, modality: str, required_angles: List[float], logger=None
     ) -> Tuple[bool, List[float]]:
         """
         Validate that all required background images exist for a specific modality.
-        
+
         Returns:
             (is_valid, missing_angles) tuple
         """
         missing_angles = []
         modality_dir = background_dir / modality
-        
+
         if not modality_dir.exists():
             if logger:
                 logger.error(f"Modality directory not found: {modality_dir}")
             return False, required_angles
-        
+
         for angle in required_angles:
             angle_dir = modality_dir / str(angle)
-            background_file = angle_dir / "background.tif"
-            
+            background_file = angle_dir / "0.tif"
+
             if not background_file.exists():
                 missing_angles.append(angle)
-                
+
         is_valid = len(missing_angles) == 0
-        
+
         if not is_valid and logger:
             logger.error(f"Missing background images for {modality} angles: {missing_angles}")
-            
+
         return is_valid, missing_angles
-    
+
     @staticmethod
     def apply_flat_field_correction(
         image: np.ndarray,
@@ -518,49 +629,51 @@ class BackgroundCorrectionUtils:
     ) -> np.ndarray:
         """
         Apply flat-field correction with pre-calculated scaling for consistency.
-        
+
         The scaling_factor is calculated once per background image and applied
         to all tiles to ensure seamless stitching.
         """
         # Ensure float precision for calculations
         img_float = image.astype(np.float32)
         bg_float = background.astype(np.float32)
-        
+
         # Prevent division by zero with small epsilon
         epsilon = 0.1
         bg_float = np.where(bg_float < epsilon, epsilon, bg_float)
-        
+
         if method == "divide":
             # Apply the correction with consistent scaling
             corrected = (img_float / bg_float) * scaling_factor
-            
+
             # For 8-bit images, we need to handle the range carefully
             # The scaling_factor is chosen to keep most values in range,
             # but we still need to handle outliers
-            
+
             if image.dtype == np.uint8:
                 # Soft clipping approach: compress the high values rather than hard clip
                 # This preserves some detail in very bright areas
-                
+                corrected = corrected*240
                 # Find where we're exceeding the range
                 overflow_mask = corrected > 240  # Leave some headroom
-                
+
                 if np.any(overflow_mask):
                     # Compress the overflow region
                     overflow_values = corrected[overflow_mask]
                     # Map [240, max] -> [240, 254] with log compression
                     max_val = overflow_values.max()
                     if max_val > 240:
-                        compressed = 240 + (254 - 240) * np.log1p(overflow_values - 240) / np.log1p(max_val - 240)
+                        compressed = 240 + (254 - 240) * np.log1p(overflow_values - 240) / np.log1p(
+                            max_val - 240
+                        )
                         corrected[overflow_mask] = compressed
-            
+
         elif method == "subtract":
             # For subtraction, we need a different approach
             # Scale the background to match the image intensity range
             bg_scaled = bg_float * scaling_factor
             corrected = img_float - (bg_float - bg_scaled)
             corrected = np.maximum(corrected, 0)  # No negative values
-        
+
         # Final clipping to valid range
         if image.dtype == np.uint8:
             max_val = 255
@@ -568,7 +681,7 @@ class BackgroundCorrectionUtils:
             max_val = 65535
         else:
             max_val = 255  # Default for unknown types
-        
+
         return np.clip(corrected, 0, max_val).astype(image.dtype)
 
     # COULD PASS A UNIQUE COMMAND FROM QUPATH, OR HAVE QUPATH POINT TO A DATA DIR FOR BACKGROUND IMAGES AND DO A STANDARD ACQUISITION
