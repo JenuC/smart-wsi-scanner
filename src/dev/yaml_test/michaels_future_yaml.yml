@@ -1,0 +1,45 @@
+# Template for camera configurations
+camera_templates:
+  LOCI_CAMERA_002_base: &cam002
+    model: 'MicroPublisher 6'
+    sensor: {width: 2688, height: 2200}
+    
+  LOCI_CAMERA_003_base: &cam003
+    model: 'AP-3200T-USB'
+    sensor: {width: 2064, height: 1544}
+
+# PPM-specific templates
+ppm_templates:
+  standard_exposures: &standard_exp
+    negative_ms: 500
+    crossed_ms: 800
+    positive_ms: 500
+    uncrossed_ms: 10
+    
+  high_mag_exposures: &high_mag_exp
+    negative_ms: 300
+    crossed_ms: 600
+    positive_ms: 300
+    uncrossed_ms: 8
+
+modalities:
+  ppm_10x:
+    objective: 'LOCI_10x_001'
+    exposures: *standard_exp
+    cameras:
+      LOCI_CAMERA_002: 
+        <<: *cam002
+        pixel_size_um: 0.4537
+      LOCI_CAMERA_003:
+        <<: *cam003
+        pixel_size_um: 0.6866
+
+exposure_sequence: &exposures
+  - 100
+  - 200
+  - 300
+  - 400
+
+modalitiesx:
+  test_sequence:
+    exposures: *exposures  # Use the whole list
