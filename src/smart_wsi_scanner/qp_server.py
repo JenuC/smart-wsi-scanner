@@ -500,7 +500,6 @@ def handle_client(socket: QTcpSocket, addr):
     socket.disconnected.connect(_on_disconnect)
 
 
-
 def main():
     """Main server loop that accepts client connections and spawns handler threads."""
     logger.info("=" * 60)
@@ -519,15 +518,22 @@ def main():
     logger.info("=" * 60)
 
     app = QApplication([])
-    create_mmgui(mmcore=core, exec_app=False)
+    gui = create_mmgui(mmcore=core, exec_app=False)
+
+    ## tried
+    # from pymmcore_gui._app import MMQApplication
+    # app = MMQApplication([])
+    # create_mmgui(mmcore=core, exec_app=False)
 
     sockets = []
     server = QTcpServer(app)
+
     def handle_new_connection():
         client_socket: QTcpSocket = server.nextPendingConnection()
         sockets.append(client_socket)
         addr = client_socket.peerAddress().toString(), client_socket.peerPort()
         handle_client(client_socket, addr)
+
     server.newConnection.connect(handle_new_connection)
     server.listen(address=QHostAddress(HOST), port=PORT)
 
