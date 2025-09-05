@@ -20,6 +20,8 @@ class Command(Enum):
     FOV = b"getfov__"
 
 
+## CMD echo | set /p="shutdown" | ncat.exe 127.0.0.1 5000
+
 for command in Command:
     if len(command.value) != 8:
         raise ValueError(f"Command {command.name} must be exactly 8 bytes long.")
