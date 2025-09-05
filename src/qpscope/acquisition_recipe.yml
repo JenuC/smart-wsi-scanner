@@ -1,0 +1,28 @@
+# acquisition_recipe.yaml
+acquisition:
+  project_name: "My_Imaging_Project"
+  sample_id: "2024_04_09_sample1"  # name of the sample
+  output_folder: "./data/acquisitions" 
+  
+imaging:
+  modality: "PPM_20x"
+  angles: [0, 90, 5, -5]
+  exposures: [800, 10, 500, 500]  # ms per angle
+  
+
+tiles:
+  source: "TileConfiguration.txt"  # or inline positions
+  autofocus:
+    is_image_in: true
+    enabled: true
+    using_brightfield: true,
+    using_brightfield_expoure : 50
+    every_n_tiles: 5
+    method: "laplacian_variance"
+    
+processing:
+  debayer: true
+  white_balance: true
+  background_correction:
+    enabled: true
+    background_folder: "./backgrounds"
