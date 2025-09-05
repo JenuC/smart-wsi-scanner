@@ -6,20 +6,24 @@ microscope hardware, separated from the socket server/transport logic.
 
 from __future__ import annotations
 
-from typing import Callable, List, Tuple, Optional
+from typing import Callable, List, Tuple, Optional, Dict, Any
 import pathlib
 import shutil
+import logging
 
 import numpy as np
 
-from .config import sp_position
+from .hardware import Position
 from .hardware_pycromanager import PycromanagerHardware
 from .qp_utils import BackgroundCorrectionUtils, TileConfigUtils, TifWriterUtils, AutofocusUtils
 import shlex
 import skimage.filters
 
+logger = logging.getLogger(__name__)
+
 
 def calculate_luminance_gain(r, g, b):
+    """Calculate luminance-based gain from RGB values."""
     return 0.299 * r + 0.587 * g + 0.114 * b
 
 
@@ -27,6 +31,7 @@ def parse_angles_exposures(angles_str, exposures_str=None) -> Tuple[List[float],
     """Parse angle and exposure strings from various formats."""
     angles: List[float] = []
     exposures: List[int] = []
+    
     # Parse angles
     if isinstance(angles_str, list):
         angles = angles_str
@@ -57,6 +62,7 @@ def parse_angles_exposures(angles_str, exposures_str=None) -> Tuple[List[float],
                 exposures.append(800)
             else:
                 exposures.append(500)
+                
     return angles, exposures
 
 
@@ -71,7 +77,6 @@ def parse_acquisition_message(message: str) -> dict:
         params = {}
 
         # Split by spaces but preserve quoted strings
-
         try:
             # For Windows compatibility, temporarily replace backslashes
             temp_message = message.replace("\\", "|||BACKSLASH|||")
@@ -133,6 +138,50 @@ def parse_acquisition_message(message: str) -> dict:
     raise ValueError("Unsupported acquisition message format")
 
 
+def get_angles_wb_from_settings(settings: Dict[str, Any]) -> Dict[float, List[float]]:
+    """Extract white balance values for different angles from settings."""
+    angles_wb = {}
+    
+    # Try to find white balance settings
+    wb_settings = settings.get('white_balance', {})
+    ppm_wb = wb_settings.get('ppm', {})
+    
+    # Map standard angle names to numeric values
+    angle_mapping = {
+        'crossed': 0.0,
+        'uncrossed': 90.0,
+        'positive': 5.0,
+        'negative': -5.0
+    }
+    
+    for angle_name, angle_value in angle_mapping.items():
+        if angle_name in ppm_wb:
+            wb_values = ppm_wb[angle_name]
+            # Handle different formats
+            if isinstance(wb_values, list):
+                if len(wb_values) > 0 and isinstance(wb_values[0], str):
+                    # Format: ["1.0 1.0 1.0"] 
+                    angles_wb[angle_value] = [float(x) for x in wb_values[0].split()]
+                else:
+                    # Format: [1.0, 1.0, 1.0]
+                    angles_wb[angle_value] = wb_values
+            elif isinstance(wb_values, str):
+                # Format: "1.0 1.0 1.0"
+                angles_wb[angle_value] = [float(x) for x in wb_values.split()]
+    
+    # Default fallback values if not found
+    if not angles_wb:
+        logger.warning("No white balance settings found, using defaults")
+        angles_wb = {
+            0.0: [1.0, 1.0, 1.0],    # crossed
+            90.0: [1.2, 1.0, 1.1],   # uncrossed
+            5.0: [1.0, 1.0, 1.0],    # positive
+            -5.0: [1.0, 1.0, 1.0]    # negative
+        }
+    
+    return angles_wb
+
+
 def _acquisition_workflow(
     message: str,
     client_addr,
@@ -143,22 +192,8 @@ def _acquisition_workflow(
     set_state: Callable[[str], None],
     is_cancelled: Callable[[], bool],
 ):
-    """Execute the main image acquisition workflow with progress and cancellation.
-    The server provides callbacks for status/progress and cancellation checks.
-    # Parse the acquisition parameters
-        ## load the yaml file
-        ## Set up output paths
-    # Read tile positions
-        ## Create subdirectories for each angle
-        ## Calculate total images and update progress
-        ## load white balance values for angles from the yaml
-        ## find autofocus positions for range from the yaml
-    # Main acquisition loop
-        ## TODO ideally the pos-list needs to be parsed/ estimated before acq
-    ## Move to position- set Angle - set Expsoure - Debayer  - WhiteBalance - Save
-
-    """
-
+    """Execute the main image acquisition workflow with progress and cancellation."""
+    
     logger.info(f"=== ACQUISITION WORKFLOW STARTED for client {client_addr} ===")
 
     try:
@@ -176,12 +211,19 @@ def _acquisition_workflow(
         logger.info(f"  Angles: {params['angles']} degrees")
         logger.info(f"  Exposures: {params['exposures']} ms")
 
-        # load the yaml file
+        # Load the yaml file
         if not params["yaml_file_path"]:
             raise ValueError("YAML file path is required")
         if not pathlib.Path(params["yaml_file_path"]).exists():
             raise FileNotFoundError(f"YAML file {params['yaml_file_path']} does not exist")
-        ppm_settings = config_manager.load_config(params["yaml_file_path"])  # type: ignore[attr-defined]
+        
+        # Load configuration using the config manager
+        ppm_settings = config_manager.load_config_file(params["yaml_file_path"])
+        loci_rsc_file = str(
+            pathlib.Path(__file__).parent / "configurations" / "resources" / "resources_LOCI.yml"
+        )
+        loci_resources = config_manager.load_config_file(loci_rsc_file)
+        ppm_settings.update(loci_resources)
         hardware.settings = ppm_settings
 
         # Extract modality from scan type
@@ -191,43 +233,45 @@ def _acquisition_workflow(
         # Load background images if correction is enabled
         background_images = {}
         background_correction_enabled = False
+        angle_wb_corrections = {}
 
-        angle_wb_corrections = {}  # Store WB corrections calculated from first tile
-        if hasattr(ppm_settings, "background_correction") and ppm_settings.background_correction:
-            bc_settings = ppm_settings.background_correction
+        # Check for background correction settings
+        modalities = ppm_settings.get('modalities', {})
+        ppm_config = modalities.get('ppm', {})
+        bc_settings = ppm_config.get('background_correction', {})
 
-            if bc_settings.enabled and bc_settings.background_folder:
-                # Load background images for this modality
-                background_dir = pathlib.Path(bc_settings.background_folder)
+        if bc_settings.get('enabled') and bc_settings.get('base_folder'):
+            # Load background images for this modality
+            background_dir = pathlib.Path(bc_settings['base_folder'])
 
-                if background_dir.exists():
-                    # Validate first
-                    is_valid, missing = BackgroundCorrectionUtils.validate_background_images(
-                        background_dir, modality, params["angles"], logger
+            if background_dir.exists():
+                is_valid, missing = BackgroundCorrectionUtils.validate_background_images(
+                    background_dir, modality, params["angles"], logger
+                )
+
+                if is_valid:
+                    background_images, background_scaling_factors, white_balance_coeffs = (
+                        BackgroundCorrectionUtils.load_background_images(
+                            background_dir, modality, params["angles"], logger
+                        )
                     )
 
-                    if is_valid:
-                        background_images, background_scaling_factors, white_balance_coeffs = (
-                            BackgroundCorrectionUtils.load_background_images(
-                                background_dir, modality, params["angles"], logger
-                            )
+                    if background_images and background_scaling_factors:
+                        background_correction_enabled = True
+                        logger.info(
+                            f"Background correction enabled with {len(background_images)} images"
                         )
-
-                        if background_images and background_scaling_factors:
-                            background_correction_enabled = True
-                            logger.info(
-                                f"Background correction enabled with {len(background_images)} images"
-                            )
-                            logger.info(f"Method: {bc_settings.method}")
-                            logger.info(f"Scaling factors: {background_scaling_factors}")
-                            logger.info(f"White balance coefficients: {white_balance_coeffs}")
-                    else:
-                        logger.error(
-                            f"Cannot proceed with background correction - missing images for angles: {missing}"
-                        )
-                        logger.warning("Continuing without background correction")
+                        logger.info(f"Method: {bc_settings.get('method', 'divide')}")
+                        logger.info(f"Scaling factors: {background_scaling_factors}")
+                        logger.info(f"White balance coefficients: {white_balance_coeffs}")
                 else:
-                    logger.warning(f"Background directory not found: {background_dir}")
+                    logger.error(
+                        f"Cannot proceed with background correction - missing images for angles: {missing}"
+                    )
+                    logger.warning("Continuing without background correction")
+            else:
+                logger.warning(f"Background directory not found: {background_dir}")
+                
         # Set up output paths
         project_path = pathlib.Path(params["projects_folder_path"]) / params["sample_label"]
         output_path = project_path / params["scan_type"] / params["region_name"]
@@ -237,13 +281,14 @@ def _acquisition_workflow(
 
         # Read tile positions
         tile_config_path = output_path / "TileConfiguration.txt"
-        positions = TileConfigUtils.read_tile_config(tile_config_path, hardware.core)  # type:ignore
+        positions = TileConfigUtils.read_tile_config(tile_config_path, hardware.core)
 
         if not positions:
             logger.error(f"No positions found in {tile_config_path}")
             set_state("FAILED")
             return
 
+        # Create angle subdirectories
         if params["angles"]:
             for angle in params["angles"]:
                 angle_dir = output_path / str(angle)
@@ -256,38 +301,53 @@ def _acquisition_workflow(
         )
         update_progress(0, total_images)
         logger.info(
-            f"Starting acquisition of {total_images} total images ({len(positions)} positions × {len(params['angles'])} angles)"
+            f"Starting acquisition of {total_images} total images "
+            f"({len(positions)} positions × {len(params['angles'])} angles)"
         )
 
         image_count = 0
 
-        ## white balance values for angles
+        # Get white balance values for angles from settings
+        angles_wb = get_angles_wb_from_settings(ppm_settings)
 
-        [float(x) for x in ppm_settings.white_balance.ppm.crossed[0].split(" ")]
-        angles_wb_ = {
-            0: hardware.settings.white_balance.ppm.crossed,
-            90: hardware.settings.white_balance.ppm.uncrossed,
-            5.0: hardware.settings.white_balance.ppm.positive,
-            -5.0: hardware.settings.white_balance.ppm.negative,
-        }
-        angles_wb = {
-            angle: [float(x) for x in wb_list[0].split()] for angle, wb_list in angles_wb_.items()
-        }
-
-        # find autofocus positions:
+        # Find autofocus positions
         fov = hardware.get_fov()
+        
+        # Get autofocus settings from config
+        acq_profiles = ppm_settings.get('acq_profiles_new', {})
+        defaults = acq_profiles.get('defaults', [])
+        
+        # Find autofocus parameters for current objective
+        af_n_tiles = 5  # default
+        af_search_range = 50  # default
+        af_n_steps = 11  # default
+        
+        # Try to get current objective from hardware
+        microscope = ppm_settings.get('microscope', {})
+        current_objective = microscope.get('objective_in_use', '')
+        
+        # Look for autofocus settings in defaults
+        for default in defaults:
+            if default.get('objective') == current_objective:
+                af_settings = default.get('settings', {}).get('autofocus', {})
+                af_n_tiles = af_settings.get('n_tiles', af_n_tiles)
+                af_search_range = af_settings.get('search_range_um', af_search_range)
+                af_n_steps = af_settings.get('n_steps', af_n_steps)
+                break
+        
         try:
             xy_positions = [(pos.x, pos.y) for pos, filename in positions]
             af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, n_tiles=ppm_settings.autofocus.n_tiles  # type:ignore
+                fov, xy_positions, n_tiles=af_n_tiles
             )
         except Exception as e:
-            print("! falling back to older tileconfig-reader")
+            logger.warning("Falling back to older tileconfig reader: %s", e)
             xy_positions = TileConfigUtils.read_TileConfiguration_coordinates(tile_config_path)
             af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, n_tiles=ppm_settings.autofocus.n_tiles  # type:ignore
+                fov, xy_positions, n_tiles=af_n_tiles
             )
-        print(af_positions)
+        
+        logger.info(f"Autofocus positions: {af_positions}")
 
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
@@ -299,30 +359,31 @@ def _acquisition_workflow(
 
             logger.info(f"Position {pos_idx + 1}/{len(positions)}: {filename}")
 
-            # tile config is not handling Z, so we need the z as the last set autofocus z value
-            # ensure Z is not loaded from the pos-list (that uses a single z value when tile config was passed)
-            # TODO ideally the pos-list needs to be parsed and autofocus positions and z needs to estimated separately
+            # Ensure Z is current autofocus value
             pos.z = hardware.get_current_position().z
+            
             # Move to position
             logger.info(f"Moving to position: X={pos.x}, Y={pos.y}, Z={pos.z}")
             hardware.move_to_position(pos)
 
+            # Perform autofocus if needed
             if pos_idx in af_positions:
                 logger.info(f"Performing Autofocus at X={pos.x}, Y={pos.y}, Z={pos.z}")
                 new_z = hardware.autofocus(
                     move_stage_to_estimate=True,
-                    n_steps=ppm_settings.autofocus.n_steps,
-                    search_range=ppm_settings.autofocus.search_range,
+                    n_steps=af_n_steps,
+                    search_range=af_search_range,
                     interp_strength=100,
                     score_metric=AutofocusUtils.autofocus_profile_laplacian_variance,
                 )
-                logger.info(f" Autofocus :: New Z {new_z}")
+                logger.info(f"  Autofocus :: New Z {new_z}")
+                
             if params["angles"]:
-                # storage for birefringence image calculation
+                # Storage for birefringence image calculation
                 angle_images = {}
+                
                 # Multi-angle acquisition
                 for angle_idx, angle in enumerate(params["angles"]):
-
                     # Check for cancellation
                     if is_cancelled():
                         logger.warning(f"Acquisition cancelled by client {client_addr}")
@@ -330,24 +391,27 @@ def _acquisition_workflow(
                         return
 
                     # Set rotation angle
-                    hardware.set_psg_ticks(angle)  # type:Ignore
-                    # set_angle(hardware, brushless_device, angle)
-                    logger.info(f" Angle set to {hardware.get_psg_ticks():.1f}")
+                    hardware.set_psg_ticks(angle)
+                    logger.info(f"  Angle set to {hardware.get_psg_ticks():.1f}")
+                    
                     # Set exposure time if specified
                     if angle_idx < len(params["exposures"]):
                         exposure_ms = params["exposures"][angle_idx]
-                        hardware.core.set_exposure(exposure_ms)  # type:ignore
-                    logger.info(f"  Exposure set to {hardware.core.get_exposure()}")  # type:ignore
-                    ## FORCE debayering for mm2:
+                        hardware.core.set_exposure(exposure_ms)
+                    logger.info(f"  Exposure set to {hardware.core.get_exposure()}")
+                    
                     # Acquire image
-                    image, metadata = hardware.snap_image(debayering=False)  # type: ignore[attr-defined]
-                    logger.info(
-                        f"  Debayer on ndim {image.ndim} mean {image.mean((0,1))}"
-                    )  # type:ignore
+                    image, metadata = hardware.snap_image(debayering=False)
+                    
+                    if image is None:
+                        logger.error(f"Failed to acquire image at angle {angle}")
+                        continue
+                        
+                    logger.info(f"  Image shape: {image.shape}, mean: {image.mean((0,1))}")
 
                     # Apply background correction if available
                     if background_correction_enabled and angle in background_images:
-                        bc_method = ppm_settings.background_correction.method
+                        bc_method = bc_settings.get('method', 'divide')
 
                         image = BackgroundCorrectionUtils.apply_flat_field_correction(
                             image,
@@ -356,28 +420,29 @@ def _acquisition_workflow(
                             method=bc_method,
                         )
                         logger.info(
-                            f"  Applied {bc_method} flat-field correction with factor {background_scaling_factors[angle]:.3f}"
+                            f"  Applied {bc_method} flat-field correction with factor "
+                            f"{background_scaling_factors[angle]:.3f}"
                         )
                         logger.info(f"  Post-correction RGB means: {image.mean(axis=(0,1))}")
                         logger.info(f"  Post-correction RGB max: {image.max(axis=(0,1))}")
 
                         # Calculate WB from first tile only
                         if pos_idx == 0:
-                            # Calculate what correction is needed to make it white
+                            # Calculate what correction is needed
                             bg_color, confidence = (
                                 BackgroundCorrectionUtils.calculate_background_color_from_mode(
                                     image
                                 )
                             )
 
-                            # These are the multipliers needed
                             if confidence > 0.2:  # Reasonable amount of background found
                                 logger.info(
-                                    f"  Detected background color: RGB={bg_color}, confidence={confidence:.1%}"
+                                    f"  Detected background color: RGB={bg_color}, "
+                                    f"confidence={confidence:.1%}"
                                 )
 
                                 # Calculate correction needed
-                                target_white = bg_color.mean()  # Or use max(bg_color)
+                                target_white = bg_color.mean()
                                 wb_for_division = bg_color / target_white
                                 angle_wb_corrections[angle] = wb_for_division.tolist()
 
@@ -385,7 +450,7 @@ def _acquisition_workflow(
                             else:
                                 # Low confidence - try alternative approach
                                 logger.warning(
-                                    f"  Low background confidence, using percentile approach"
+                                    "  Low background confidence, using percentile approach"
                                 )
 
                                 # Use bright percentile as fallback
@@ -402,40 +467,26 @@ def _acquisition_workflow(
                                 image, white_balance_profile=wb_profile, gain=gain
                             )
                             logger.info(f"  Applied first-tile WB: {wb_profile}")
-                        # Use auto-calculated white balance from background
-                        # if angle in white_balance_coeffs:
-                        #     wb_profile = white_balance_coeffs[angle]
-                        #     gain = calculate_luminance_gain(*wb_profile)
-                        #     image = hardware.white_balance(
-                        #         image,
-                        #         white_balance_profile=wb_profile,
-                        #         gain=gain
-                        #     )
-                        #     logger.info(f"  Applied auto white balance: {wb_profile}")
-                        # else:
-                        #     # Fallback to YAML values if needed
-                        #     gain = calculate_luminance_gain(*angles_wb[angle])
-                        #     image = hardware.white_balance(
-                        #         image,
-                        #         white_balance_profile=angles_wb[angle],
-                        #         gain=gain
-                        #     )
-                        #     logger.info(f"  Applied YAML white balance")
                     else:
-                        gain = calculate_luminance_gain(*angles_wb[angle])
-                        # white balance
-
-                        ## TODO : WB need to be done before debayer uint conversion
+                        # No background correction - use settings-based WB
+                        if angle in angles_wb:
+                            wb_profile = angles_wb[angle]
+                        else:
+                            # Default if angle not found
+                            wb_profile = [1.0, 1.0, 1.0]
+                            
+                        gain = calculate_luminance_gain(*wb_profile)
                         image = hardware.white_balance(
-                            image, white_balance_profile=angles_wb[angle], gain=gain
+                            image, white_balance_profile=wb_profile, gain=gain
                         )
-                        logger.info(f"  Whitebalance applied {image.ndim} mean {image.mean((0,1))}")
+                        logger.info(f"  Applied white balance: {wb_profile}")
+                        
                     # Save image
                     image_path = output_path / str(angle) / filename
                     if image_path.parent.exists():
                         TifWriterUtils.ome_writer(
                             filename=str(image_path),
-                            pixel_size_um=hardware.core.get_pixel_size_um(),  # type: ignore[attr-defined]
+                            pixel_size_um=hardware.core.get_pixel_size_um(),
                             data=image,
                         )
                         image_count += 1
@@ -445,6 +496,7 @@ def _acquisition_workflow(
                         angle_images[angle] = image
                     else:
                         logger.error(f"Failed to save {image_path} - parent directory missing")
+                        
                 # Create birefringence image for this tile after all angles acquired
                 positive_angles = [a for a in angle_images.keys() if a > 0 and a != 90]
                 negative_angles = [a for a in angle_images.keys() if a < 0]
@@ -463,40 +515,39 @@ def _acquisition_workflow(
                         neg_image=angle_images[neg_angle],
                         output_dir=biref_dir,
                         filename=filename,
-                        pixel_size_um=hardware.core.get_pixel_size_um(),  # type: ignore
+                        pixel_size_um=hardware.core.get_pixel_size_um(),
                         tile_config_source=tile_config_source,
                         logger=logger,
                     )
 
             else:
                 # Single image acquisition: no angles specified
-                image, metadata = hardware.snap_image()  # type: ignore[attr-defined]
+                image, metadata = hardware.snap_image()
                 image_path = output_path / filename
 
                 if image_path.parent.exists():
                     TifWriterUtils.ome_writer(
                         filename=str(image_path),
-                        pixel_size_um=hardware.core.get_pixel_size_um(),  # type: ignore[attr-defined]
-                        data=image,  # type:ignore
+                        pixel_size_um=hardware.core.get_pixel_size_um(),
+                        data=image,
                     )
                     image_count += 1
                     update_progress(image_count, total_images)
 
         # Save device properties
-        current_props = hardware.get_device_properties()  # type:ignore
+        current_props = hardware.get_device_properties()
         props_path = output_path / "MMproperties.txt"
         with open(props_path, "w") as fid:
             from pprint import pprint as dict_printer
-
             dict_printer(current_props, stream=fid)
 
         set_state("COMPLETED")
-        logger.info(f"=== ACQUISITION COMPLETED SUCCESSFULLY ===")
+        logger.info("=== ACQUISITION COMPLETED SUCCESSFULLY ===")
         logger.info(f"Total images saved: {image_count}/{total_images}")
         logger.info(f"Output directory: {output_path}")
 
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"=== ACQUISITION FAILED ===")
+    except Exception as e:
+        logger.error("=== ACQUISITION FAILED ===")
         logger.error(f"Error: {str(e)}", exc_info=True)
         set_state("FAILED")
 
@@ -534,7 +585,8 @@ def background_acquisition_workflow(
     # Get and log current position for reference
     current_pos = hardware.get_current_position()
     logger.info(
-        f"Acquiring backgrounds at position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}"
+        f"Acquiring backgrounds at position: X={current_pos.x:.1f}, "
+        f"Y={current_pos.y:.1f}, Z={current_pos.z:.1f}"
     )
 
     try:
@@ -545,7 +597,7 @@ def background_acquisition_workflow(
         if not pathlib.Path(yaml_file_path).exists():
             raise FileNotFoundError(f"YAML file {yaml_file_path} does not exist")
 
-        settings = config_manager.load_config(yaml_file_path)
+        settings = config_manager.load_config_file(yaml_file_path)
         hardware.settings = settings
 
         # Create output directory structure with modality

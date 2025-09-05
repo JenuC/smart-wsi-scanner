@@ -24,7 +24,8 @@ from threading import Lock
 import logging
 from datetime import datetime
 
-from smart_wsi_scanner.config import ConfigManager, sp_position
+from smart_wsi_scanner.config import ConfigManager
+from smart_wsi_scanner.hardware import Position
 from smart_wsi_scanner.hardware_pycromanager import PycromanagerHardware, init_pycromanager
 from smart_wsi_scanner.qp_server_config import ExtendedCommand, TCP_PORT, END_MARKER
 from smart_wsi_scanner.qp_acquisition import _acquisition_workflow
@@ -83,13 +84,36 @@ def init_pycromanager_with_logger():
 # Initialize hardware connections
 logger.info("Loading configuration...")
 config_manager = ConfigManager()
+
+# Try to load default PPM configuration
 ppm_settings = config_manager.get_config("config_PPM")
+if not ppm_settings:
+    logger.warning("config_PPM not found, trying to load from file...")
+    # Try to load directly from file
+    config_path = pathlib.Path(__file__).parent / "configurations" / "config_PPM.yml"
+    if config_path.exists():
+        ppm_settings = config_manager.load_config_file(str(config_path))
+    else:
+        logger.error("No configuration found!")
+        sys.exit(1)
+
+## attach loci-resources to ppm-settings
+loci_rsc_file = str(
+    pathlib.Path(__file__).parent / "configurations" / "resources" / "resources_LOCI.yml"
+)
+loci_resources = config_manager.load_config_file(loci_rsc_file)
+ppm_settings.update(loci_resources)
+
+# assert "id_detector" in ppm_settings
+
+# Initialize hardware
 core, studio = init_pycromanager_with_logger()
-hardware = PycromanagerHardware(core, studio, ppm_settings)  # type:ignore
+hardware = PycromanagerHardware(core, studio, ppm_settings)
 logger.info("Hardware initialization complete")
 
 
 def acquisitionWorkflow(message, client_addr):
+    """Wrapper for acquisition workflow with state management."""
 
     def _update_progress(current: int, total: int):
         with acquisition_locks[client_addr]:
@@ -97,10 +121,6 @@ def acquisitionWorkflow(message, client_addr):
 
     def _set_state(state_str: str):
         with acquisition_locks[client_addr]:
-            try:
-                acquisition_states[client_addr] = AcquisitionState[state_str]
-            except KeyError:
-                acquisition_states[client_addr] = AcquisitionState.FAILED
             try:
                 acquisition_states[client_addr] = AcquisitionState[state_str]
             except KeyError:
@@ -202,7 +222,7 @@ def handle_client(conn, addr):
                 if len(coords) == 8:
                     x, y = struct.unpack("!ff", coords)
                     logger.info(f"Client {addr} requested move to: X={x}, Y={y}")
-                    hardware.move_to_position(sp_position(x, y))
+                    hardware.move_to_position(Position(x, y))
                     logger.info(f"Move completed to X={x}, Y={y}")
                 else:
                     logger.error(f"Client {addr} sent incomplete move coordinates")
@@ -212,7 +232,7 @@ def handle_client(conn, addr):
                 z = conn.recv(4)
                 z_position = struct.unpack("!f", z)[0]
                 logger.info(f"Client {addr} requested move to Z={z_position}")
-                hardware.move_to_position(sp_position(z=z_position))
+                hardware.move_to_position(Position(z=z_position))
                 logger.info(f"Move completed to Z={z_position}")
                 continue
 
@@ -303,7 +323,8 @@ def handle_client(conn, addr):
                                 "END_MARKER", ""
                             )
                             logger.debug(
-                                f"Received complete acquisition message ({total_bytes} bytes) in {time.time() - start_time:.2f}s"
+                                f"Received complete acquisition message ({total_bytes} bytes) "
+                                f"in {time.time() - start_time:.2f}s"
                             )
 
                             # Clear cancellation event
@@ -353,55 +374,55 @@ def handle_client(conn, addr):
 
             if data == ExtendedCommand.BGACQUIRE:
                 logger.info(f"Client {addr} requested background acquisition")
-                
+
                 # Read the message using the same pattern as ACQUIRE command
                 message_parts = []
                 total_bytes = 0
                 start_time = time.time()
-                
+
                 conn.settimeout(5.0)
-                
+
                 try:
                     while True:
                         chunk = conn.recv(1024)
                         if not chunk:
-                            logger.error(f"Connection closed while reading background acquisition message")
+                            logger.error(
+                                "Connection closed while reading background acquisition message"
+                            )
                             conn.sendall(b"FAILED:Connection closed")
                             break
-                            
+
                         message_parts.append(chunk.decode("utf-8"))
                         total_bytes += len(chunk)
-                        
+
                         full_message = "".join(message_parts)
-                        
+
                         if "END_MARKER" in full_message:
                             message = full_message.replace("END_MARKER", "").strip()
-                            
-                            # Parse the message without using shlex
-                            # We'll use a simple but effective approach
+
+                            # Parse the message
                             params = {}
-                            
+
                             # Split by known flags to avoid issues with spaces in paths
-                            # This approach looks for the flag patterns and extracts values between them
                             flags = ["--yaml", "--output", "--modality", "--angles", "--exposures"]
-                            
+
                             for i, flag in enumerate(flags):
                                 if flag in message:
                                     # Find where this flag starts
                                     start_idx = message.index(flag) + len(flag)
-                                    
+
                                     # Find where the next flag starts (or use end of string)
                                     end_idx = len(message)
-                                    for next_flag in flags[i+1:]:
+                                    for next_flag in flags[i + 1 :]:
                                         if next_flag in message[start_idx:]:
                                             next_pos = message.index(next_flag, start_idx)
                                             if next_pos < end_idx:
                                                 end_idx = next_pos
                                                 break
-                                    
+
                                     # Extract the value and clean it up
                                     value = message[start_idx:end_idx].strip()
-                                    
+
                                     # Map to the parameter name
                                     if flag == "--yaml":
                                         params["yaml_file_path"] = value
@@ -413,8 +434,7 @@ def handle_client(conn, addr):
                                         params["angles_str"] = value
                                     elif flag == "--exposures":
                                         params["exposures_str"] = value
-                            
-                            # NOW we validate and execute - inside the END_MARKER block
+
                             # Validate required parameters
                             required = ["yaml_file_path", "output_folder_path", "modality"]
                             missing = [key for key in required if key not in params]
@@ -423,11 +443,13 @@ def handle_client(conn, addr):
                                 logger.error(error_msg)
                                 conn.sendall(f"FAILED:{error_msg}".encode())
                                 break
-                            
+
                             # Execute background acquisition
                             try:
-                                from smart_wsi_scanner.qp_acquisition import background_acquisition_workflow
-                                
+                                from smart_wsi_scanner.qp_acquisition import (
+                                    background_acquisition_workflow,
+                                )
+
                                 output_path = background_acquisition_workflow(
                                     yaml_file_path=params["yaml_file_path"],
                                     output_folder_path=params["output_folder_path"],
@@ -438,31 +460,35 @@ def handle_client(conn, addr):
                                     config_manager=config_manager,
                                     logger=logger,
                                 )
-                                
+
                                 # Send success response with output path
                                 response = f"SUCCESS:{output_path}".encode()
                                 conn.sendall(response)
-                                logger.info(f"Background acquisition completed successfully")
-                                
+                                logger.info("Background acquisition completed successfully")
+
                             except Exception as e:
-                                logger.error(f"Background acquisition failed: {str(e)}", exc_info=True)
+                                logger.error(
+                                    f"Background acquisition failed: {str(e)}", exc_info=True
+                                )
                                 response = f"FAILED:{str(e)}".encode()
                                 conn.sendall(response)
-                            
+
                             # We found and processed the END_MARKER, so break the while loop
                             break
-                        
-                        # Safety checks for the while loop (these stay at the original indentation)
+
+                        # Safety checks for the while loop
                         if total_bytes > 10000:  # 10KB max
-                            logger.error(f"Background acquisition message too large: {total_bytes} bytes")
+                            logger.error(
+                                f"Background acquisition message too large: {total_bytes} bytes"
+                            )
                             conn.sendall(b"FAILED:Message too large")
                             break
-                            
+
                         if time.time() - start_time > 10:
-                            logger.error(f"Timeout reading background acquisition message")
+                            logger.error("Timeout reading background acquisition message")
                             conn.sendall(b"FAILED:Timeout waiting for complete message")
                             break
-                            
+
                 except socket.timeout:
                     logger.error(f"Timeout reading background acquisition message from {addr}")
                     conn.sendall(b"FAILED:Timeout reading message")
@@ -471,11 +497,8 @@ def handle_client(conn, addr):
                     conn.sendall(f"FAILED:{str(e)}".encode())
                 finally:
                     conn.settimeout(None)  # Reset to blocking mode
-                
-                # This continue is for the main client handling loop
+
                 continue
-
-
 
             # Legacy GET/SET commands (not implemented)
             if data == ExtendedCommand.GET:
@@ -522,11 +545,17 @@ def main():
     logger.info(f"  Port: {PORT}")
     logger.info(f"  Micro-Manager core: {'Connected' if core else 'Not connected'}")
     logger.info(f"  Hardware: {'Initialized' if hardware else 'Not initialized'}")
-    logger.info(f"Features:")
-    logger.info(f"  - Status monitoring")
-    logger.info(f"  - Progress tracking")
-    logger.info(f"  - Cancellation support")
-    logger.info(f"  - Enhanced logging")
+
+    # Log loaded configuration
+    microscope_info = ppm_settings.get("microscope", {})
+    logger.info(f"  Microscope: {microscope_info.get('name', 'Unknown')}")
+    logger.info(f"  Type: {microscope_info.get('type', 'Unknown')}")
+
+    logger.info("Features:")
+    logger.info("  - Status monitoring")
+    logger.info("  - Progress tracking")
+    logger.info("  - Cancellation support")
+    logger.info("  - Enhanced logging")
     logger.info("=" * 60)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

@@ -1,224 +1,378 @@
-from dataclasses import dataclass, field
-from dataclasses import make_dataclass
-from typing import Dict, Type, Optional
+"""
+Configuration Manager for QuPath Scope Control
+Handles loading, saving, and accessing microscope configurations
+without dataclass dependencies.
+"""
+
 import yaml
 import os
 from pathlib import Path
+from typing import Dict, Any, Optional, List, Union
+from copy import deepcopy
+import logging
 
-
-class sp:
-    def __init__(self) -> None:
-        self.microscope_settings = sp_microscope_settings
-        self.position = sp_position
-        self.imaging_mode = sp_imaging_mode
-        self.detector = sp_detector
-        self.stage = sp_stage_settings
-        self.objective_lens = sp_objective_lens
-        self.camm_settings = sp_camm_settings
-        self.ppm_settings = sp_ppm_settings
-        self.limits = _limits
-        self.background_correction = sp_background_correction
-
-## property constraints
-@dataclass
-class _limits:
-    low: float
-    high: float
-
-    def __post_init__(self):
-        if self.low > self.high:
-            self.low, self.high = self.high, self.low
-
-
-@dataclass
-class sp_position:
-    x: Optional[float] = field(default=None)
-    y: Optional[float] = field(default=None)
-    z: Optional[float] = field(default=None)
-
-    def __post_init__(self):
-        if self.x is not None and not isinstance(self.x, (float, int)):
-            print(
-                f"Invalid type for x: expected float or int, got {type(self.x).__name__} ({self.x!r})"
-            )
-        if self.y is not None and not isinstance(self.y, (float, int)):
-            print(
-                f"Invalid type for y: expected float or int, got {type(self.y).__name__} ({self.y!r})"
-            )
-        if self.z is not None and not isinstance(self.z, (float, int)):
-            print(
-                f"Invalid type for z: expected float or int, got {type(self.z).__name__} ({self.z!r})"
-            )
-
-    def populate_missing(self, current_position: "sp_position") -> None:
-        """Populate missing coordinates with values from current_position."""
-        if self.x is None:
-            self.x = current_position.x
-        if self.y is None:
-            self.y = current_position.y
-        if self.z is None:
-            self.z = current_position.z
-
-    def __repr__(self):
-        kws_values = [
-            f"{key}={value:.1f}" for key, value in self.__dict__.items() if value is not None
-        ]
-        kws_none = [f"{key}={value!r}" for key, value in self.__dict__.items() if value is None]
-        kws = kws_values + kws_none
-        return f"{type(self).__name__}({', '.join(kws)})"
-
-
-## instruments: stage, lens, detector, imaging mode
-
-
-@dataclass
-class sp_stage_settings:
-    x_limit: Optional[_limits] = field(default=None)
-    y_limit: Optional[_limits] = field(default=None)
-    z_limit: Optional[_limits] = field(default=None)
-
-
-@dataclass
-class sp_objective_lens:
-    name: str
-    magnification: float
-    NA: float
-    WD: Optional[float] = field(default=None)
-
-
-@dataclass
-class sp_detector:
-    width: Optional[int] = field(default=None)
-    height: Optional[int] = field(default=None)
-
-
-@dataclass
-class sp_imaging_mode:
-    name: Optional[str] = field(default=None)
-    pixel_size: Optional[float] = field(default=None)
-
-
-## microscope settings
-
-
-@dataclass
-class sp_microscope:
-    name: Optional[str] = field(default=None)
-    type: Optional[str] = field(default=None)
-
-@dataclass
-class sp_background_correction:
-    """Settings for background/flat-field correction"""
-    enabled: bool = field(default=False)
-    method: str = field(default="divide")  # "divide" or "subtract"
-    background_folder: Optional[str] = field(default=None)
-@dataclass
-class sp_microscope_settings:
-    path: Optional[str] = field(default=None)
-    microscope: Optional[sp_microscope] = field(default=None)
-    stage: Optional[sp_stage_settings] = field(default=None)
-    lens: Optional[sp_objective_lens] = field(default=None)
-    detector: Optional[sp_detector] = field(default=None)
-    imaging_mode: Optional[sp_imaging_mode] = field(default=None)
-    background_correction: Optional[sp_background_correction] = field(default=None)
-
-## instrument specific adaptation
-
-
-@dataclass
-class sp_camm_settings(sp_microscope_settings):
-    slide_size: Optional[sp_objective_lens] = field(default=None)
-    lamp: Optional[sp_stage_settings] = field(default=None)
-    objective_slider: Optional[sp_detector] = field(default=None)
-
-
-
-class sp_ppm_settings(sp_microscope_settings):
-    slide_size: Optional[sp_objective_lens] = field(default=None)
-
-
-## YAML support
-
-
-def read_yaml_file(filename):
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"The file '{filename}' does not exist.")
-    with open(filename, "r") as file:
-        data = yaml.safe_load(file)
-    return data
-
-
-def create_dataclass(name, data):
-    fields = []
-    for key, value in data.items():
-        if isinstance(value, dict):
-            # Recursively create nested data classes for nested dictionaries
-            # print(value)
-            nested_class = create_dataclass(key.capitalize(), value)
-            fields.append((key, nested_class))
-        else:
-            fields.append((key, type(value)))
-    DataClass = make_dataclass(name, fields)
-    # print(DataClass)
-    return DataClass
-
-
-def instantiate_dataclass(data_class, data):
-    kwargs = {}
-    for fieldx in data_class.__dataclass_fields__:
-        value = data[fieldx]
-        field_type = data_class.__dataclass_fields__[fieldx].type
-        if isinstance(value, dict):
-            value = instantiate_dataclass(field_type, value)
-        kwargs[fieldx] = value
-    return data_class(**kwargs)
-
-
-def yaml_to_dataclass(yaml_data):
-    DataClass = create_dataclass("DataClass", yaml_data)
-    instance = instantiate_dataclass(DataClass, yaml_data)
-    return instance
+logger = logging.getLogger(__name__)
 
 
 class ConfigManager:
-    """Manages microscope configurations and presets"""
+    """
+    Manages microscope configurations and acquisition profiles.
+    Works directly with YAML configuration files without dataclass conversions.
+    """
 
     def __init__(self, config_dir: Optional[str] = None):
+        """
+        Initialize ConfigManager with configuration directory.
+
+        Args:
+            config_dir: Path to configuration directory. If None, uses 'configurations'
+                       subdirectory relative to this file.
+        """
         if config_dir is None:
-            # Use the submodule path by default
             package_dir = Path(__file__).parent
             self.config_dir = package_dir / "configurations"
         else:
             self.config_dir = Path(config_dir)
 
-        self._configs: Dict[str, Type[sp_microscope_settings]] = {}
+        self._configs: Dict[str, Dict[str, Any]] = {}
+        self._current_config_name: Optional[str] = None
         self._load_configs()
+        logger.info(f"ConfigManager initialized with directory: {self.config_dir}")
 
     def _load_configs(self) -> None:
-        """Load all configuration files from config directory"""
+        """Load all configuration files from config directory."""
         if not self.config_dir.exists():
-            raise FileNotFoundError(f"Configuration directory not found: {self.config_dir}")
+            logger.warning(f"Configuration directory not found: {self.config_dir}")
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+            return
 
         for file in self.config_dir.glob("*.yml"):
-            config_name = file.stem
-            self._configs[config_name] = self.load_config(str(file))
+            try:
+                config_name = file.stem
+                self._configs[config_name] = self.load_config_file(str(file))
+                logger.info(f"Loaded configuration: {config_name}")
+            except Exception as e:
+                logger.error(f"Failed to load config {file}: {e}")
 
-    def load_config(self, config_path: str) -> Type[sp_microscope_settings]:
-        """Load a single configuration file"""
-        data = read_yaml_file(config_path)
-        return yaml_to_dataclass(data)
+    def load_config_file(self, config_path: str) -> Dict[str, Any]:
+        """
+        Load a single configuration file.
 
-    def get_config(self, name: str) -> Optional[Type[sp_microscope_settings]]:
-        """Get configuration by name"""
-        return self._configs.get(name)
+        Args:
+            config_path: Path to YAML configuration file
 
-    def save_config(self, name: str, config: sp_microscope_settings) -> None:
-        """Save configuration to file"""
+        Returns:
+            Dictionary containing configuration data
+        """
+        with open(config_path, "r") as file:
+            data = yaml.safe_load(file)
+        return data
+
+    def get_config(self, name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get configuration by name or return current config.
+
+        Args:
+            name: Configuration name. If None, returns current config.
+
+        Returns:
+            Configuration dictionary or None if not found
+        """
+        if name is None:
+            name = self._current_config_name
+        if name is None:
+            return None
+        return deepcopy(self._configs.get(name))
+
+    def set_current_config(self, name: str) -> bool:
+        """
+        Set the current active configuration.
+
+        Args:
+            name: Name of configuration to set as current
+
+        Returns:
+            True if successful, False if config not found
+        """
+        if name in self._configs:
+            self._current_config_name = name
+            logger.info(f"Current config set to: {name}")
+            return True
+        logger.error(f"Configuration not found: {name}")
+        return False
+
+    def save_config(self, name: str, config: Dict[str, Any]) -> None:
+        """
+        Save configuration to file.
+
+        Args:
+            name: Name for the configuration
+            config: Configuration dictionary to save
+        """
         config_path = self.config_dir / f"{name}.yml"
         with open(config_path, "w") as f:
-            yaml.dump(config.__dict__, f)
-        self._configs[name] = config
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        self._configs[name] = deepcopy(config)
+        logger.info(f"Saved configuration: {name}")
 
-    def list_configs(self) -> list:
-        """List all available configurations"""
+    def list_configs(self) -> List[str]:
+        """List all available configurations."""
         return list(self._configs.keys())
+
+    # Convenience methods for accessing common configuration elements
+
+    def get_microscope_info(self, config_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get microscope information from config."""
+        config = self.get_config(config_name)
+        return config.get("microscope") if config else None
+
+    def get_modalities(self, config_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get available imaging modalities."""
+        config = self.get_config(config_name)
+        return config.get("modalities") if config else None
+
+    def get_acquisition_profile(
+        self, modality: str, objective: str, detector: str, config_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get acquisition profile for specific combination.
+
+        Args:
+            modality: Imaging modality (e.g., 'ppm', 'brightfield')
+            objective: Objective lens identifier
+            detector: Detector identifier
+            config_name: Configuration name (uses current if None)
+
+        Returns:
+            Acquisition profile with merged defaults and specific settings
+        """
+        config = self.get_config(config_name)
+        if not config:
+            return None
+
+        acq_profiles = config.get("acq_profiles_new", {})
+        defaults = acq_profiles.get("defaults", [])
+        profiles = acq_profiles.get("profiles", [])
+
+        # Find default settings for objective
+        default_settings = {}
+        for default in defaults:
+            if default.get("objective") == objective:
+                default_settings = deepcopy(default.get("settings", {}))
+                break
+
+        # Find specific profile
+        for profile in profiles:
+            if (
+                profile.get("modality") == modality
+                and profile.get("objective") == objective
+                and profile.get("detector") == detector
+            ):
+                # Merge with defaults
+                profile_settings = deepcopy(profile.get("settings", {}))
+                merged = self._merge_settings(default_settings, profile_settings)
+                return {
+                    "modality": modality,
+                    "objective": objective,
+                    "detector": detector,
+                    "settings": merged,
+                }
+
+        return None
+
+    def _merge_settings(self, defaults: Dict[str, Any], specific: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Merge default settings with specific settings.
+        Specific settings override defaults.
+        """
+        result = deepcopy(defaults)
+        for key, value in specific.items():
+            if isinstance(value, dict) and key in result and isinstance(result[key], dict):
+                result[key] = self._merge_settings(result[key], value)
+            else:
+                result[key] = value
+        return result
+
+    def get_stage_limits(self, config_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get stage movement limits."""
+        config = self.get_config(config_name)
+        if not config:
+            return None
+
+        stage = config.get("stage", {})
+        return stage.get("limits")
+
+    def get_pixel_size(
+        self, objective: str, detector: str, config_name: Optional[str] = None
+    ) -> Optional[float]:
+        """
+        Get pixel size for objective/detector combination.
+
+        Args:
+            objective: Objective lens identifier
+            detector: Detector identifier
+            config_name: Configuration name (uses current if None)
+
+        Returns:
+            Pixel size in micrometers or None if not found
+        """
+        config = self.get_config(config_name)
+        if not config:
+            return None
+
+        acq_profiles = config.get("acq_profiles_new", {})
+        defaults = acq_profiles.get("defaults", [])
+
+        for default in defaults:
+            if default.get("objective") == objective:
+                pixel_sizes = default.get("settings", {}).get("pixel_size_xy_um", {})
+                return pixel_sizes.get(detector)
+
+        return None
+
+    def get_background_correction(
+        self, modality: str, config_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get background correction settings for a modality.
+
+        Args:
+            modality: Imaging modality
+            config_name: Configuration name (uses current if None)
+
+        Returns:
+            Background correction settings or None
+        """
+        config = self.get_config(config_name)
+        if not config:
+            return None
+
+        modalities = config.get("modalities", {})
+        modality_config = modalities.get(modality, {})
+        return modality_config.get("background_correction")
+
+    def get_rotation_angles(
+        self, config_name: Optional[str] = None
+    ) -> Optional[List[Dict[str, Any]]]:
+        """Get rotation angles for PPM modality."""
+        config = self.get_config(config_name)
+        if not config:
+            return None
+
+        ppm_config = config.get("modalities", {}).get("ppm", {})
+        return ppm_config.get("rotation_angles")
+
+    def validate_config(self, config: Dict[str, Any]) -> List[str]:
+        """
+        Validate configuration structure and return list of errors.
+
+        Args:
+            config: Configuration dictionary to validate
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors = []
+
+        # Check required top-level keys
+        required_keys = ["microscope", "modalities", "acq_profiles_new", "stage"]
+        for key in required_keys:
+            if key not in config:
+                errors.append(f"Missing required key: {key}")
+
+        # Validate microscope section
+        if "microscope" in config:
+            microscope = config["microscope"]
+            if not isinstance(microscope, dict):
+                errors.append("'microscope' must be a dictionary")
+            elif "name" not in microscope:
+                errors.append("'microscope' must have a 'name' field")
+
+        # Validate modalities
+        if "modalities" in config:
+            modalities = config["modalities"]
+            if not isinstance(modalities, dict):
+                errors.append("'modalities' must be a dictionary")
+
+        # Validate acquisition profiles
+        if "acq_profiles_new" in config:
+            acq_profiles = config["acq_profiles_new"]
+            if not isinstance(acq_profiles, dict):
+                errors.append("'acq_profiles_new' must be a dictionary")
+            else:
+                if "defaults" in acq_profiles and not isinstance(acq_profiles["defaults"], list):
+                    errors.append("'defaults' must be a list")
+                if "profiles" in acq_profiles and not isinstance(acq_profiles["profiles"], list):
+                    errors.append("'profiles' must be a list")
+
+        return errors
+
+    def create_empty_config(self, microscope_name: str, microscope_type: str) -> Dict[str, Any]:
+        """
+        Create an empty configuration template.
+
+        Args:
+            microscope_name: Name of the microscope
+            microscope_type: Type of microscope
+
+        Returns:
+            Empty configuration dictionary
+        """
+        return {
+            "microscope": {
+                "name": microscope_name,
+                "type": microscope_type,
+                "detector_in_use": None,
+                "objective_in_use": None,
+                "modality": None,
+            },
+            "modalities": {},
+            "acq_profiles_new": {"defaults": [], "profiles": []},
+            "stage": {
+                "stage_id": "",
+                "limits": {
+                    "x_um": {"low": 0, "high": 0},
+                    "y_um": {"low": 0, "high": 0},
+                    "z_um": {"low": 0, "high": 0},
+                },
+            },
+            "slide_size_um": {"x": 0, "y": 0},
+        }
+
+
+# Example usage and testing
+if __name__ == "__main__":
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
+    # Create config manager
+    cm = ConfigManager()
+
+    # List available configs
+    print("Available configurations:", cm.list_configs())
+
+    # Load and display a config
+    if "config_PPM" in cm.list_configs():
+        cm.set_current_config("config_PPM")
+
+        # Get microscope info
+        microscope = cm.get_microscope_info()
+        print(f"\nMicroscope: {microscope}")
+
+        # Get acquisition profile
+        profile = cm.get_acquisition_profile(
+            modality="ppm",
+            objective="LOCI_OBJECTIVE_OLYMPUS_10X_001",
+            detector="LOCI_DETECTOR_TELEDYNE_001",
+        )
+        print(f"\nAcquisition profile: {profile}")
+
+        # Get pixel size
+        pixel_size = cm.get_pixel_size(
+            objective="LOCI_OBJECTIVE_OLYMPUS_10X_001", detector="LOCI_DETECTOR_TELEDYNE_001"
+        )
+        print(f"\nPixel size: {pixel_size} µm")
+
+        # Get stage limits
+        limits = cm.get_stage_limits()
+        print(f"\nStage limits: {limits}")

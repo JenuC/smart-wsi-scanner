@@ -1,20 +1,26 @@
-import warnings  # Used by smartpath class for validation warnings
-from collections import OrderedDict  # Used by smartpath class for image tags
+"""Pycromanager hardware implementation for microscope control."""
 
+import warnings
+from collections import OrderedDict
+from typing import Dict, Any, Optional, Tuple, List
+import logging
 
 from pycromanager import Core, Studio
-from .hardware import MicroscopeHardware, is_mm_running, is_coordinate_in_range
-from .config import sp_microscope_settings, sp_position, sp_imaging_mode
+from .hardware import MicroscopeHardware, is_mm_running, is_coordinate_in_range, Position
+from .qp_utils import AutofocusUtils
 
-import numpy as np  #  image processing on tagged_image.pix
+import numpy as np
 import skimage.color
-import skimage.filters  # Used by smartpath class for autofocus
-import scipy.interpolate  # Used by smartpath class for autofocus interpolation
-import matplotlib.pyplot as plt  # Used by smartpath class for autofocus plots
+import skimage.filters
+import scipy.interpolate
+import matplotlib.pyplot as plt
 from .debayering import CPUDebayer
+
+logger = logging.getLogger(__name__)
 
 
 def obj_2_list(name):
+    """Convert Java object to Python list."""
     return [name.get(i) for i in range(name.size())]
 
 
@@ -25,7 +31,7 @@ def init_pycromanager():
         return None, None
     core = Core()
     studio = Studio()
-    core.set_timeout_ms(20000)  # type: ignore
+    core.set_timeout_ms(20000)
     return core, studio
 
 
@@ -42,68 +48,113 @@ def ppm_thor_to_psgticks(kinesis_pos: float) -> float:
 class PycromanagerHardware(MicroscopeHardware):
     """Implementation for Pycromanager-based microscopes."""
 
-    def __init__(self, core: Core, studio: Studio, settings: sp_microscope_settings):
+    def __init__(self, core: Core, studio: Studio, settings: Dict[str, Any]):
+        """
+        Initialize PycromanagerHardware with dictionary-based settings.
+
+        Args:
+            core: Pycromanager Core object
+            studio: Pycromanager Studio object
+            settings: Dictionary containing microscope configuration
+        """
         self.core = core
         self.studio = studio
         self.settings = settings
-        print(self.settings.microscope)
-        if self.settings.microscope.name == "PPM":  # type: ignore
+
+        # Log microscope info
+        microscope_info = settings.get("microscope", {})
+        logger.info(
+            f"Initializing hardware for microscope: {microscope_info.get('name', 'Unknown')}"
+        )
+
+        # Set up microscope-specific methods based on name
+        microscope_name = microscope_info.get("name", "")
+
+        if microscope_name == "PPM":
             self.set_psg_ticks = self._ppm_set_psgticks
             self.get_psg_ticks = self._ppm_get_psgticks
-        if settings.microscope.name == "CAMM":  # type: ignore
-            self.swap_objective_lens = self._camm_swap_objective_lens
+            logger.info("PPM-specific methods initialized")
 
-    def move_to_position(self, position: sp_position) -> None:
+        if microscope_name == "CAMM":
+            self.swap_objective_lens = self._camm_swap_objective_lens
+            logger.info("CAMM-specific methods initialized")
+
+    def move_to_position(self, position: Position) -> None:
+        """Move stage to specified position."""
         # Get current position and populate any missing coordinates
         current_position = self.get_current_position()
         position.populate_missing(current_position)
 
+        # Validate position is within range
         if not is_coordinate_in_range(self.settings, position):
-            raise ValueError("Position out of range")
+            raise ValueError(f"Position out of range: {position}")
 
-        if self.core.get_focus_device() != self.settings.stage.z_stage:  # type: ignore
-            self.core.set_focus_device(self.settings.focus_device)  # type: ignore
+        # Get focus device from settings if available
+        stage_config = self.settings.get("stage", {})
+        z_stage_device = stage_config.get("z_stage", None)
 
-        self.core.set_position(position.z)  # type: ignore
-        self.core.set_xy_position(position.x, position.y)  # type: ignore
-        self.core.wait_for_device(self.core.get_xy_stage_device())  # type: ignore
-        self.core.wait_for_device(self.core.get_focus_device())  # type: ignore
+        if z_stage_device and self.core.get_focus_device() != z_stage_device:
+            self.core.set_focus_device(z_stage_device)
 
-    def get_current_position(self) -> sp_position:
-        return sp_position(
-            self.core.get_x_position(), self.core.get_y_position(), self.core.get_position()  # type: ignore
+        # Move to position
+        self.core.set_position(position.z)
+        self.core.set_xy_position(position.x, position.y)
+        self.core.wait_for_device(self.core.get_xy_stage_device())
+        self.core.wait_for_device(self.core.get_focus_device())
+
+        logger.debug(f"Moved to position: {position}")
+
+    def get_current_position(self) -> Position:
+        """Get current stage position."""
+        return Position(
+            self.core.get_x_position(), self.core.get_y_position(), self.core.get_position()
         )
 
     def snap_image(self, background_correction=False, remove_alpha=True, debayering=False):
-        """Snaps an Image using MM Core and returns img,tags"""
-        if self.core.is_sequence_running() and self.studio is not None:  # type: ignore
-            self.studio.live().set_live_mode(False)  # type: ignore
+        """
+        Snap an image using MM Core and return img, tags.
+
+        Args:
+            background_correction: Apply background correction (if implemented)
+            remove_alpha: Remove alpha channel from BGRA images
+            debayering: Apply debayering for MicroPublisher6
+
+        Returns:
+            Tuple of (image_array, metadata_tags)
+        """
+        if self.core.is_sequence_running() and self.studio is not None:
+            self.studio.live().set_live_mode(False)
 
         camera = self.get_device_properties()["Core"]["Camera"]
 
+        # Handle debayering for MicroPublisher6
         if debayering and (camera == "MicroPublisher6"):
-            self.core.set_property("MicroPublisher6", "Color", "OFF")  # type:ignore
+            self.core.set_property("MicroPublisher6", "Color", "OFF")
 
+        # Handle white balance for JAI
         if camera == "JAICamera":
-            self.core.set_property("JAICamera", "WhiteBalance", "Continuous")  # type:ignore
+            self.core.set_property("JAICamera", "WhiteBalance", "Continuous")
 
-        self.core.snap_image()  # type: ignore
+        # Capture image
+        self.core.snap_image()
+        tagged_image = self.core.get_tagged_image()
 
-        tagged_image = self.core.get_tagged_image()  # type: ignore
-        ## TODO : check if ordering helps in presentation?
+        # Sort tags for consistency
         tags = OrderedDict(sorted(tagged_image.tags.items()))
-        ## tags = tagged_image.tags
 
+        # Process pixels
         pixels = tagged_image.pix
         total_pixels = pixels.shape[0]
         height, width = tags["Height"], tags["Width"]
         assert (total_pixels % (height * width)) == 0
         nchannels = total_pixels // (height * width)
+
         if nchannels > 1:
             pixels = pixels.reshape(height, width, nchannels)
         else:
             pixels = pixels.reshape(height, width)
 
+        # Apply debayering if requested
         if debayering and (camera == "MicroPublisher6"):
             debayerx = CPUDebayer(
                 pattern="GRBG",
@@ -113,47 +164,58 @@ class PycromanagerHardware(MicroscopeHardware):
             )
 
             pixels = debayerx.debayer(pixels)
-            print("before uint16-uint14 scaling", pixels.mean((0, 1)))
+            logger.debug(f"Before uint16-uint14 scaling: mean {pixels.mean((0, 1))}")
             pixels = ((pixels / ((2**14) + 1)) * 255).astype(np.uint8)
             pixels = np.clip(pixels, 0, 255).astype(np.uint8)
-            print("after uint14-uint8 scaling", pixels.mean((0, 1)))
-            self.core.set_property("MicroPublisher6", "Color", "ON")  # type:ignore
+            logger.debug(f"After uint14-uint8 scaling: mean {pixels.mean((0, 1))}")
+            self.core.set_property("MicroPublisher6", "Color", "ON")
 
             return pixels, tags
 
+        # Handle different camera types
         if camera in ["QCamera", "MicroPublisher6", "JAICamera"]:
-            # flip BGRA to ARGB
             if nchannels > 1:
-                pixels = pixels[:, :, ::-1]  # flip
-                ## TODO verify if QCamera is BGRA (tested only MP6 and JAI)
-                if (camera != "QCamera") and (remove_alpha):
-                    pixels = pixels[:, :, 1:]  # ARGB the alpha-channel is all zeros
-                if background_correction:
-                    ## currently implemented in the qp-acquisition
-                    pass
+                pixels = pixels[:, :, ::-1]  # BGRA to ARGB
+                if (camera != "QCamera") and remove_alpha:
+                    pixels = pixels[:, :, 1:]  # Remove alpha channel
 
         elif camera == "OSc-LSM":
             pass
         else:
-            print(f"Capture Failed: SP doesn't recognize : {tags['Core-Camera']=}")
+            logger.error(
+                f"Capture Failed: Unrecognized camera: {tags.get('Core-Camera', 'Unknown')}"
+            )
             return None, None
 
         return pixels, tags
 
-    def get_fov(self) -> tuple[float, float]:
-        """returns field of view in settings.pixelsize units fov_x, fov_y"""
-        camera = self.core.get_property("Core", "Camera")  # type: ignore
+    def get_fov(self) -> Tuple[float, float]:
+        """
+        Get field of view in micrometers.
+
+        Returns:
+            Tuple of (fov_x, fov_y) in micrometers
+        """
+        camera = self.core.get_property("Core", "Camera")
+
         if camera == "OSc-LSM":
-            height = int(self.core.get_property(camera, "LSM-Resolution"))  # type: ignore
+            height = int(self.core.get_property(camera, "LSM-Resolution"))
             width = height
+        elif camera == "JAICamera":
+            height = self.settings["id_detector"]["LOCI_DETECTOR_JAI_001"]["height_px"]
+            width = self.settings["id_detector"]["LOCI_DETECTOR_JAI_001"]["width_px"]
+
         elif camera in ["QCamera", "MicroPublisher6"]:
-            height = int(self.core.get_property(camera, "Y-dimension"))  # type: ignore
-            width = int(self.core.get_property(camera, "X-dimension"))  # type: ignore
+            height = int(self.core.get_property(camera, "Y-dimension"))
+            width = int(self.core.get_property(camera, "X-dimension"))
+
         else:
             raise ValueError(f"Unknown camera type: {camera}")
-        pixel_size_um = self.core.get_pixel_size_um()  # type: ignore
+
+        pixel_size_um = self.core.get_pixel_size_um()
         fov_y = height * pixel_size_um
         fov_x = width * pixel_size_um
+
         return fov_x, fov_y
 
     def autofocus(
@@ -165,32 +227,45 @@ class PycromanagerHardware(MicroscopeHardware):
         score_metric=skimage.filters.sobel,
         pop_a_plot=False,
         move_stage_to_estimate=True,
-    ) -> float:  # type: ignore
+    ) -> float:
         """
-        score metric options : shannon_entropy, sobel
+        Perform autofocus using specified score metric.
+
+        Args:
+            n_steps: Number of Z positions to sample
+            search_range: Total Z range to search in micrometers
+            interp_strength: Interpolation density factor
+            interp_kind: Type of interpolation ('linear', 'quadratic', 'cubic')
+            score_metric: Function to score image focus
+            pop_a_plot: Whether to show a focus score plot
+            move_stage_to_estimate: Whether to move to best focus position
+
+        Returns:
+            Best focus Z position
         """
         steps = np.linspace(0, search_range, n_steps) - (search_range / 2)
         current_pos = self.get_current_position()
-        z_steps = current_pos.z + steps  # type: ignore
+        z_steps = current_pos.z + steps
+
         try:
             scores = []
             for step_number in range(n_steps):
-                new_pos = sp_position(
-                    current_pos.x, current_pos.y, current_pos.z + steps[step_number]
-                )
+                new_pos = Position(current_pos.x, current_pos.y, current_pos.z + steps[step_number])
                 self.move_to_position(new_pos)
-                # print(smartpath.get_current_position(core))
+
                 img, tags = self.snap_image()
+
+                # Extract green channel for focus calculation
                 green1 = img[0::2, 0::2]
                 green2 = img[1::2, 1::2]
                 img_gray = ((green1 + green2) / 2.0).astype(np.float32)
-                # img_gray = skimage.color.rgb2gray(img)
+
                 score = score_metric(img_gray)
-                if score.ndim == 2:
+                if hasattr(score, "ndim") and score.ndim == 2:
                     score = np.mean(score)
                 scores.append(score)
 
-            # interpolation
+            # Interpolate to find best focus
             interp_x = np.linspace(z_steps[0], z_steps[-1], n_steps * interp_strength)
             interp_y = scipy.interpolate.interp1d(z_steps, scores, kind=interp_kind)(interp_x)
             new_z = interp_x[np.argmax(interp_y)]
@@ -200,27 +275,27 @@ class PycromanagerHardware(MicroscopeHardware):
                 plt.bar(z_steps, scores)
                 plt.plot(interp_x, interp_y, "k")
                 plt.plot(interp_x[np.argmax(interp_y)], interp_y.max(), "or")
-                plt.xlabel("Z-axis")
-                plt.title(f"X,Y = ({current_pos.x:.1f} , {current_pos.y:.1f})")
+                plt.xlabel("Z-axis (µm)")
+                plt.title(f"Autofocus at X={current_pos.x:.1f}, Y={current_pos.y:.1f}")
+                plt.show()
 
             if move_stage_to_estimate:
-                new_pos = current_pos
-                new_pos.z = new_z
+                new_pos = Position(current_pos.x, current_pos.y, new_z)
                 self.move_to_position(new_pos)
-                return new_z
-                # core.set_position(new_z)
+
+            return new_z
+
         except Exception as e:
-            print("Autofocus failed: ", e)
+            logger.error(f"Autofocus failed: {e}")
             self.move_to_position(current_pos)
             raise e
 
-    # TODO DANGER MIKE ADDED CODE, FOR INITIAL SEARCH, MAYBE?
     def autofocus_adaptive_search(
         self,
-        initial_step_size=10,  # Initial step size in microns
-        min_step_size=2,  # Minimum step size before stopping
-        focus_threshold=0.95,  # Threshold for "good enough" focus (relative to max seen)
-        max_total_steps=25,  # Safety limit on total acquisitions
+        initial_step_size=10,
+        min_step_size=2,
+        focus_threshold=0.95,
+        max_total_steps=25,
         score_metric=None,
         pop_a_plot=False,
         move_stage_to_estimate=True,
@@ -229,24 +304,17 @@ class PycromanagerHardware(MicroscopeHardware):
         Adaptive autofocus that starts at current Z and searches outward.
         Minimizes acquisitions by stopping when focus is "good enough".
         """
-        # Import the autofocus utilities
-        from .qp_utils import AutofocusUtils
-
-        # Use Laplacian variance from AutofocusUtils by default
         if score_metric is None:
             score_metric = AutofocusUtils.autofocus_profile_laplacian_variance
 
         current_pos = self.get_current_position()
         initial_z = current_pos.z
 
-        # Get Z limits with safer attribute access
-        z_min = -1000
-        z_max = 1000
-        if hasattr(self.settings, "stage") and hasattr(self.settings.stage, "z_limit"):
-            if hasattr(self.settings.stage.z_limit, "low"):  # type: ignore
-                z_min = self.settings.stage.z_limit.low  # type: ignore
-            if hasattr(self.settings.stage.z_limit, "high"):  # type: ignore
-                z_max = self.settings.stage.z_limit.high  # type: ignore
+        # Get Z limits from settings
+        stage_limits = self.settings.get("stage", {}).get("limits", {})
+        z_limits = stage_limits.get("z_um", {})
+        z_min = z_limits.get("low", -1000)
+        z_max = z_limits.get("high", 1000)
 
         # Keep track of all measurements
         z_positions = []
@@ -254,18 +322,17 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Helper function to acquire and score at a position
         def measure_at_z(z):
-            if z < z_min + 5 or z > z_max - 5:  # Stay away from limits
+            if z < z_min + 5 or z > z_max - 5:
                 return -np.inf
 
-            self.move_to_position(sp_position(current_pos.x, current_pos.y, z))
+            self.move_to_position(Position(current_pos.x, current_pos.y, z))
             img, tags = self.snap_image()
 
-            # Check if image acquisition failed
             if img is None:
-                print(f"Failed to acquire image at Z={z}")
+                logger.error(f"Failed to acquire image at Z={z}")
                 return -np.inf
 
-            # Process image - check shape instead of ndim for safety
+            # Process image
             if len(img.shape) == 2:  # Bayer pattern
                 green1 = img[0::2, 0::2]
                 green2 = img[1::2, 1::2]
@@ -284,8 +351,8 @@ class PycromanagerHardware(MicroscopeHardware):
         # Start with current position
         current_score = measure_at_z(initial_z)
         if current_score == -np.inf:
-            print("Failed to acquire initial image")
-            return initial_z  # type: ignore
+            logger.error("Failed to acquire initial image")
+            return initial_z
 
         z_positions.append(initial_z)
         scores.append(current_score)
@@ -295,15 +362,14 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Adaptive search
         step_size = initial_step_size
-        search_direction = None  # Will be determined by first measurements
+        search_direction = None
         total_steps = 1
 
         while step_size >= min_step_size and total_steps < max_total_steps:
             # Measure above and below current best
-            z_above = best_z + step_size  # type: ignore
-            z_below = best_z - step_size  # type: ignore
+            z_above = best_z + step_size
+            z_below = best_z - step_size
 
-            # Only measure positions we haven't checked yet
             positions_to_check = []
             if not any(abs(z - z_above) < 0.1 for z in z_positions) and z_above < z_max - 5:
                 positions_to_check.append(("above", z_above))
@@ -311,16 +377,14 @@ class PycromanagerHardware(MicroscopeHardware):
                 positions_to_check.append(("below", z_below))
 
             if not positions_to_check:
-                # Can't go further, reduce step size
                 step_size /= 2
                 continue
 
-            # Measure new positions
             improved = False
             for direction, z_pos in positions_to_check:
                 score = measure_at_z(z_pos)
                 if score == -np.inf:
-                    continue  # Skip failed acquisitions
+                    continue
 
                 z_positions.append(z_pos)
                 scores.append(score)
@@ -333,43 +397,38 @@ class PycromanagerHardware(MicroscopeHardware):
                     search_direction = direction
 
             # Check if we're "good enough"
-            if len(scores) > 3:  # Need some history
+            if len(scores) > 3:
                 max_seen = max(scores)
                 if best_score >= focus_threshold * max_seen:
-                    print(f"Found acceptable focus after {total_steps} steps")
+                    logger.info(f"Found acceptable focus after {total_steps} steps")
                     break
 
             if improved:
-                # Continue in the improving direction with same step size
                 if search_direction == "above":
-                    next_z = best_z + step_size  # type: ignore
+                    next_z = best_z + step_size
                     if next_z < z_max - 5 and not any(abs(z - next_z) < 0.1 for z in z_positions):
                         continue
                 else:  # below
-                    next_z = best_z - step_size  # type: ignore
+                    next_z = best_z - step_size
                     if next_z > z_min + 5 and not any(abs(z - next_z) < 0.1 for z in z_positions):
                         continue
             else:
-                # No improvement at this step size, refine
                 step_size /= 2
 
-        # Optional: Do a final fine interpolation around the best point
+        # Optional fine interpolation
         if len(z_positions) > 2:
-            # Sort by position for interpolation
             sorted_indices = np.argsort(z_positions)
             z_sorted = np.array(z_positions)[sorted_indices]
             scores_sorted = np.array(scores)[sorted_indices]
 
-            # Find points around the best
             best_idx = np.where(z_sorted == best_z)[0][0]
             start_idx = max(0, best_idx - 2)
             end_idx = min(len(z_sorted), best_idx + 3)
 
-            if end_idx - start_idx >= 3:  # Need at least 3 points
+            if end_idx - start_idx >= 3:
                 z_local = z_sorted[start_idx:end_idx]
                 scores_local = scores_sorted[start_idx:end_idx]
 
-                # Quadratic interpolation
                 interp_z = np.linspace(z_local[0], z_local[-1], 50)
                 interp_scores = scipy.interpolate.interp1d(z_local, scores_local, kind="quadratic")(
                     interp_z
@@ -379,25 +438,27 @@ class PycromanagerHardware(MicroscopeHardware):
         if pop_a_plot:
             plt.figure(figsize=(10, 6))
             plt.scatter(z_positions, scores, c=range(len(scores)), cmap="viridis", s=50)
-            plt.plot(best_z, max(scores), "r*", markersize=15)  # type: ignore
+            plt.plot(best_z, max(scores), "r*", markersize=15)
             plt.xlabel("Z position (µm)")
             plt.ylabel("Focus score")
             plt.title(f"Adaptive autofocus: {total_steps} acquisitions")
             plt.colorbar(label="Acquisition order")
             plt.show()
 
-        print(f"Autofocus complete: Z={best_z:.1f} after {total_steps} acquisitions")
+        logger.info(f"Autofocus complete: Z={best_z:.1f} after {total_steps} acquisitions")
 
         if move_stage_to_estimate:
-            self.move_to_position(sp_position(current_pos.x, current_pos.y, best_z))
+            self.move_to_position(Position(current_pos.x, current_pos.y, best_z))
 
-        return best_z  # type: ignore
+        return best_z
 
     def white_balance(self, img=None, background_image=None, gain=1.0, white_balance_profile=None):
+        """Apply white balance correction to image."""
         if white_balance_profile is None:
-            # load from profile
-            # white_balance_profile = self.settings.white_balance.ppm.uncrossed
-            white_balance_profile = self.settings.white_balance.default.default  # type: ignore
+            # Try to get default from settings
+            wb_settings = self.settings.get("white_balance", {})
+            default_wb = wb_settings.get("default", {}).get("default", [1.0, 1.0, 1.0])
+            white_balance_profile = default_wb
 
         if img is None:
             raise ValueError("Input image 'img' must not be None for white balancing.")
@@ -409,69 +470,118 @@ class PycromanagerHardware(MicroscopeHardware):
             r1, g1, b1 = white_balance_profile
 
         img_wb = img.astype(np.float64) * gain / [r1, g1, b1]
-
-        # img_wb = img_wb * (255.0 / img_wb.max())
-
         return np.clip(img_wb, 0, 255).astype(np.uint8)
 
-    def get_device_properties(self, scope: str = "used") -> dict:
+    def get_device_properties(self, scope: str = "used") -> Dict[str, Dict[str, Any]]:
         """
-        get used/allowed properties in mm2-device manager
-        as a dictionary
+        Get device properties from MM device manager.
+
+        Args:
+            scope: 'used' for current values, 'allowed' for possible values
+
+        Returns:
+            Dictionary of device properties
         """
         device_dict = {}
-        for device_name in obj_2_list(self.core.get_loaded_devices()):  # type: ignore
-            device_property_names = self.core.get_device_property_names(device_name)  # type: ignore
+        for device_name in obj_2_list(self.core.get_loaded_devices()):
+            device_property_names = self.core.get_device_property_names(device_name)
             property_names = obj_2_list(device_property_names)
             prop_dict = {}
+
             for prop in property_names:
                 if scope == "allowed":
-                    values = self.core.get_allowed_property_values(device_name, prop)  # type: ignore
-                    prop_dict.update({f"{prop}": obj_2_list(values)})
+                    values = self.core.get_allowed_property_values(device_name, prop)
+                    prop_dict[prop] = obj_2_list(values)
                 elif scope == "used":
-                    values = self.core.get_property(device_name, prop)  # type: ignore
-                    prop_dict.update({f"{prop}": values})
+                    values = self.core.get_property(device_name, prop)
+                    prop_dict[prop] = values
                 else:
-                    warnings.warn(f" unknown metadata scope {scope} ")
-            device_dict.update({f"{device_name}": prop_dict})
+                    warnings.warn(f"Unknown metadata scope {scope}")
+
+            device_dict[device_name] = prop_dict
+
         return device_dict
 
     def _ppm_set_psgticks(self, theta: float) -> None:
-        """Set the rotation stage to a specific angle and wait for completion."""
+        """Set the PPM rotation stage to a specific angle."""
+        # Try to get rotation stage device from settings
+        ppm_config = self.settings.get("modalities", {}).get("ppm", {})
+        rotation_device = ppm_config.get("rotation_stage", {}).get("device")
+        rotation_device = self.settings.get("id_stage", {}).get(rotation_device, {}).get("device")
+        if not rotation_device:
+            # Fallback to looking for r_stage in stage config
+            rotation_device = self.settings.get("stage", {}).get("r_stage")
+
+        if not rotation_device:
+            raise ValueError("No rotation stage device found in configuration")
+
         theta_thor = ppm_psgticks_to_thor(theta)
-        self.core.set_position(self.settings.stage.r_stage, theta_thor)  # type: ignore
-        self.core.wait_for_device(self.settings.stage.r_stage)  # type: ignore
+        self.core.set_position(rotation_device, theta_thor)
+        self.core.wait_for_device(rotation_device)
+        logger.debug(f"Set rotation angle to {theta}° (Thor position: {theta_thor})")
 
     def _ppm_get_psgticks(self) -> float:
-        """Set the rotation stage to a specific angle and wait for completion."""
-        return ppm_thor_to_psgticks(self.core.get_position(self.settings.stage.r_stage))  # type: ignore
+        """Get the current PPM rotation angle."""
+        ppm_config = self.settings.get("modalities", {}).get("ppm", {})
+        rotation_device = ppm_config.get("rotation_stage", {}).get("device")
+        rotation_device = self.settings.get("id_stage", {}).get(rotation_device, {}).get("device")
 
-    def _camm_swap_objective_lens(
-        self,
-        desired_imaging_mode: sp_imaging_mode,
-    ):
-        """ " 4x->20x moves O first, then Z
-        and
-        20x->4x moves z first"""
+        if not rotation_device:
+            rotation_device = self.settings.get("stage", {}).get("r_stage")
 
-        current_slider_position = self.core.get_property(*self.settings.obj_slider)  # type: ignore
-        if desired_imaging_mode.objective_position_label != current_slider_position:  # type: ignore
+        if not rotation_device:
+            raise ValueError("No rotation stage device found in configuration")
 
-            if desired_imaging_mode.name.startswith("4X"):  # type: ignore
-                self.core.set_focus_device(self.settings.stage.z_stage)  #  type: ignore
-                self.core.set_position(desired_imaging_mode.z)  # type: ignore
-                self.core.wait_for_device(self.settings.stage.z_stage)  # type: ignore
-                self.core.set_property(*self.settings.obj_slider, desired_imaging_mode.objective_position_label)  # type: ignore
-                self.core.set_focus_device(self.settings.stage.f_stage)  # type: ignore
-                self.core.wait_for_system()  # type: ignore
-            if desired_imaging_mode.name.startswith("20X"):  # type: ignore
-                self.core.set_property(*self.settings.obj_slider, desired_imaging_mode.objective_position_label)  # type: ignore
-                self.core.wait_for_device(self.settings.obj_slider[0])  # type: ignore
-                self.core.set_focus_device(self.settings.stage.z_stage)  # type: ignore
-                self.core.set_position(desired_imaging_mode.z)  # type: ignore
-                self.core.set_focus_device(self.settings.stage.f_stage)  # type: ignore
-                self.core.set_position(desired_imaging_mode.f)  # type: ignore
-                self.core.wait_for_system()  # type: ignore
+        thor_pos = self.core.get_position(rotation_device)
+        return ppm_thor_to_psgticks(thor_pos)
 
-            self.core.set_focus_device(self.settings.stage.z_stage)  # type: ignore
-            self.settings.imaging_mode = desired_imaging_mode
+    def _camm_swap_objective_lens(self, desired_imaging_mode: Dict[str, Any]):
+        """
+        Swap objective lens for CAMM microscope.
+
+        Args:
+            desired_imaging_mode: Dictionary containing imaging mode configuration
+        """
+        # Get objective slider device from settings
+        obj_slider = self.settings.get("obj_slider")
+        if not obj_slider:
+            raise ValueError("No objective slider configuration found")
+
+        current_slider_position = self.core.get_property(*obj_slider)
+        desired_position = desired_imaging_mode.get("objective_position_label")
+
+        if not desired_position:
+            raise ValueError("No objective position label in imaging mode")
+
+        if desired_position != current_slider_position:
+            mode_name = desired_imaging_mode.get("name", "")
+            stage_config = self.settings.get("stage", {})
+            z_stage = stage_config.get("z_stage")
+            f_stage = stage_config.get("f_stage")
+
+            if not z_stage or not f_stage:
+                raise ValueError("Stage devices not properly configured")
+
+            # Handle different objectives differently
+            if mode_name.startswith("4X"):
+                self.core.set_focus_device(z_stage)
+                self.core.set_position(desired_imaging_mode.get("z", 0))
+                self.core.wait_for_device(z_stage)
+                self.core.set_property(*obj_slider, desired_position)
+                self.core.set_focus_device(f_stage)
+                self.core.wait_for_system()
+
+            elif mode_name.startswith("20X"):
+                self.core.set_property(*obj_slider, desired_position)
+                self.core.wait_for_device(obj_slider[0])
+                self.core.set_focus_device(z_stage)
+                self.core.set_position(desired_imaging_mode.get("z", 0))
+                self.core.set_focus_device(f_stage)
+                self.core.set_position(desired_imaging_mode.get("f", 0))
+                self.core.wait_for_system()
+
+            self.core.set_focus_device(z_stage)
+
+            # Update current imaging mode in settings
+            self.settings["imaging_mode"] = desired_imaging_mode
+            logger.info(f"Swapped to objective: {desired_position}")
