@@ -444,25 +444,36 @@ def handle_client(conn, addr):
                                 conn.sendall(f"FAILED:{error_msg}".encode())
                                 break
 
-                            # Execute background acquisition
+                            # Send immediate acknowledgment to prevent client timeout
                             try:
+                                ack_response = f"STARTED:{params['output_folder_path']}".encode()
+                                conn.sendall(ack_response)
+                                logger.info("Sent STARTED acknowledgment for background acquisition")
+                                
+                                # Execute background acquisition using simplified collection
                                 from smart_wsi_scanner.qp_acquisition import (
-                                    background_acquisition_workflow,
+                                    simple_background_collection,
                                 )
 
-                                output_path = background_acquisition_workflow(
+                                # Create progress update function for this client
+                                def update_progress(current, total):
+                                    with acquisition_locks[addr]:
+                                        acquisition_progress[addr] = (current, total)
+
+                                simple_background_collection(
                                     yaml_file_path=params["yaml_file_path"],
                                     output_folder_path=params["output_folder_path"],
                                     modality=params["modality"],
                                     angles_str=params.get("angles_str", "()"),
-                                    exposures_str=params.get("exposures_str", None),
+                                    exposures_str=params.get("exposures_str", "()"),
                                     hardware=hardware,
                                     config_manager=config_manager,
                                     logger=logger,
+                                    update_progress=update_progress,
                                 )
 
                                 # Send success response with output path
-                                response = f"SUCCESS:{output_path}".encode()
+                                response = f"SUCCESS:{params['output_folder_path']}".encode()
                                 conn.sendall(response)
                                 logger.info("Background acquisition completed successfully")
 

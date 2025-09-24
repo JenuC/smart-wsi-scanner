@@ -399,6 +399,87 @@ class TifWriterUtils:
         return rgb_diff
 
     @staticmethod
+    def ppm_angle_sum(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
+        """
+        Calculate angle sum for polarized microscopy images.
+        Adds the two images to create a combined RGB image.
+
+        Args:
+            img1: First image (RGB)
+            img2: Second image (RGB)
+
+        Returns:
+            Sum image as RGB
+        """
+        # Convert to float for calculations
+        img1_f = img1.astype(np.float32) / 255.0
+        img2_f = img2.astype(np.float32) / 255.0
+
+        # Sum RGB values (average to keep values in [0,1] range)
+        rgb_sum = (img1_f + img2_f) / 2.0
+
+        return rgb_sum
+
+    @staticmethod
+    def create_sum_tile(
+        pos_image: np.ndarray,
+        neg_image: np.ndarray,
+        output_dir: pathlib.Path,
+        filename: str,
+        pixel_size_um: float,
+        tile_config_source: Optional[pathlib.Path] = None,
+        logger=None,
+    ) -> np.ndarray:
+        """
+        Create a single sum image from positive and negative angle images.
+
+        Args:
+            pos_image: Positive angle image
+            neg_image: Negative angle image
+            output_dir: Directory to save sum image
+            filename: Output filename
+            pixel_size_um: Pixel size for OME-TIFF metadata
+            tile_config_source: Path to source TileConfiguration.txt to copy (optional)
+            logger: Logger instance (optional)
+
+        Returns:
+            The sum image array
+        """
+        # Create output directory if it doesn't exist
+        if not output_dir.exists():
+            output_dir.mkdir(exist_ok=True)
+
+            # Copy TileConfiguration.txt if source provided
+            if tile_config_source and tile_config_source.exists():
+                shutil.copy2(tile_config_source, output_dir / "TileConfiguration.txt")
+                if logger:
+                    logger.debug(f"Copied TileConfiguration.txt to {output_dir}")
+
+        # Calculate sum
+        output_path = output_dir / filename
+
+        sum_img = TifWriterUtils.ppm_angle_sum(pos_image, neg_image)
+
+        # Save float version for reference
+        tf.imwrite(str(output_path)[:-4] + "_float.tif", sum_img.astype(np.float32))
+
+        # Normalize to 8-bit RGB
+        sum_img = sum_img * 255
+        sum_img = np.clip(sum_img, 0, 255).astype(np.uint8)
+
+        # Save as RGB (keep full color)
+        TifWriterUtils.ome_writer(
+            filename=str(output_path),
+            pixel_size_um=pixel_size_um,
+            data=sum_img,
+        )
+
+        if logger:
+            logger.info(f"  Created sum image: {filename}")
+
+        return sum_img
+
+    @staticmethod
     def apply_brightness_correction(image: np.ndarray, correction_factor: float) -> np.ndarray:
         """Apply brightness correction to an image."""
         return np.clip(image * correction_factor, 0, 255).astype(np.uint8)
@@ -570,17 +651,21 @@ class BackgroundCorrectionUtils:
                     # Calculate the scaling factor for this background
                     bg_float = background_img.astype(np.float32)
 
-                    # Different scaling strategy for polarized vs brightfield
+                    # Calculate the scaling factor for this background
+                    bg_mean_all = bg_float.mean()
+                    
                     if angle == 90.0:  # Brightfield
                         # Scale to make background bright
-                        bg_mean_all = bg_float.mean()
                         target_intensity = 240.0
                         scaling_factor = target_intensity / bg_mean_all if bg_mean_all > 0 else 1.0
                         if logger:
                             logger.info(f"  Background mean intensity at 90°: {bg_mean_all:.1f}")
                     else:  # Polarized angles (-5, 0, 5)
-                        # Don't scale intensity - preserve dark backgrounds
-                        scaling_factor = 1.0  # No intensity scaling!
+                        # Preserve the physical intensity level - only correct spatial variation
+                        scaling_factor = 1.0  # No intensity scaling - preserve polarization physics
+                        if logger:
+                            logger.info(f"  Background mean intensity at {angle}°: {bg_mean_all:.1f}")
+                            logger.info(f"  No intensity scaling for {angle}° (preserves polarization physics)")
 
                     scaling_factors[angle] = scaling_factor
 
@@ -604,6 +689,106 @@ class BackgroundCorrectionUtils:
             else:
                 if logger:
                     logger.warning(f"No background found for {modality} {angle}°")
+
+        return backgrounds, scaling_factors, white_balance_coeffs
+
+    @staticmethod
+    def load_background_images_with_explicit_paths(
+        background_dir: pathlib.Path, angles: List[float], logger=None
+    ) -> Tuple[Dict[float, np.ndarray], Dict[float, float], Dict[float, List[float]]]:
+        """
+        Load background images with explicit path logging for each angle.
+        Supports both legacy structure (modality/angle/background.tif) and 
+        new structure (detector/modality/objective/angle.tif).
+        
+        Returns:
+            Tuple of (background_images_dict, scaling_factors_dict, white_balance_dict)
+        """
+        backgrounds = {}
+        scaling_factors = {}
+        white_balance_coeffs = {}
+
+        if logger:
+            logger.info(f"Loading background images from: {background_dir}")
+
+        for angle in angles:
+            background_found = False
+            attempted_paths = []
+            
+            # Try new structure first: direct angle file (detector/modality/objective/angle.tif)
+            new_format_path = background_dir / f"{angle}.tif"
+            attempted_paths.append(str(new_format_path))
+            
+            if new_format_path.exists():
+                background_found = True
+                background_file = new_format_path
+            else:
+                # Try legacy structure: angle subdirectory (modality/angle/background.tif)
+                legacy_format_path = background_dir / str(angle) / "background.tif"
+                attempted_paths.append(str(legacy_format_path))
+                
+                if legacy_format_path.exists():
+                    background_found = True
+                    background_file = legacy_format_path
+
+            if background_found:
+                try:
+                    background_img = tf.imread(str(background_file))
+                    backgrounds[angle] = background_img
+                    
+                    if logger:
+                        logger.info(f"  [OK] Loaded background for {angle}°: {background_file}")
+
+                    # Calculate the scaling factor for this background
+                    bg_float = background_img.astype(np.float32)
+
+                    # Calculate the scaling factor for this background
+                    bg_mean_all = bg_float.mean()
+                    
+                    if angle == 90.0:  # Brightfield
+                        # Scale to make background bright
+                        target_intensity = 240.0
+                        scaling_factor = target_intensity / bg_mean_all if bg_mean_all > 0 else 1.0
+                        if logger:
+                            logger.info(f"    Background mean intensity at 90°: {bg_mean_all:.1f}")
+                    else:  # Polarized angles (-5, 0, 5)
+                        # Preserve the physical intensity level - only correct spatial variation
+                        scaling_factor = 1.0  # No intensity scaling - preserve polarization physics
+                        if logger:
+                            logger.info(f"    Background mean intensity at {angle}°: {bg_mean_all:.1f}")
+                            logger.info(f"    No intensity scaling for {angle}° (preserves polarization physics)")
+
+                    scaling_factors[angle] = scaling_factor
+
+                    # Calculate white balance from background
+                    # Background should be neutral, so we calculate what correction is needed
+                    bg_mean = background_img.mean(axis=(0, 1))  # Mean R,G,B
+                    if len(bg_mean) >= 3 and bg_mean[1] > 0:  # Check G channel
+                        # Calculate relative gains to normalize to green channel
+                        white_balance_coeffs[angle] = [
+                            bg_mean[1] / bg_mean[0] if bg_mean[0] > 0 else 1.0,  # R correction
+                            1.0,  # G reference
+                            bg_mean[1] / bg_mean[2] if bg_mean[2] > 0 else 1.0,  # B correction
+                        ]
+                        if logger:
+                            logger.info(f"    White balance coeffs for {angle}°: {white_balance_coeffs[angle]}")
+                    else:
+                        white_balance_coeffs[angle] = [1.0, 1.0, 1.0]
+                        
+                except Exception as e:
+                    if logger:
+                        logger.error(f"  [ERROR] Failed to load background for {angle}°: {e}")
+            else:
+                if logger:
+                    logger.warning(f"  [FAIL] Background not found for {angle}°")
+                    logger.warning(f"    Searched paths:")
+                    for path in attempted_paths:
+                        logger.warning(f"      - {path}")
+
+        if logger and backgrounds:
+            logger.info(f"Successfully loaded {len(backgrounds)}/{len(angles)} background images")
+        elif logger:
+            logger.warning("No background images were loaded")
 
         return backgrounds, scaling_factors, white_balance_coeffs
 
@@ -664,33 +849,49 @@ class BackgroundCorrectionUtils:
         # Ensure float precision for calculations
         img_float = image.astype(np.float32)
         bg_float = background.astype(np.float32)
+        
+        # Track if we need to transpose the result back to original image shape
+        original_shape = image.shape
+        transposed_image = False
+        
+        # Handle shape mismatch - background may be (C,H,W) while image is (H,W,C)
+        if img_float.shape != bg_float.shape:
+            if len(bg_float.shape) == 3 and len(img_float.shape) == 3:
+                # Check if we need to transpose from (C,H,W) to (H,W,C)
+                if bg_float.shape[0] == img_float.shape[2] and bg_float.shape[1:] == img_float.shape[:2]:
+                    bg_float = np.transpose(bg_float, (1, 2, 0))  # (C,H,W) -> (H,W,C)
+                # Or check if we need to transpose from (H,W,C) to (C,H,W)  
+                elif bg_float.shape[:2] == img_float.shape[1:] and bg_float.shape[2] == img_float.shape[0]:
+                    img_float = np.transpose(img_float, (2, 0, 1))  # (H,W,C) -> (C,H,W)
+                    transposed_image = True
+                    
+        # Ensure shapes match after potential transpose
+        if img_float.shape != bg_float.shape:
+            raise ValueError(f"Shape mismatch after transpose attempt: image {img_float.shape} vs background {bg_float.shape}")
 
         # Prevent division by zero with small epsilon
         epsilon = 0.1
         bg_float = np.where(bg_float < epsilon, epsilon, bg_float)
 
         if method == "divide":
-            # Apply the correction with consistent scaling
-            corrected = (img_float / bg_float) * scaling_factor
-
-            # For 8-bit images, we need to handle the range carefully
-            if image.dtype == np.uint8:
-                # Scale back to 8-bit range
-                corrected = corrected * 240
-
-                # Find where we're exceeding the range
-                overflow_mask = corrected > 240  # Leave some headroom
-
-                if np.any(overflow_mask):
-                    # Compress the overflow region
-                    overflow_values = corrected[overflow_mask]
-                    # Map [240, max] -> [240, 254] with log compression
-                    max_val = overflow_values.max()
-                    if max_val > 240:
-                        compressed = 240 + (254 - 240) * np.log1p(overflow_values - 240) / np.log1p(
-                            max_val - 240
-                        )
-                        corrected[overflow_mask] = compressed
+            # Proper flatfield correction: normalize by background mean to preserve brightness
+            bg_mean = bg_float.mean()
+            
+            # The correction formula: Image * (background_mean / background_pixel)
+            # This normalizes illumination while preserving overall brightness
+            corrected = img_float * (bg_mean / bg_float)
+            
+            # Apply the scaling factor for consistency across tiles
+            corrected = corrected * scaling_factor
+            
+            # For debugging: check if background has illumination variation
+            bg_std = bg_float.std()
+            bg_variation = bg_std / bg_mean
+            if bg_variation < 0.05:  # Less than 5% variation
+                # Background is too uniform - may not be proper flatfield reference
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Background image has low variation (std/mean = {bg_variation:.3f}) - may not correct illumination properly")
 
         elif method == "subtract":
             # For subtraction, we need a different approach
@@ -707,7 +908,14 @@ class BackgroundCorrectionUtils:
         else:
             max_val = 255  # Default for unknown types
 
-        return np.clip(corrected, 0, max_val).astype(image.dtype)
+        # Clip to valid range
+        corrected = np.clip(corrected, 0, max_val).astype(image.dtype)
+        
+        # Transpose back to original shape if we transposed the image
+        if transposed_image:
+            corrected = np.transpose(corrected, (1, 2, 0))  # (C,H,W) -> (H,W,C)
+            
+        return corrected
 
     @staticmethod
     def acquire_background_image(
@@ -740,7 +948,7 @@ class BackgroundCorrectionUtils:
 
             # Set exposure
             if angle_idx < len(exposures):
-                hardware.core.set_exposure(exposures[angle_idx])
+                hardware.set_exposure(exposures[angle_idx])
                 logger.info(f"Set exposure to {exposures[angle_idx]}ms")
 
             # Acquire image with debayering
