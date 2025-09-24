@@ -260,9 +260,10 @@ class PycromanagerHardware(MicroscopeHardware):
             Best focus Z position
         """
         steps = np.linspace(0, search_range, n_steps) - (search_range / 2)
+
         current_pos = self.get_current_position()
         z_steps = current_pos.z + steps
-
+        print(z_steps)
         try:
             scores = []
             for step_number in range(n_steps):
@@ -272,9 +273,14 @@ class PycromanagerHardware(MicroscopeHardware):
                 img, tags = self.snap_image()
 
                 # Extract green channel for focus calculation
-                green1 = img[0::2, 0::2]
-                green2 = img[1::2, 1::2]
-                img_gray = ((green1 + green2) / 2.0).astype(np.float32)
+                if self.core.get_property("Core", "Camera") == "JAICamera":
+                    img_gray = np.mean(img, 2)
+                else:
+                    # TODO: debayer to go to gray ?
+                    # TODO support other cameras!
+                    green1 = img[0::2, 0::2]
+                    green2 = img[1::2, 1::2]
+                    img_gray = ((green1 + green2) / 2.0).astype(np.float32)
 
                 score = score_metric(img_gray)
                 if hasattr(score, "ndim") and score.ndim == 2:
