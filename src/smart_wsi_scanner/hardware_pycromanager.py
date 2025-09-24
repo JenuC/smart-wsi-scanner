@@ -4,7 +4,7 @@ import warnings
 from collections import OrderedDict
 from typing import Dict, Any, Optional, Tuple, List
 import logging
-
+import time
 from pycromanager import Core, Studio
 from .hardware import MicroscopeHardware, is_mm_running, is_coordinate_in_range, Position
 from .qp_utils import AutofocusUtils
@@ -133,7 +133,7 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Handle white balance for JAI
         if camera == "JAICamera":
-            self.core.set_property("JAICamera", "WhiteBalance", "Continuous")
+            self.core.set_property("JAICamera", "WhiteBalance", "Off")
 
         # Capture image
         self.core.snap_image()
@@ -217,6 +217,22 @@ class PycromanagerHardware(MicroscopeHardware):
         fov_x = width * pixel_size_um
 
         return fov_x, fov_y
+
+    def set_exposure(self, exposure_ms: float) -> None:
+        """Set camera exposure time in milliseconds."""
+        camera = self.core.get_property("Core", "Camera")
+        if camera == "JAICamera":
+            frame_rate_min = 0.125
+            frame_rate_max = 38.0
+            margin = 1.01
+            exposure_s = exposure_ms / 1000.0
+            required_frame_rate = round(1.0 / (exposure_s * margin), 3)
+            frame_rate = min(max(required_frame_rate, frame_rate_min), frame_rate_max)
+            self.core.set_property("JAICamera", "FrameRateHz", frame_rate)
+            self.core.set_property("JAICamera", "Exposure", exposure_ms)
+        else:
+            self.core.set_exposure(exposure_ms)
+        self.core.wait_for_device(camera)
 
     def autofocus(
         self,
@@ -518,6 +534,7 @@ class PycromanagerHardware(MicroscopeHardware):
         theta_thor = ppm_psgticks_to_thor(theta)
         self.core.set_position(rotation_device, theta_thor)
         self.core.wait_for_device(rotation_device)
+
         logger.debug(f"Set rotation angle to {theta}° (Thor position: {theta_thor})")
 
     def _ppm_get_psgticks(self) -> float:

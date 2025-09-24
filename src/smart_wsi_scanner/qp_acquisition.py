@@ -369,6 +369,10 @@ def _acquisition_workflow(
             # Perform autofocus if needed
             if pos_idx in af_positions:
                 logger.info(f"Performing Autofocus at X={pos.x}, Y={pos.y}, Z={pos.z}")
+                ## TODO: hardsetting ppm-focusing to 90deg
+                # if params["angles"] and 90.0 in params["angles"]:
+                #    hardware.set_psg_ticks(90.0)
+
                 new_z = hardware.autofocus(
                     move_stage_to_estimate=True,
                     n_steps=af_n_steps,
