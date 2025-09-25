@@ -60,7 +60,8 @@ class PycromanagerHardware(MicroscopeHardware):
         self.core = core
         self.studio = studio
         self.settings = settings
-
+        self.psg_angle = None
+        self.rotation_device = None
         # Log microscope info
         microscope_info = settings.get("microscope", {})
         logger.info(
@@ -73,8 +74,17 @@ class PycromanagerHardware(MicroscopeHardware):
         if microscope_name == "PPM":
             self.set_psg_ticks = self._ppm_set_psgticks
             self.get_psg_ticks = self._ppm_get_psgticks
+            ppm_config = self.settings.get("modalities", {}).get("ppm", {})
+            r_device_name = ppm_config.get("rotation_stage", {}).get("device")
+            self.rotation_device = self.settings.get("id_stage", {}).get(r_device_name, {}).get("device")
+            if not self.rotation_device:
+                # Fallback to looking for r_stage in stage config
+                self.rotation_device = self.settings.get("stage", {}).get("r_stage")
+            if not self.rotation_device:
+                raise ValueError("No rotation stage device found in configuration")
+            self.psg_angle = self
             logger.info("PPM-specific methods initialized")
-
+        
         if microscope_name == "CAMM":
             self.swap_objective_lens = self._camm_swap_objective_lens
             logger.info("CAMM-specific methods initialized")
@@ -527,16 +537,7 @@ class PycromanagerHardware(MicroscopeHardware):
     def _ppm_set_psgticks(self, theta: float) -> None:
         """Set the PPM rotation stage to a specific angle."""
         # Try to get rotation stage device from settings
-        ppm_config = self.settings.get("modalities", {}).get("ppm", {})
-        rotation_device = ppm_config.get("rotation_stage", {}).get("device")
-        rotation_device = self.settings.get("id_stage", {}).get(rotation_device, {}).get("device")
-        if not rotation_device:
-            # Fallback to looking for r_stage in stage config
-            rotation_device = self.settings.get("stage", {}).get("r_stage")
-
-        if not rotation_device:
-            raise ValueError("No rotation stage device found in configuration")
-
+        rotation_device = self.rotation_device
         theta_thor = ppm_psgticks_to_thor(theta)
         self.core.set_position(rotation_device, theta_thor)
         self.core.wait_for_device(rotation_device)
@@ -545,16 +546,7 @@ class PycromanagerHardware(MicroscopeHardware):
 
     def _ppm_get_psgticks(self) -> float:
         """Get the current PPM rotation angle."""
-        ppm_config = self.settings.get("modalities", {}).get("ppm", {})
-        rotation_device = ppm_config.get("rotation_stage", {}).get("device")
-        rotation_device = self.settings.get("id_stage", {}).get(rotation_device, {}).get("device")
-
-        if not rotation_device:
-            rotation_device = self.settings.get("stage", {}).get("r_stage")
-
-        if not rotation_device:
-            raise ValueError("No rotation stage device found in configuration")
-
+        rotation_device = self.rotation_device
         thor_pos = self.core.get_position(rotation_device)
         return ppm_thor_to_psgticks(thor_pos)
 
