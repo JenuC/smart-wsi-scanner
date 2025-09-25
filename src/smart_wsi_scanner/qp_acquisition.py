@@ -320,7 +320,7 @@ def _acquisition_workflow(
             if background_dir and background_dir.exists():
                 logger.info(f"Loading background images from: {background_dir}")
                 background_images, background_scaling_factors, _ = (
-                    BackgroundCorrectionUtils.load_background_images_with_explicit_paths(
+                    BackgroundCorrectionUtils.load_background_images(
                         background_dir, params["angles"], logger
                     )
                 )

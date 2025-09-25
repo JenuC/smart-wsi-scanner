@@ -620,87 +620,25 @@ class BackgroundCorrectionUtils:
 
     @staticmethod
     def load_background_images(
-        background_dir: pathlib.Path, modality: str, angles: List[float], logger=None
+        background_dir: pathlib.Path,
+        angles: List[float],
+        logger=None,
+        modality: Optional[str] = None
     ) -> Tuple[Dict[float, np.ndarray], Dict[float, float], Dict[float, List[float]]]:
         """
         Load background images and calculate consistent scaling factors for each angle.
 
-        Returns:
-            Tuple of (background_images_dict, scaling_factors_dict, white_balance_dict)
-        """
-        backgrounds = {}
-        scaling_factors = {}
-        white_balance_coeffs = {}
+        Supports multiple directory structures:
+        - Direct angle files: background_dir/angle.tif
+        - Angle subdirectories: background_dir/angle/background.tif
+        - Modality subdirectories: background_dir/modality/angle/background.tif
 
-        modality_dir = background_dir / modality
+        Args:
+            background_dir: Directory containing background images
+            angles: List of angles to load backgrounds for
+            logger: Optional logger instance
+            modality: Optional modality subdirectory name
 
-        if not modality_dir.exists():
-            if logger:
-                logger.error(f"Modality directory not found: {modality_dir}")
-            return backgrounds, scaling_factors, white_balance_coeffs
-
-        for angle in angles:
-            angle_dir = modality_dir / str(angle)
-            background_file = angle_dir / "background.tif"
-
-            if background_file.exists():
-                try:
-                    background_img = tf.imread(str(background_file))
-                    backgrounds[angle] = background_img
-
-                    # Calculate the scaling factor for this background
-                    bg_float = background_img.astype(np.float32)
-
-                    # Calculate the scaling factor for this background
-                    bg_mean_all = bg_float.mean()
-                    
-                    if angle == 90.0:  # Brightfield
-                        # Scale to make background bright
-                        target_intensity = 240.0
-                        scaling_factor = target_intensity / bg_mean_all if bg_mean_all > 0 else 1.0
-                        if logger:
-                            logger.info(f"  Background mean intensity at 90°: {bg_mean_all:.1f}")
-                    else:  # Polarized angles (-5, 0, 5)
-                        # Preserve the physical intensity level - only correct spatial variation
-                        scaling_factor = 1.0  # No intensity scaling - preserve polarization physics
-                        if logger:
-                            logger.info(f"  Background mean intensity at {angle}°: {bg_mean_all:.1f}")
-                            logger.info(f"  No intensity scaling for {angle}° (preserves polarization physics)")
-
-                    scaling_factors[angle] = scaling_factor
-
-                    # Calculate white balance from background
-                    # Background should be neutral, so we calculate what correction is needed
-                    bg_mean = background_img.mean(axis=(0, 1))  # Mean R,G,B
-
-                    # Calculate coefficients to make all channels equal to the brightest
-                    wb_coeffs = bg_mean / (bg_mean.max() + 1e-6)
-                    white_balance_coeffs[angle] = wb_coeffs.tolist()
-
-                    if logger:
-                        logger.info(f"Loaded background for {modality} {angle}°")
-                        logger.info(f"  Scaling factor: {scaling_factor:.3f}")
-                        logger.info(f"  Background RGB means: {bg_mean}")
-                        logger.info(f"  Auto WB coefficients: {wb_coeffs}")
-
-                except Exception as e:
-                    if logger:
-                        logger.error(f"Failed to load background {background_file}: {e}")
-            else:
-                if logger:
-                    logger.warning(f"No background found for {modality} {angle}°")
-
-        return backgrounds, scaling_factors, white_balance_coeffs
-
-    @staticmethod
-    def load_background_images_with_explicit_paths(
-        background_dir: pathlib.Path, angles: List[float], logger=None
-    ) -> Tuple[Dict[float, np.ndarray], Dict[float, float], Dict[float, List[float]]]:
-        """
-        Load background images with explicit path logging for each angle.
-        Supports both legacy structure (modality/angle/background.tif) and 
-        new structure (detector/modality/objective/angle.tif).
-        
         Returns:
             Tuple of (background_images_dict, scaling_factors_dict, white_balance_dict)
         """
@@ -710,41 +648,49 @@ class BackgroundCorrectionUtils:
 
         if logger:
             logger.info(f"Loading background images from: {background_dir}")
+            if modality:
+                logger.info(f"Using modality subdirectory: {modality}")
+
+        # Determine search directory
+        search_dir = background_dir / modality if modality else background_dir
+
+        if modality and not search_dir.exists():
+            if logger:
+                logger.error(f"Modality directory not found: {search_dir}")
+            return backgrounds, scaling_factors, white_balance_coeffs
 
         for angle in angles:
             background_found = False
             attempted_paths = []
-            
-            # Try new structure first: direct angle file (detector/modality/objective/angle.tif)
-            new_format_path = background_dir / f"{angle}.tif"
-            attempted_paths.append(str(new_format_path))
-            
-            if new_format_path.exists():
-                background_found = True
-                background_file = new_format_path
-            else:
-                # Try legacy structure: angle subdirectory (modality/angle/background.tif)
-                legacy_format_path = background_dir / str(angle) / "background.tif"
-                attempted_paths.append(str(legacy_format_path))
-                
-                if legacy_format_path.exists():
+            background_file = None
+
+            # Search order: most specific to most general
+            search_paths = [
+                # Direct angle file
+                search_dir / f"{angle}.tif",
+                # Angle subdirectory
+                search_dir / str(angle) / "background.tif"
+            ]
+
+            for path in search_paths:
+                attempted_paths.append(str(path))
+                if path.exists():
                     background_found = True
-                    background_file = legacy_format_path
+                    background_file = path
+                    break
 
             if background_found:
                 try:
                     background_img = tf.imread(str(background_file))
                     backgrounds[angle] = background_img
-                    
+
                     if logger:
                         logger.info(f"  [OK] Loaded background for {angle}°: {background_file}")
 
                     # Calculate the scaling factor for this background
                     bg_float = background_img.astype(np.float32)
-
-                    # Calculate the scaling factor for this background
                     bg_mean_all = bg_float.mean()
-                    
+
                     if angle == 90.0:  # Brightfield
                         # Scale to make background bright
                         target_intensity = 240.0
@@ -761,7 +707,6 @@ class BackgroundCorrectionUtils:
                     scaling_factors[angle] = scaling_factor
 
                     # Calculate white balance from background
-                    # Background should be neutral, so we calculate what correction is needed
                     bg_mean = background_img.mean(axis=(0, 1))  # Mean R,G,B
                     if len(bg_mean) >= 3 and bg_mean[1] > 0:  # Check G channel
                         # Calculate relative gains to normalize to green channel
@@ -774,7 +719,7 @@ class BackgroundCorrectionUtils:
                             logger.info(f"    White balance coeffs for {angle}°: {white_balance_coeffs[angle]}")
                     else:
                         white_balance_coeffs[angle] = [1.0, 1.0, 1.0]
-                        
+
                 except Exception as e:
                     if logger:
                         logger.error(f"  [ERROR] Failed to load background for {angle}°: {e}")
