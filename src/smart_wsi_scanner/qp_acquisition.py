@@ -320,7 +320,7 @@ def _acquisition_workflow(
             if background_dir and background_dir.exists():
                 logger.info(f"Loading background images from: {background_dir}")
                 background_images, background_scaling_factors, _ = (
-                    BackgroundCorrectionUtils.load_background_images_with_explicit_paths(
+                    BackgroundCorrectionUtils.load_background_images(
                         background_dir, params["angles"], logger
                     )
                 )
@@ -417,6 +417,10 @@ def _acquisition_workflow(
 
         logger.info(f"Autofocus positions: {af_positions}")
 
+        # Create dynamic autofocus positions set (can be modified during acquisition)
+        dynamic_af_positions = set(af_positions)
+        deferred_af_positions = set()  # Track positions where AF was deferred
+
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
             # Check for cancellation
@@ -434,21 +438,50 @@ def _acquisition_workflow(
             logger.info(f"Moving to position: X={pos.x}, Y={pos.y}, Z={pos.z}")
             hardware.move_to_position(pos)
 
-            # Perform autofocus if needed
-            if pos_idx in af_positions:
-                logger.info(f"Performing Autofocus at X={pos.x}, Y={pos.y}, Z={pos.z}")
-                ## TODO: hardsetting ppm-focusing to 90deg
-                # if params["angles"] and 90.0 in params["angles"]:
-                #    hardware.set_psg_ticks(90.0)
+            # Perform autofocus if needed (with tissue detection)
+            if pos_idx in dynamic_af_positions:
+                logger.info(f"Checking for autofocus at position {pos_idx}: X={pos.x}, Y={pos.y}, Z={pos.z}")
 
-                new_z = hardware.autofocus(
-                    move_stage_to_estimate=True,
-                    n_steps=af_n_steps,
-                    search_range=af_search_range,
-                    interp_strength=100,
-                    score_metric=AutofocusUtils.autofocus_profile_laplacian_variance,
-                )
-                logger.info(f"  Autofocus :: New Z {new_z}")
+                # Take a quick image to assess tissue content
+                test_img, _ = hardware.snap_image()
+
+                # Check if there's sufficient tissue for reliable autofocus
+                if AutofocusUtils.has_sufficient_tissue(test_img, logger=logger):
+                    logger.info(f"Sufficient tissue detected - performing autofocus")
+                    ## TODO: hardsetting ppm-focusing to 90deg
+                    # if params["angles"] and 90.0 in params["angles"]:
+                    #    hardware.set_psg_ticks(90.0)
+
+                    new_z = hardware.autofocus(
+                        move_stage_to_estimate=True,
+                        n_steps=af_n_steps,
+                        search_range=af_search_range,
+                        interp_strength=100,
+                        score_metric=AutofocusUtils.autofocus_profile_laplacian_variance,
+                    )
+                    logger.info(f"  Autofocus :: New Z {new_z}")
+                else:
+                    logger.warning(f"Insufficient tissue at position {pos_idx} - deferring autofocus")
+
+                    # Remove this position from autofocus list
+                    dynamic_af_positions.discard(pos_idx)
+                    deferred_af_positions.add(pos_idx)
+
+                    # Try to find next suitable position for autofocus
+                    next_af_pos = AutofocusUtils.defer_autofocus_to_next_tile(
+                        current_pos_idx=pos_idx,
+                        original_af_positions=af_positions,
+                        total_positions=len(positions),
+                        af_min_distance=af_min_distance,
+                        positions=xy_positions,
+                        logger=logger
+                    )
+
+                    if next_af_pos is not None and next_af_pos < len(positions):
+                        dynamic_af_positions.add(next_af_pos)
+                        logger.info(f"Added position {next_af_pos} to autofocus queue")
+                    else:
+                        logger.warning(f"Could not find suitable position to defer autofocus to")
 
             if params["angles"]:
                 # Storage for birefringence image calculation
@@ -620,6 +653,11 @@ def _acquisition_workflow(
         logger.info("=== ACQUISITION COMPLETED SUCCESSFULLY ===")
         logger.info(f"Total images saved: {image_count}/{total_images}")
         logger.info(f"Output directory: {output_path}")
+
+        # Report autofocus activity
+        if deferred_af_positions:
+            logger.info(f"Autofocus deferred at {len(deferred_af_positions)} positions due to insufficient tissue: {sorted(deferred_af_positions)}")
+        logger.info(f"Autofocus completed at {len([p for p in af_positions if p not in deferred_af_positions])} positions")
 
     except Exception as e:
         logger.error("=== ACQUISITION FAILED ===")
