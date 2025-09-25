@@ -992,8 +992,12 @@ class BackgroundCorrectionUtils:
                         # Preserve the physical intensity level - only correct spatial variation
                         scaling_factor = 1.0  # No intensity scaling - preserve polarization physics
                         if logger:
-                            logger.info(f"    Background mean intensity at {angle}°: {bg_mean_all:.1f}")
-                            logger.info(f"    No intensity scaling for {angle}° (preserves polarization physics)")
+                            logger.info(
+                                f"    Background mean intensity at {angle}°: {bg_mean_all:.1f}"
+                            )
+                            logger.info(
+                                f"    No intensity scaling for {angle}° (preserves polarization physics)"
+                            )
 
                     scaling_factors[angle] = scaling_factor
 
@@ -1007,7 +1011,9 @@ class BackgroundCorrectionUtils:
                             bg_mean[1] / bg_mean[2] if bg_mean[2] > 0 else 1.0,  # B correction
                         ]
                         if logger:
-                            logger.info(f"    White balance coeffs for {angle}°: {white_balance_coeffs[angle]}")
+                            logger.info(
+                                f"    White balance coeffs for {angle}°: {white_balance_coeffs[angle]}"
+                            )
                     else:
                         white_balance_coeffs[angle] = [1.0, 1.0, 1.0]
 
@@ -1085,25 +1091,33 @@ class BackgroundCorrectionUtils:
         # Ensure float precision for calculations
         img_float = image.astype(np.float32)
         bg_float = background.astype(np.float32)
-        
+
         # Track if we need to transpose the result back to original image shape
         original_shape = image.shape
         transposed_image = False
-        
+
         # Handle shape mismatch - background may be (C,H,W) while image is (H,W,C)
         if img_float.shape != bg_float.shape:
             if len(bg_float.shape) == 3 and len(img_float.shape) == 3:
                 # Check if we need to transpose from (C,H,W) to (H,W,C)
-                if bg_float.shape[0] == img_float.shape[2] and bg_float.shape[1:] == img_float.shape[:2]:
+                if (
+                    bg_float.shape[0] == img_float.shape[2]
+                    and bg_float.shape[1:] == img_float.shape[:2]
+                ):
                     bg_float = np.transpose(bg_float, (1, 2, 0))  # (C,H,W) -> (H,W,C)
-                # Or check if we need to transpose from (H,W,C) to (C,H,W)  
-                elif bg_float.shape[:2] == img_float.shape[1:] and bg_float.shape[2] == img_float.shape[0]:
+                # Or check if we need to transpose from (H,W,C) to (C,H,W)
+                elif (
+                    bg_float.shape[:2] == img_float.shape[1:]
+                    and bg_float.shape[2] == img_float.shape[0]
+                ):
                     img_float = np.transpose(img_float, (2, 0, 1))  # (H,W,C) -> (C,H,W)
                     transposed_image = True
-                    
+
         # Ensure shapes match after potential transpose
         if img_float.shape != bg_float.shape:
-            raise ValueError(f"Shape mismatch after transpose attempt: image {img_float.shape} vs background {bg_float.shape}")
+            raise ValueError(
+                f"Shape mismatch after transpose attempt: image {img_float.shape} vs background {bg_float.shape}"
+            )
 
         # Prevent division by zero with small epsilon
         epsilon = 0.1
@@ -1112,22 +1126,25 @@ class BackgroundCorrectionUtils:
         if method == "divide":
             # Proper flatfield correction: normalize by background mean to preserve brightness
             bg_mean = bg_float.mean()
-            
+
             # The correction formula: Image * (background_mean / background_pixel)
             # This normalizes illumination while preserving overall brightness
             corrected = img_float * (bg_mean / bg_float)
-            
+
             # Apply the scaling factor for consistency across tiles
             corrected = corrected * scaling_factor
-            
+
             # For debugging: check if background has illumination variation
             bg_std = bg_float.std()
             bg_variation = bg_std / bg_mean
             if bg_variation < 0.05:  # Less than 5% variation
                 # Background is too uniform - may not be proper flatfield reference
                 import logging
+
                 logger = logging.getLogger(__name__)
-                logger.warning(f"Background image has low variation (std/mean = {bg_variation:.3f}) - may not correct illumination properly")
+                logger.warning(
+                    f"Background image has low variation (std/mean = {bg_variation:.3f}) - may not correct illumination properly"
+                )
 
         elif method == "subtract":
             # For subtraction, we need a different approach
@@ -1146,11 +1163,11 @@ class BackgroundCorrectionUtils:
 
         # Clip to valid range
         corrected = np.clip(corrected, 0, max_val).astype(image.dtype)
-        
+
         # Transpose back to original shape if we transposed the image
         if transposed_image:
             corrected = np.transpose(corrected, (1, 2, 0))  # (C,H,W) -> (H,W,C)
-            
+
         return corrected
 
     @staticmethod

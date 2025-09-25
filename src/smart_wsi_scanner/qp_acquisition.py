@@ -280,9 +280,13 @@ def _acquisition_workflow(
 
         # Log background correction configuration
         if background_correction_enabled:
-            logger.info(f"Background correction enabled with method: {background_correction_method}")
+            logger.info(
+                f"Background correction enabled with method: {background_correction_method}"
+            )
             if background_disabled_angles:
-                logger.info(f"Background correction will be disabled for angles: {background_disabled_angles}")
+                logger.info(
+                    f"Background correction will be disabled for angles: {background_disabled_angles}"
+                )
         else:
             logger.info("Background correction disabled")
 
@@ -496,6 +500,7 @@ def _acquisition_workflow(
                         return
 
                     # Set rotation angle
+                    
                     hardware.set_psg_ticks(angle)
                     logger.info(f"  Angle set to {hardware.get_psg_ticks():.1f}")
 
@@ -532,9 +537,11 @@ def _acquisition_workflow(
 
                     # ======= APPLY BACKGROUND CORRECTION (STEP 1) =======
                     # Check if background correction is enabled, background exists, and angle is not disabled
-                    if (background_correction_enabled and
-                        angle in background_images and
-                        angle not in background_disabled_angles):
+                    if (
+                        background_correction_enabled
+                        and angle in background_images
+                        and angle not in background_disabled_angles
+                    ):
                         bg_img = background_images[angle]
                         logger.info(f"  Applying background correction for {angle} degrees")
                         logger.info(
@@ -552,9 +559,13 @@ def _acquisition_workflow(
                         )
                         logger.info(f"    Post-correction RGB means: {image.mean(axis=(0,1))}")
                     elif background_correction_enabled and angle in background_disabled_angles:
-                        logger.info(f"  Background correction SKIPPED for {angle}° (validation failed - exposure mismatch or missing background)")
+                        logger.info(
+                            f"  Background correction SKIPPED for {angle}° (validation failed - exposure mismatch or missing background)"
+                        )
                     elif background_correction_enabled and angle not in background_images:
-                        logger.info(f"  Background correction SKIPPED for {angle}° (no background image available)")
+                        logger.info(
+                            f"  Background correction SKIPPED for {angle}° (no background image available)"
+                        )
 
                     # ======= APPLY WHITE BALANCE (STEP 2) =======
                     if white_balance_enabled:

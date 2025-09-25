@@ -76,15 +76,17 @@ class PycromanagerHardware(MicroscopeHardware):
             self.get_psg_ticks = self._ppm_get_psgticks
             ppm_config = self.settings.get("modalities", {}).get("ppm", {})
             r_device_name = ppm_config.get("rotation_stage", {}).get("device")
-            self.rotation_device = self.settings.get("id_stage", {}).get(r_device_name, {}).get("device")
+            self.rotation_device = (
+                self.settings.get("id_stage", {}).get(r_device_name, {}).get("device")
+            )
             if not self.rotation_device:
                 # Fallback to looking for r_stage in stage config
                 self.rotation_device = self.settings.get("stage", {}).get("r_stage")
             if not self.rotation_device:
                 raise ValueError("No rotation stage device found in configuration")
-            self.psg_angle = self
+            _ = self._ppm_get_psgticks()  # initialize psg_angle
             logger.info("PPM-specific methods initialized")
-        
+
         if microscope_name == "CAMM":
             self.swap_objective_lens = self._camm_swap_objective_lens
             logger.info("CAMM-specific methods initialized")
@@ -534,21 +536,72 @@ class PycromanagerHardware(MicroscopeHardware):
 
         return device_dict
 
+    def wrap_angle_m180_p180(self, angle_deg):
+        """
+        Wrap an angle in degrees to the range [-180, 180)
+        """
+        wrapped = (angle_deg + 180) % 360 - 180
+        return wrapped
+
+    def get_ccw_rot_angle(self, theta):  # get counter clockwise rotation angle
+        current_angle_wrapped = self.get_psg_ticks()
+        current_angle = self.psg_angle
+        if theta == 90:
+            theta = -1 * 90
+        # current_angle_wrapped = microscope_hardware.wrap_angle_m180_p180(current_angle)
+        # print("current", current_angle, current_angle_wrapped)
+        delta_angle = current_angle_wrapped - theta
+        # print("delta_angle", delta_angle)
+        if delta_angle > 0:
+            desired_theta = current_angle - delta_angle + 360
+            # print(f"Rotating ccw by {360 + delta_angle} degrees to {theta}")
+        else:
+            desired_theta = current_angle - delta_angle
+            # print(f"Rotating ccw by { - delta_angle} degrees to {theta}")
+        return desired_theta
+
     def _ppm_set_psgticks(self, theta: float) -> None:
         """Set the PPM rotation stage to a specific angle."""
         # Try to get rotation stage device from settings
         rotation_device = self.rotation_device
-        theta_thor = ppm_psgticks_to_thor(theta)
+        new_theta = self.get_ccw_rot_angle(theta)
+        theta_thor = ppm_psgticks_to_thor(new_theta)
+        current_pos_thor = self.core.get_position(rotation_device)
+        assert theta_thor < current_pos_thor
         self.core.set_position(rotation_device, theta_thor)
         self.core.wait_for_device(rotation_device)
-
         logger.debug(f"Set rotation angle to {theta}° (Thor position: {theta_thor})")
+        print(
+            f"[PPM Rotation Stage] Requested: {theta}°, "
+            f"CCW-adjusted: {new_theta}°, "
+            f"Current (Thor): {current_pos_thor}, "
+            f"Target (Thor): {theta_thor}"
+        )
 
     def _ppm_get_psgticks(self) -> float:
         """Get the current PPM rotation angle."""
         rotation_device = self.rotation_device
         thor_pos = self.core.get_position(rotation_device)
-        return ppm_thor_to_psgticks(thor_pos)
+        self.psg_angle = ppm_thor_to_psgticks(thor_pos)
+        angle_wrapped = self.wrap_angle_m180_p180(self.psg_angle)
+        return angle_wrapped
+
+    # def _ppm_set_psgticks(self, theta: float) -> None:
+    #     """Set the PPM rotation stage to a specific angle."""
+    #     # Try to get rotation stage device from settings
+    #     rotation_device = self.rotation_device
+
+    #     theta_thor = ppm_psgticks_to_thor(theta)
+    #     self.core.set_position(rotation_device, theta_thor)
+    #     self.core.wait_for_device(rotation_device)
+
+    #     logger.debug(f"Set rotation angle to {theta}° (Thor position: {theta_thor})")
+
+    # def _ppm_get_psgticks(self) -> float:
+    #     """Get the current PPM rotation angle."""
+    #     rotation_device = self.rotation_device
+    #     thor_pos = self.core.get_position(rotation_device)
+    #     return ppm_thor_to_psgticks(thor_pos)
 
     def _camm_swap_objective_lens(self, desired_imaging_mode: Dict[str, Any]):
         """
