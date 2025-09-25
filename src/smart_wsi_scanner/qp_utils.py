@@ -262,6 +262,297 @@ class AutofocusUtils:
 
         return float(np.mean(gradient_magnitude * weight_mask))
 
+    @staticmethod
+    def has_sufficient_tissue(
+        image: np.ndarray,
+        texture_threshold: float = 0.02,
+        tissue_area_threshold: float = 0.15,
+        modality: Optional[str] = None,
+        logger=None
+    ) -> bool:
+        """
+        Determine if image has sufficient tissue texture for reliable autofocus.
+
+        Args:
+            image: Input image (grayscale or RGB)
+            texture_threshold: Minimum texture variance (normalized)
+            tissue_area_threshold: Minimum fraction of image that must contain tissue
+            modality: Imaging modality for modality-specific adjustments
+            logger: Optional logger instance
+
+        Returns:
+            True if sufficient tissue is present for autofocus
+        """
+        # Modality-specific parameter adjustments
+        if modality:
+            modality_lower = modality.lower()
+
+            # Polarized light microscopy adjustments
+            if 'ppm' in modality_lower or 'polarized' in modality_lower:
+                # Polarized images can have wider intensity ranges and different tissue appearance
+                # More inclusive tissue mask to capture birefringent structures
+                tissue_mask_range = (0.05, 0.95)  # Wider range
+                if texture_threshold == 0.02:  # Only adjust if using default
+                    texture_threshold = 0.015  # Slightly more sensitive
+
+            # Brightfield microscopy
+            elif 'bf' in modality_lower or 'brightfield' in modality_lower:
+                # Standard tissue detection works well for brightfield
+                tissue_mask_range = (0.15, 0.85)  # Focus on typical tissue intensity
+
+            # Multi-photon or SHG
+            elif 'shg' in modality_lower or 'multiphoton' in modality_lower:
+                # High contrast features, different background characteristics
+                tissue_mask_range = (0.1, 0.9)
+                if texture_threshold == 0.02:
+                    texture_threshold = 0.025  # Slightly less sensitive due to sparse features
+
+            else:
+                # Default mask range
+                tissue_mask_range = (0.1, 0.9)
+        else:
+            tissue_mask_range = (0.1, 0.9)
+        # Convert to grayscale if needed
+        if len(image.shape) == 3:
+            img_gray = np.mean(image, axis=2).astype(np.float32)
+        elif len(image.shape) == 2:
+            # Handle Bayer pattern
+            if image.shape[0] % 2 == 0 and image.shape[1] % 2 == 0:
+                green1 = image[0::2, 0::2]
+                green2 = image[1::2, 1::2]
+                img_gray = ((green1 + green2) / 2.0).astype(np.float32)
+            else:
+                img_gray = image.astype(np.float32)
+        else:
+            img_gray = image.astype(np.float32)
+
+        # Normalize image to [0, 1] range
+        img_norm = (img_gray - img_gray.min()) / (img_gray.max() - img_gray.min() + 1e-10)
+
+        # Calculate local texture using gradient magnitude
+        gy, gx = np.gradient(img_norm)
+        gradient_magnitude = np.sqrt(gx**2 + gy**2)
+
+        # Calculate overall texture strength
+        texture_strength = np.std(gradient_magnitude)
+
+        # Identify potential tissue regions using modality-specific intensity ranges
+        tissue_mask = (img_norm > tissue_mask_range[0]) & (img_norm < tissue_mask_range[1])
+
+        # Calculate texture in tissue regions only
+        if np.any(tissue_mask):
+            tissue_texture = np.std(gradient_magnitude[tissue_mask])
+            tissue_area_fraction = np.sum(tissue_mask) / tissue_mask.size
+        else:
+            tissue_texture = 0.0
+            tissue_area_fraction = 0.0
+
+        # Decision criteria
+        sufficient_texture = tissue_texture > texture_threshold
+        sufficient_area = tissue_area_fraction > tissue_area_threshold
+
+        # Overall decision
+        has_tissue = sufficient_texture and sufficient_area
+
+        if logger:
+            logger.debug(f"Tissue detection: texture={tissue_texture:.4f} (>{texture_threshold}), "
+                        f"area={tissue_area_fraction:.3f} (>{tissue_area_threshold}), "
+                        f"sufficient={has_tissue}")
+
+        return has_tissue
+
+    @staticmethod
+    def defer_autofocus_to_next_tile(
+        current_pos_idx: int,
+        original_af_positions: List[int],
+        total_positions: int,
+        af_min_distance: float,
+        positions: List[Tuple[float, float]],
+        logger=None
+    ) -> Optional[int]:
+        """
+        Find the next suitable tile position for autofocus when current tile lacks tissue.
+
+        Args:
+            current_pos_idx: Current tile index that was supposed to get autofocus
+            original_af_positions: Original list of autofocus positions
+            total_positions: Total number of tile positions
+            af_min_distance: Minimum distance required between autofocus positions
+            positions: List of (x, y) positions for all tiles
+            logger: Optional logger instance
+
+        Returns:
+            Index of next tile to perform autofocus on, or None if no suitable tile found
+        """
+        if not positions or current_pos_idx >= len(positions):
+            return None
+
+        current_xy = positions[current_pos_idx]
+
+        # Look ahead for the next tile that's far enough away and within bounds
+        for candidate_idx in range(current_pos_idx + 1, total_positions):
+            candidate_xy = positions[candidate_idx]
+
+            # Check distance from current position
+            distance = cdist([current_xy], [candidate_xy])[0][0]
+
+            if distance >= af_min_distance * 0.7:  # Slightly relax distance requirement
+                if logger:
+                    logger.info(f"Deferring autofocus from tile {current_pos_idx} to tile {candidate_idx} "
+                              f"(distance: {distance:.1f} >= {af_min_distance * 0.7:.1f})")
+                return candidate_idx
+
+        # If no suitable position found nearby, try to find any position beyond minimum distance
+        for candidate_idx in range(current_pos_idx + 1, min(current_pos_idx + 10, total_positions)):
+            if logger:
+                logger.warning(f"No ideal autofocus position found, using tile {candidate_idx} as backup")
+            return candidate_idx
+
+        if logger:
+            logger.warning(f"Could not find suitable autofocus deferral position after tile {current_pos_idx}")
+
+        return None
+
+    @staticmethod
+    def test_tissue_detection(
+        image: np.ndarray,
+        modality: str = "unknown",
+        texture_thresholds: List[float] = [0.01, 0.02, 0.03, 0.05],
+        area_thresholds: List[float] = [0.10, 0.15, 0.20, 0.25],
+        show_analysis: bool = True,
+        logger=None
+    ) -> Dict[str, Any]:
+        """
+        Test tissue detection function with different threshold combinations.
+
+        Args:
+            image: Input image to analyze
+            modality: Imaging modality name for reporting
+            texture_thresholds: List of texture thresholds to test
+            area_thresholds: List of area thresholds to test
+            show_analysis: Whether to show detailed analysis
+            logger: Optional logger instance
+
+        Returns:
+            Dictionary with analysis results and recommendations
+        """
+        import matplotlib.pyplot as plt
+
+        # Convert to grayscale for analysis
+        if len(image.shape) == 3:
+            img_gray = np.mean(image, axis=2).astype(np.float32)
+        elif len(image.shape) == 2:
+            if image.shape[0] % 2 == 0 and image.shape[1] % 2 == 0:
+                green1 = image[0::2, 0::2]
+                green2 = image[1::2, 1::2]
+                img_gray = ((green1 + green2) / 2.0).astype(np.float32)
+            else:
+                img_gray = image.astype(np.float32)
+        else:
+            img_gray = image.astype(np.float32)
+
+        # Normalize image
+        img_norm = (img_gray - img_gray.min()) / (img_gray.max() - img_gray.min() + 1e-10)
+
+        # Calculate gradient and tissue metrics
+        gy, gx = np.gradient(img_norm)
+        gradient_magnitude = np.sqrt(gx**2 + gy**2)
+
+        # Intensity analysis for modality-specific insights
+        intensity_stats = {
+            'min': float(img_norm.min()),
+            'max': float(img_norm.max()),
+            'mean': float(img_norm.mean()),
+            'std': float(img_norm.std()),
+            'median': float(np.median(img_norm))
+        }
+
+        # Gradient analysis
+        gradient_stats = {
+            'mean': float(gradient_magnitude.mean()),
+            'std': float(gradient_magnitude.std()),
+            'max': float(gradient_magnitude.max()),
+            'p95': float(np.percentile(gradient_magnitude, 95))
+        }
+
+        # Test different tissue masks for modality analysis
+        tissue_masks = {
+            'conservative': (img_norm > 0.1) & (img_norm < 0.9),  # Original
+            'brightfield_like': (img_norm > 0.2) & (img_norm < 0.8),  # Typical tissue range
+            'polarized_inclusive': (img_norm > 0.05) & (img_norm < 0.95),  # Wider range for polarized
+            'high_contrast': (img_norm > 0.15) & (img_norm < 0.85)  # Focus on mid-range
+        }
+
+        mask_analysis = {}
+        for mask_name, mask in tissue_masks.items():
+            if np.any(mask):
+                mask_texture = np.std(gradient_magnitude[mask])
+                mask_area = np.sum(mask) / mask.size
+            else:
+                mask_texture = 0.0
+                mask_area = 0.0
+
+            mask_analysis[mask_name] = {
+                'texture': mask_texture,
+                'area_fraction': mask_area
+            }
+
+        # Test threshold combinations
+        results_matrix = []
+        for tex_thresh in texture_thresholds:
+            for area_thresh in area_thresholds:
+                result = AutofocusUtils.has_sufficient_tissue(
+                    image, tex_thresh, area_thresh, logger=None
+                )
+                results_matrix.append({
+                    'texture_threshold': tex_thresh,
+                    'area_threshold': area_thresh,
+                    'has_tissue': result
+                })
+
+        # Analysis summary
+        analysis_summary = {
+            'modality': modality,
+            'image_shape': image.shape,
+            'intensity_stats': intensity_stats,
+            'gradient_stats': gradient_stats,
+            'mask_analysis': mask_analysis,
+            'threshold_results': results_matrix,
+            'recommendations': {}
+        }
+
+        # Generate recommendations based on analysis
+        best_mask = max(mask_analysis.keys(), key=lambda k: mask_analysis[k]['texture'])
+        analysis_summary['recommendations'] = {
+            'best_tissue_mask': best_mask,
+            'suggested_texture_threshold': max(0.01, gradient_stats['std'] * 0.5),
+            'suggested_area_threshold': max(0.1, mask_analysis[best_mask]['area_fraction'] * 0.5),
+            'intensity_range': f"{intensity_stats['min']:.3f} - {intensity_stats['max']:.3f}",
+            'has_good_contrast': intensity_stats['std'] > 0.15
+        }
+
+        if show_analysis and logger:
+            logger.info(f"=== TISSUE DETECTION TEST: {modality.upper()} ===")
+            logger.info(f"Image shape: {image.shape}")
+            logger.info(f"Intensity range: {intensity_stats['min']:.3f} - {intensity_stats['max']:.3f} (std: {intensity_stats['std']:.3f})")
+            logger.info(f"Gradient stats: mean={gradient_stats['mean']:.4f}, std={gradient_stats['std']:.4f}")
+
+            logger.info("Tissue mask analysis:")
+            for mask_name, stats in mask_analysis.items():
+                logger.info(f"  {mask_name}: texture={stats['texture']:.4f}, area={stats['area_fraction']:.3f}")
+
+            logger.info("Threshold test results:")
+            for result in results_matrix:
+                status = "PASS" if result['has_tissue'] else "FAIL"
+                logger.info(f"  tex={result['texture_threshold']:.3f}, area={result['area_threshold']:.3f} -> {status}")
+
+            logger.info(f"Recommendations:")
+            logger.info(f"  Best mask: {analysis_summary['recommendations']['best_tissue_mask']}")
+            logger.info(f"  Suggested texture threshold: {analysis_summary['recommendations']['suggested_texture_threshold']:.4f}")
+            logger.info(f"  Suggested area threshold: {analysis_summary['recommendations']['suggested_area_threshold']:.3f}")
+
+        return analysis_summary
+
 
 class TifWriterUtils:
     """Utilities for writing TIFF files and image processing."""
