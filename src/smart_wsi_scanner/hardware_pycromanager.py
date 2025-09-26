@@ -543,22 +543,87 @@ class PycromanagerHardware(MicroscopeHardware):
         wrapped = (angle_deg + 180) % 360 - 180
         return wrapped
 
-    def get_ccw_rot_angle(self, theta):  # get counter clockwise rotation angle
+    def get_ccw_rot_angle(self, theta, is_sequence_start=False):
+        """
+        Get counter clockwise rotation angle maintaining polarization state consistency.
+
+        CRITICAL: Within an acquisition sequence (e.g., -90°, -7°, 0°, 7° for one tile),
+        ALL angles must maintain the same optical polarization state to avoid
+        alternating light/dark intensities. Large rotations that flip the optical
+        element are ONLY allowed between acquisition sequences.
+
+        Args:
+            theta: Target optical angle (e.g., -90, -7, 0, 7)
+            is_sequence_start: True if starting new acquisition sequence (allows large rotation)
+
+        Returns:
+            Next PPM tick value for motor positioning
+        """
         current_angle_wrapped = self.get_psg_ticks()
         current_angle = self.psg_angle
-        if theta == 90:
-            theta = -1 * 90
-        # current_angle_wrapped = microscope_hardware.wrap_angle_m180_p180(current_angle)
-        # print("current", current_angle, current_angle_wrapped)
-        delta_angle = current_angle_wrapped - theta
-        # print("delta_angle", delta_angle)
-        if delta_angle > 0:
-            desired_theta = current_angle - delta_angle + 360
-            # print(f"Rotating ccw by {360 + delta_angle} degrees to {theta}")
+
+        # Convert optical angle to PPM ticks (base positions)
+        optical_to_ppm_ticks = {
+            -90: 90,   # -90° optical -> 90 PPM ticks
+            -7: 173,   # -7° optical -> 173 PPM ticks (180 - 7)
+            0: 180,    # 0° optical -> 180 PPM ticks
+            7: 7       # 7° optical -> 7 PPM ticks (wraps around from 187)
+        }
+
+        if theta not in optical_to_ppm_ticks:
+            raise ValueError(f"Unsupported optical angle: {theta}°. Supported: {list(optical_to_ppm_ticks.keys())}")
+
+        target_ppm_ticks = optical_to_ppm_ticks[theta]
+
+        if is_sequence_start:
+            # Starting new acquisition sequence - ensure we're in "a" polarization state
+            # Find next "a" position (even number of 180° segments from 0)
+            current_cycle = current_angle // 360
+            candidate = target_ppm_ticks + (current_cycle * 360)
+
+            # If we've passed this position, move to next cycle
+            if candidate <= current_angle:
+                candidate = target_ppm_ticks + ((current_cycle + 1) * 360)
+
+            # Ensure it's an "a" position (even number of 180° segments)
+            while (candidate // 180) % 2 != 0:
+                candidate += 360
+
+            return candidate
+
         else:
-            desired_theta = current_angle - delta_angle
-            # print(f"Rotating ccw by { - delta_angle} degrees to {theta}")
-        return desired_theta
+            # Within acquisition sequence - maintain current polarization state
+            # Only allow small rotations that don't flip the optical element
+
+            # Determine current polarization state
+            current_state = "a" if (current_angle // 180) % 2 == 0 else "b"
+
+            # Find the target position that maintains current state
+            current_cycle = current_angle // 360
+            candidate = target_ppm_ticks + (current_cycle * 360)
+
+            # Ensure same polarization state as current
+            candidate_state = "a" if (candidate // 180) % 2 == 0 else "b"
+
+            if candidate_state != current_state:
+                # Adjust to maintain same state
+                if current_state == "a":
+                    # Need even number of 180° segments
+                    while (candidate // 180) % 2 != 0:
+                        candidate += 180
+                else:
+                    # Need odd number of 180° segments
+                    while (candidate // 180) % 2 == 0:
+                        candidate += 180
+
+            # Ensure forward motion only
+            if candidate <= current_angle:
+                if current_state == "a":
+                    candidate += 360  # Next "a" cycle
+                else:
+                    candidate += 360  # Next "b" cycle
+
+            return candidate
 
     def _ppm_set_psgticks(self, theta: float) -> None:
         """Set the PPM rotation stage to a specific angle."""
