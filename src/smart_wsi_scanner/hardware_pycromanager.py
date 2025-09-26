@@ -585,52 +585,45 @@ class PycromanagerHardware(MicroscopeHardware):
                 target_ppm_ticks = theta % 180
 
         if is_sequence_start:
-            # Starting new acquisition sequence - ensure we're in "a" polarization state
-            # Find next "a" position (even number of 180° segments from 0)
+            # Starting new acquisition sequence - force "a" polarization state
+            # "a" positions are in even-numbered 360° cycles: 0-359, 720-1079, 1440-1799, etc.
+
+            # Find the next even-numbered cycle (360° period)
             current_cycle = current_angle // 360
-            candidate = target_ppm_ticks + (current_cycle * 360)
 
-            # If we've passed this position, move to next cycle
+            # Target cycle should be even (for "a" position)
+            if current_cycle % 2 != 0:
+                # Currently in odd cycle ("b"), move to next even cycle ("a")
+                target_cycle = current_cycle + 1
+            else:
+                # Currently in even cycle ("a")
+                target_cycle = current_cycle
+
+            # Calculate candidate position in target cycle
+            candidate = target_ppm_ticks + (target_cycle * 360)
+
+            # If we've already passed this position, move to next even cycle
             if candidate <= current_angle:
-                candidate = target_ppm_ticks + ((current_cycle + 1) * 360)
-
-            # Ensure it's an "a" position (even number of 180° segments)
-            while (candidate // 180) % 2 != 0:
-                candidate += 360
+                target_cycle += 2 if target_cycle % 2 == 0 else 1
+                candidate = target_ppm_ticks + (target_cycle * 360)
 
             return candidate
 
         else:
-            # Within acquisition sequence - maintain current polarization state
-            # Only allow small rotations that don't flip the optical element
+            # Within acquisition sequence - stay in the same 360° cycle
+            # This ensures all angles in the sequence maintain the same polarization state
 
-            # Determine current polarization state
-            current_state = "a" if (current_angle // 180) % 2 == 0 else "b"
-
-            # Find the target position that maintains current state
             current_cycle = current_angle // 360
             candidate = target_ppm_ticks + (current_cycle * 360)
 
-            # Ensure same polarization state as current
-            candidate_state = "a" if (candidate // 180) % 2 == 0 else "b"
-
-            if candidate_state != current_state:
-                # Adjust to maintain same state
-                if current_state == "a":
-                    # Need even number of 180° segments
-                    while (candidate // 180) % 2 != 0:
-                        candidate += 180
-                else:
-                    # Need odd number of 180° segments
-                    while (candidate // 180) % 2 == 0:
-                        candidate += 180
-
-            # Ensure forward motion only
+            # If we can't reach this angle in the current cycle (already passed it),
+            # we have a problem - the sequence should be designed to avoid this
             if candidate <= current_angle:
-                if current_state == "a":
-                    candidate += 360  # Next "a" cycle
-                else:
-                    candidate += 360  # Next "b" cycle
+                # This should not happen in a well-designed sequence, but handle it
+                logger.warning(f"Angle sequence issue: target {target_ppm_ticks} in cycle {current_cycle} "
+                             f"would go backwards from {current_angle} to {candidate}")
+                # Stay in same cycle but move to next logical position
+                candidate = current_angle + (target_ppm_ticks % 180)
 
             return candidate
 
