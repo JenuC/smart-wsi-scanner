@@ -563,17 +563,26 @@ class PycromanagerHardware(MicroscopeHardware):
         current_angle = self.psg_angle
 
         # Convert optical angle to PPM ticks (base positions)
-        optical_to_ppm_ticks = {
+        # Handle special known angles first
+        special_angles = {
             -90: 90,   # -90° optical -> 90 PPM ticks
+            90: 90,    # 90° optical -> 90 PPM ticks (same as -90°, 90° away from 0°)
             -7: 173,   # -7° optical -> 173 PPM ticks (180 - 7)
-            0: 180,    # 0° optical -> 180 PPM ticks
-            7: 7       # 7° optical -> 7 PPM ticks (wraps around from 187)
+            0: 180,    # 0° optical -> 180 PPM ticks (or 0, but using 180)
+            7: 7       # 7° optical -> 7 PPM ticks
         }
 
-        if theta not in optical_to_ppm_ticks:
-            raise ValueError(f"Unsupported optical angle: {theta}°. Supported: {list(optical_to_ppm_ticks.keys())}")
-
-        target_ppm_ticks = optical_to_ppm_ticks[theta]
+        if theta in special_angles:
+            target_ppm_ticks = special_angles[theta]
+        else:
+            # For other angles, calculate PPM ticks
+            # Convert angle to equivalent PPM ticks (0-179 range)
+            if theta < 0:
+                # Negative angles: convert to positive equivalent
+                target_ppm_ticks = 180 + theta  # e.g., -5 -> 175
+            else:
+                # Positive angles: use as-is but ensure within range
+                target_ppm_ticks = theta % 180
 
         if is_sequence_start:
             # Starting new acquisition sequence - ensure we're in "a" polarization state
@@ -625,11 +634,11 @@ class PycromanagerHardware(MicroscopeHardware):
 
             return candidate
 
-    def _ppm_set_psgticks(self, theta: float) -> None:
+    def _ppm_set_psgticks(self, theta: float, is_sequence_start: bool = False) -> None:
         """Set the PPM rotation stage to a specific angle."""
         # Try to get rotation stage device from settings
         rotation_device = self.rotation_device
-        new_theta = self.get_ccw_rot_angle(theta)
+        new_theta = self.get_ccw_rot_angle(theta, is_sequence_start=is_sequence_start)
         theta_thor = ppm_psgticks_to_thor(new_theta)
         current_pos_thor = self.core.get_position(rotation_device)
         assert theta_thor < current_pos_thor
