@@ -500,8 +500,9 @@ def _acquisition_workflow(
                         return
 
                     # Set rotation angle
-                    
-                    hardware.set_psg_ticks(angle)
+                    # First angle of each position should reset to "a" polarization state
+                    is_sequence_start = (angle_idx == 0)
+                    hardware.set_psg_ticks(angle, is_sequence_start=is_sequence_start)
                     logger.info(f"  Angle set to {hardware.get_psg_ticks():.1f}")
 
                     # Set exposure time if specified
@@ -754,7 +755,7 @@ def simple_background_collection(
 
             # Set rotation angle if supported
             if hasattr(hardware, "set_psg_ticks"):
-                hardware.set_psg_ticks(angle)
+                hardware.set_psg_ticks(angle, is_sequence_start=True)  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
             # Set exposure time
@@ -855,7 +856,7 @@ def background_acquisition_workflow(
 
             # Set rotation angle if PPM
             if hasattr(hardware, "set_psg_ticks"):
-                hardware.set_psg_ticks(angle)
+                hardware.set_psg_ticks(angle, is_sequence_start=True)  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
             # Set exposure time

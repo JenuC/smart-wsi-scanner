@@ -240,7 +240,7 @@ def handle_client(conn, addr):
                 coords = conn.recv(4)
                 angle = struct.unpack("!f", coords)[0]
                 logger.info(f"Client {addr} requested rotation to {angle}°")
-                hardware.set_psg_ticks(angle)
+                hardware.set_psg_ticks(angle, is_sequence_start=True)  # Single rotation command
                 logger.info(f"Rotation completed to {angle}°")
                 continue
 

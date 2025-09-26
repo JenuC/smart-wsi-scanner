@@ -1196,7 +1196,7 @@ class BackgroundCorrectionUtils:
 
             # Set rotation angle if PPM
             if hasattr(hardware, "set_psg_ticks"):
-                hardware.set_psg_ticks(angle)
+                hardware.set_psg_ticks(angle, is_sequence_start=True)  # Single angle acquisition
                 logger.info(f"Set angle to {angle}°")
 
             # Set exposure
