@@ -74,6 +74,7 @@ class PycromanagerHardware(MicroscopeHardware):
         if microscope_name == "PPM":
             self.set_psg_ticks = self._ppm_set_psgticks
             self.get_psg_ticks = self._ppm_get_psgticks
+            self.home_psg = self._ppm_home
             ppm_config = self.settings.get("modalities", {}).get("ppm", {})
             r_device_name = ppm_config.get("rotation_stage", {}).get("device")
             self.rotation_device = (
@@ -669,6 +670,14 @@ class PycromanagerHardware(MicroscopeHardware):
     #     rotation_device = self.rotation_device
     #     thor_pos = self.core.get_position(rotation_device)
     #     return ppm_thor_to_psgticks(thor_pos)
+
+    def _ppm_home(self, theta: float, is_sequence_start: bool = False) -> None:
+        """Set the PPM rotation stage to a specific angle."""
+        # Try to get rotation stage device from settings
+        rotation_device = self.rotation_device
+        self.core.home(rotation_device)
+        self.core.wait_for_device(rotation_device)
+        logger.debug("Homed rotation stage")
 
     def _camm_swap_objective_lens(self, desired_imaging_mode: Dict[str, Any]):
         """
