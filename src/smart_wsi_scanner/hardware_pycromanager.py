@@ -621,8 +621,10 @@ class PycromanagerHardware(MicroscopeHardware):
             # we have a problem - the sequence should be designed to avoid this
             if candidate <= current_angle:
                 # This should not happen in a well-designed sequence, but handle it
-                logger.warning(f"Angle sequence issue: target {target_ppm_ticks} in cycle {current_cycle} "
-                             f"would go backwards from {current_angle} to {candidate}")
+                logger.warning(
+                    f"Angle sequence issue: target {target_ppm_ticks} in cycle {current_cycle} "
+                    f"would go backwards from {current_angle} to {candidate}"
+                )
                 # Stay in same cycle but move to next logical position
                 candidate = current_angle + (target_ppm_ticks % 180)
 
@@ -638,7 +640,7 @@ class PycromanagerHardware(MicroscopeHardware):
         assert theta_thor < current_pos_thor
         self.core.set_position(rotation_device, theta_thor)
         self.core.wait_for_device(rotation_device)
-        logger.debug(f"Set rotation angle to {theta}° (Thor position: {theta_thor})")
+        logger.info(f"Set rotation angle to {theta}° (Thor position: {theta_thor})")
         print(
             f"[PPM Rotation Stage] Requested: {theta}°, "
             f"CCW-adjusted: {new_theta}°, "
@@ -671,7 +673,7 @@ class PycromanagerHardware(MicroscopeHardware):
     #     thor_pos = self.core.get_position(rotation_device)
     #     return ppm_thor_to_psgticks(thor_pos)
 
-    def _ppm_home(self, theta: float, is_sequence_start: bool = False) -> None:
+    def _ppm_home(self) -> None:
         """Set the PPM rotation stage to a specific angle."""
         # Try to get rotation stage device from settings
         rotation_device = self.rotation_device

@@ -268,6 +268,9 @@ def _acquisition_workflow(
         ppm_settings.update(loci_resources)
         hardware.settings = ppm_settings
 
+        # Home rot-stage
+        hardware.home_psg()
+
         # Extract modality from scan type
         modality = BackgroundCorrectionUtils.get_modality_from_scan_type(params["scan_type"])
         logger.info(f"Using modality: {modality}")
@@ -374,6 +377,17 @@ def _acquisition_workflow(
         total_images = (
             len(positions) * len(params["angles"]) if params["angles"] else len(positions)
         )
+
+        # check if total image is 720_psg_degs (should be 360, MSN tested 720) x number_of_tiles < MM2 limit for DDR25 536870.9 or ticks
+        total_rotation = 720 * len(positions)
+        if total_rotation > 2**18:  # 262144
+            #
+            # i think its an 18-bit limit because we are not sure if 536870.9 was stuck early on.
+            # the log says its unable to move from 268573.456 to 268567.0 ticks, but the mm2-thorlabs reading max at -536870.9
+            logger.error(
+                f"Total rotation steps {total_rotation} exceed Micro-Manager limit of 536870. Acquisition aborted."
+            )
+
         update_progress(0, total_images)
         logger.info(
             f"Starting acquisition of {total_images} total images "
