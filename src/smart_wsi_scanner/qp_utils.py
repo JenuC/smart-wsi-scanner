@@ -268,8 +268,9 @@ class AutofocusUtils:
         texture_threshold: float = 0.02,
         tissue_area_threshold: float = 0.15,
         modality: Optional[str] = None,
-        logger=None
-    ) -> bool:
+        logger=None,
+        return_stats: bool = False
+    ):
         """
         Determine if image has sufficient tissue texture for reliable autofocus.
 
@@ -279,9 +280,11 @@ class AutofocusUtils:
             tissue_area_threshold: Minimum fraction of image that must contain tissue
             modality: Imaging modality for modality-specific adjustments
             logger: Optional logger instance
+            return_stats: If True, return (bool, dict) with detection statistics
 
         Returns:
-            True if sufficient tissue is present for autofocus
+            If return_stats=False: True if sufficient tissue is present for autofocus
+            If return_stats=True: (bool, dict) where dict contains detection statistics
         """
         # Modality-specific parameter adjustments
         if modality:
@@ -359,7 +362,18 @@ class AutofocusUtils:
                         f"area={tissue_area_fraction:.3f} (>{tissue_area_threshold}), "
                         f"sufficient={has_tissue}")
 
-        return has_tissue
+        if return_stats:
+            stats = {
+                'texture': tissue_texture,
+                'texture_threshold': texture_threshold,
+                'area': tissue_area_fraction,
+                'area_threshold': tissue_area_threshold,
+                'sufficient_texture': sufficient_texture,
+                'sufficient_area': sufficient_area
+            }
+            return has_tissue, stats
+        else:
+            return has_tissue
 
     @staticmethod
     def defer_autofocus_to_next_tile(

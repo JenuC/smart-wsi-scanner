@@ -460,15 +460,28 @@ def _acquisition_workflow(
             if pos_idx in dynamic_af_positions:
                 logger.info(f"Checking for autofocus at position {pos_idx}: X={pos.x}, Y={pos.y}, Z={pos.z}")
 
+                # For PPM, always autofocus at 90° (uncrossed polarizers - brightest, fastest)
+                # This ensures consistent, fast autofocus regardless of angle sequence
+                if 'ppm' in modality.lower():
+                    hardware.set_psg_ticks(90.0)
+                    logger.info("Set rotation to 90° (uncrossed) for PPM autofocus")
+
                 # Take a quick image to assess tissue content
                 test_img, _ = hardware.snap_image()
 
                 # Check if there's sufficient tissue for reliable autofocus
-                if AutofocusUtils.has_sufficient_tissue(test_img, logger=logger):
+                # Pass modality for modality-specific thresholds
+                has_tissue, tissue_stats = AutofocusUtils.has_sufficient_tissue(
+                    test_img,
+                    modality=modality,
+                    logger=logger,
+                    return_stats=True
+                )
+
+                if has_tissue:
                     logger.info(f"Sufficient tissue detected - performing autofocus")
-                    ## TODO: hardsetting ppm-focusing to 90deg
-                    # if params["angles"] and 90.0 in params["angles"]:
-                    #    hardware.set_psg_ticks(90.0)
+                    logger.info(f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
+                               f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})")
 
                     new_z = hardware.autofocus(
                         move_stage_to_estimate=True,
@@ -480,6 +493,8 @@ def _acquisition_workflow(
                     logger.info(f"  Autofocus :: New Z {new_z}")
                 else:
                     logger.warning(f"Insufficient tissue at position {pos_idx} - deferring autofocus")
+                    logger.warning(f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
+                                  f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})")
 
                     # Remove this position from autofocus list
                     dynamic_af_positions.discard(pos_idx)
