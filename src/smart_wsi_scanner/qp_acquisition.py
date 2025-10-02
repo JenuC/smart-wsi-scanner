@@ -6,6 +6,7 @@ microscope hardware, separated from the socket server/transport logic.
 
 from __future__ import annotations
 
+import time
 from typing import Callable, List, Tuple, Optional, Dict, Any
 import pathlib
 import shutil
@@ -269,7 +270,7 @@ def _acquisition_workflow(
         hardware.settings = ppm_settings
 
         # Home rot-stage
-        hardware.home_psg()
+        #hardware.home_psg()
 
         # Extract modality from scan type
         modality = BackgroundCorrectionUtils.get_modality_from_scan_type(params["scan_type"])
@@ -378,12 +379,11 @@ def _acquisition_workflow(
             len(positions) * len(params["angles"]) if params["angles"] else len(positions)
         )
 
-        # check if total image is 720_psg_degs (should be 360, MSN tested 720) x number_of_tiles < MM2 limit for DDR25 536870.9 or ticks
-        total_rotation = 720 * len(positions)
+        # check if total image is 720_psg_degs (should be 360, MSN tested 720) x number_of_tiles < MM2 limit
+        # for DDR25 limit is 536870.9 (thorlabs)degs or 268573 (ticks)
+        # that is 372 tiles
+        total_rotation = 720 * len(positions)  #
         if total_rotation > 2**18:  # 262144
-            #
-            # i think its an 18-bit limit because we are not sure if 536870.9 was stuck early on.
-            # the log says its unable to move from 268573.456 to 268567.0 ticks, but the mm2-thorlabs reading max at -536870.9
             logger.error(
                 f"Total rotation steps {total_rotation} exceed Micro-Manager limit of 536870. Acquisition aborted."
             )
@@ -458,30 +458,60 @@ def _acquisition_workflow(
 
             # Perform autofocus if needed (with tissue detection)
             if pos_idx in dynamic_af_positions:
-                logger.info(f"Checking for autofocus at position {pos_idx}: X={pos.x}, Y={pos.y}, Z={pos.z}")
+                logger.info(
+                    f"Checking for autofocus at position {pos_idx}: X={pos.x}, Y={pos.y}, Z={pos.z}"
+                )
 
                 # For PPM, always autofocus at 90° (uncrossed polarizers - brightest, fastest)
                 # This ensures consistent, fast autofocus regardless of angle sequence
-                if 'ppm' in modality.lower():
+                if "ppm" in modality.lower():
                     hardware.set_psg_ticks(90.0)
                     logger.info("Set rotation to 90° (uncrossed) for PPM autofocus")
+                    # CRITICAL: Set appropriate exposure for 90° before tissue detection
+                    # Find the 90° exposure from acquisition parameters
+                    exposure_90 = 2.0  # Default fallback
 
+                    if 90.0 in params["angles"]:
+                        angle_idx = params["angles"].index(90.0)
+                        if angle_idx < len(params["exposures"]):
+                            exposure_90 = params["exposures"][angle_idx]
+
+                    hardware.set_exposure(exposure_90)
+                    logger.info(f"Set exposure to {exposure_90}ms for 90° tissue detection")
                 # Take a quick image to assess tissue content
                 test_img, _ = hardware.snap_image()
+
+                # Ensure consistent format for tissue detection
+                if test_img.dtype in [np.float32, np.float64]:
+                    # Check if already normalized (0-1 range)
+                    if test_img.max() <= 1.0 and test_img.min() >= 0.0:
+                        # Convert to uint8 to match expected format
+                        test_img = (test_img * 255).astype(np.uint8)
+                        logger.info(
+                            "Converted normalized float image to uint8 for tissue detection"
+                        )
+                    else:
+                        # Float but not normalized - clip and convert
+                        test_img = np.clip(test_img, 0, 255).astype(np.uint8)
+                        logger.info("Converted float image to uint8 for tissue detection")
 
                 # Check if there's sufficient tissue for reliable autofocus
                 # Pass modality for modality-specific thresholds
                 has_tissue, tissue_stats = AutofocusUtils.has_sufficient_tissue(
                     test_img,
+                    texture_threshold=0.010,
+                    tissue_area_threshold=0.2,
                     modality=modality,
                     logger=logger,
-                    return_stats=True
+                    return_stats=True,
                 )
 
                 if has_tissue:
                     logger.info(f"Sufficient tissue detected - performing autofocus")
-                    logger.info(f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
-                               f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})")
+                    logger.info(
+                        f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
+                        f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})"
+                    )
 
                     new_z = hardware.autofocus(
                         move_stage_to_estimate=True,
@@ -492,9 +522,13 @@ def _acquisition_workflow(
                     )
                     logger.info(f"  Autofocus :: New Z {new_z}")
                 else:
-                    logger.warning(f"Insufficient tissue at position {pos_idx} - deferring autofocus")
-                    logger.warning(f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
-                                  f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})")
+                    logger.warning(
+                        f"Insufficient tissue at position {pos_idx} - deferring autofocus"
+                    )
+                    logger.warning(
+                        f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
+                        f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})"
+                    )
 
                     # Remove this position from autofocus list
                     dynamic_af_positions.discard(pos_idx)
@@ -507,7 +541,7 @@ def _acquisition_workflow(
                         total_positions=len(positions),
                         af_min_distance=af_min_distance,
                         positions=xy_positions,
-                        logger=logger
+                        logger=logger,
                     )
 
                     if next_af_pos is not None and next_af_pos < len(positions):
@@ -530,9 +564,18 @@ def _acquisition_workflow(
 
                     # Set rotation angle
                     # First angle of each position should reset to "a" polarization state
-                    is_sequence_start = (angle_idx == 0)
-                    hardware.set_psg_ticks(angle, is_sequence_start=is_sequence_start)
-                    logger.info(f"  Angle set to {hardware.get_psg_ticks():.1f}")
+                    is_sequence_start = angle_idx == 0
+                    hardware.set_psg_ticks(angle)#, is_sequence_start=is_sequence_start)
+
+                    # Backup check of angle - seem to be having hardware issues sometimes
+                    # actual_angle = hardware.get_psg_ticks()
+                    # angle_diff = min(abs(actual_angle - angle), 360 - abs(actual_angle - angle))
+                    # if angle_diff > 5.0:
+                    #     logger.warning(f"  Angle mismatch: requested {angle:.1f}°, got {actual_angle:.1f}°, retrying...")
+                    #     hardware.set_psg_ticks(angle, is_sequence_start=False)
+                    #     time.sleep(0.15)
+                    #     actual_angle = hardware.get_psg_ticks()
+                    # logger.info(f"  Angle set to {hardware.get_psg_ticks():.1f}")
 
                     # Set exposure time if specified
                     if angle_idx < len(params["exposures"]):
@@ -656,17 +699,17 @@ def _acquisition_workflow(
                         logger=logger,
                     )
 
-                    # Create sum image alongside birefringence image
-                    sum_dir = output_path / f"{pos_angle}.sum"
-                    TifWriterUtils.create_sum_tile(
-                        pos_image=angle_images[pos_angle],
-                        neg_image=angle_images[neg_angle],
-                        output_dir=sum_dir,
-                        filename=filename,
-                        pixel_size_um=hardware.core.get_pixel_size_um(),
-                        tile_config_source=tile_config_source,
-                        logger=logger,
-                    )
+                    # # Create sum image alongside birefringence image
+                    # sum_dir = output_path / f"{pos_angle}.sum"
+                    # TifWriterUtils.create_sum_tile(
+                    #     pos_image=angle_images[pos_angle],
+                    #     neg_image=angle_images[neg_angle],
+                    #     output_dir=sum_dir,
+                    #     filename=filename,
+                    #     pixel_size_um=hardware.core.get_pixel_size_um(),
+                    #     tile_config_source=tile_config_source,
+                    #     logger=logger,
+                    # )
 
             else:
                 # Single image acquisition: no angles specified
@@ -697,8 +740,12 @@ def _acquisition_workflow(
 
         # Report autofocus activity
         if deferred_af_positions:
-            logger.info(f"Autofocus deferred at {len(deferred_af_positions)} positions due to insufficient tissue: {sorted(deferred_af_positions)}")
-        logger.info(f"Autofocus completed at {len([p for p in af_positions if p not in deferred_af_positions])} positions")
+            logger.info(
+                f"Autofocus deferred at {len(deferred_af_positions)} positions due to insufficient tissue: {sorted(deferred_af_positions)}"
+            )
+        logger.info(
+            f"Autofocus completed at {len([p for p in af_positions if p not in deferred_af_positions])} positions"
+        )
 
     except Exception as e:
         logger.error("=== ACQUISITION FAILED ===")
@@ -784,7 +831,9 @@ def simple_background_collection(
 
             # Set rotation angle if supported
             if hasattr(hardware, "set_psg_ticks"):
-                hardware.set_psg_ticks(angle, is_sequence_start=True)  # Each background is independent
+                hardware.set_psg_ticks(
+                    angle#, is_sequence_start=True
+                )  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
             # Set exposure time
@@ -885,7 +934,9 @@ def background_acquisition_workflow(
 
             # Set rotation angle if PPM
             if hasattr(hardware, "set_psg_ticks"):
-                hardware.set_psg_ticks(angle, is_sequence_start=True)  # Each background is independent
+                hardware.set_psg_ticks(
+                    angle#, is_sequence_start=True
+                )  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
             # Set exposure time
