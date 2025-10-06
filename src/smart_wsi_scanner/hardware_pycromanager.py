@@ -100,6 +100,8 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Validate position is within range
         if not is_coordinate_in_range(self.settings, position):
+            logger.info( "Current stage limits:", self.settings["stage"])
+            logger.info(f"Requested position: {position}")
             raise ValueError(f"Position out of range: {position}")
 
         # Get focus device from settings if available
