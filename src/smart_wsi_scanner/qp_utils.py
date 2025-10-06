@@ -625,9 +625,14 @@ class TifWriterUtils:
             data: Image data array
         """
         with tf.TiffWriter(filename) as tif:
+            # JPEG compression only works with 8-bit RGB or grayscale
+            # Use LZW for 16-bit data
+            is_16bit = data.dtype == np.uint16
+            compression = "lzw" if is_16bit else "jpeg"
+
             options = {
                 "photometric": "rgb" if len(data.shape) == 3 else "minisblack",
-                "compression": "jpeg",
+                "compression": compression,
                 "resolutionunit": "CENTIMETER",
                 "maxworkers": 2,
             }
@@ -680,27 +685,21 @@ class TifWriterUtils:
                 if logger:
                     logger.debug(f"Copied TileConfiguration.txt to {output_dir}")
 
-        # Calculate birefringence
+        # Calculate birefringence (sum of absolute differences)
         output_path = output_dir / filename
 
         biref_img = TifWriterUtils.ppm_angle_difference(pos_image, neg_image)
 
-        # Save float (full precision)
-        # tf.imwrite(str(output_path)[:-4] + "_gray.tif", biref_img.astype(np.float32))
-
-        # Normalize to 8-bit
-        biref_img = biref_img * 255 / biref_img.max()
-        biref_img = np.clip(biref_img, 0, 255).astype(np.uint8)
-
-        # Save as RGB (grayscale replicated to 3 channels)
+        # Save as 16-bit single-channel image (no normalization)
+        # Range: 0-765 (sum of absolute RGB differences)
         TifWriterUtils.ome_writer(
             filename=str(output_path),
             pixel_size_um=pixel_size_um,
-            data=np.stack([biref_img] * 3, axis=-1),
+            data=biref_img,  # Single channel uint16
         )
 
         if logger:
-            logger.info(f"  Created birefringence image: {filename}")
+            logger.info(f"  Created birefringence image: {filename} (16-bit, range: {biref_img.min()}-{biref_img.max()})")
 
         return biref_img
 
@@ -713,35 +712,26 @@ class TifWriterUtils:
     def ppm_angle_difference(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
         """
         Calculate angle difference for polarized microscopy images.
-        Color represents retardation angle via interference colors.
+        Sum of absolute differences across RGB channels.
 
         Args:
-            img1: First image (RGB)
-            img2: Second image (RGB)
+            img1: First image (RGB, uint8)
+            img2: Second image (RGB, uint8)
 
         Returns:
-            Difference image as single channel
+            Difference image as single channel (uint16), range 0-765 (3 * 255)
         """
-        # Convert to float for calculations
-        img1_f = img1.astype(np.float32) / 255.0
-        img2_f = img2.astype(np.float32) / 255.0
+        # Convert to int16 to handle negative differences
+        img1_i16 = img1.astype(np.int16)
+        img2_i16 = img2.astype(np.int16)
 
-        # Method 1: Direct RGB difference (simple but effective)
-        rgb_diff = np.sqrt(np.sum((img2_f - img1_f) ** 2, axis=2))
+        # Calculate absolute difference per channel and sum across RGB
+        # |R1-R2| + |G1-G2| + |B1-B2|
+        abs_diff = np.abs(img1_i16 - img2_i16)
+        sum_abs_diff = np.sum(abs_diff, axis=2)
 
-        # Alternative Method 2 (commented out): Hue-based for interference color progression
-        # hsv1 = cv2.cvtColor(img1, cv2.COLOR_RGB2HSV)
-        # hsv2 = cv2.cvtColor(img2, cv2.COLOR_RGB2HSV)
-        #
-        # # Hue difference with special handling for Michel-Lévy sequence
-        # hue_diff = np.abs(hsv1[:, :, 0] - hsv2[:, :, 0])
-        # hue_diff = np.minimum(hue_diff, 180 - hue_diff)
-        #
-        # # Weight by saturation (gray areas have no birefringence)
-        # saturation_mask = (hsv1[:, :, 1] + hsv2[:, :, 1]) / 2.0 / 255.0
-        # weighted_diff = hue_diff * saturation_mask
-
-        return rgb_diff
+        # Convert to uint16 (range is 0 to 765, well within uint16)
+        return sum_abs_diff.astype(np.uint16)
 
     @staticmethod
     def ppm_angle_sum(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
