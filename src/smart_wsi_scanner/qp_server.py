@@ -444,8 +444,10 @@ def handle_client(conn, addr):
                             try:
                                 ack_response = f"STARTED:{params['output_folder_path']}".encode()
                                 conn.sendall(ack_response)
-                                logger.info("Sent STARTED acknowledgment for background acquisition")
-                                
+                                logger.info(
+                                    "Sent STARTED acknowledgment for background acquisition"
+                                )
+
                                 # Execute background acquisition using simplified collection
                                 from smart_wsi_scanner.qp_acquisition import (
                                     simple_background_collection,

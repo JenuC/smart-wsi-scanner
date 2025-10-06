@@ -367,6 +367,11 @@ def _acquisition_workflow(
             set_state("FAILED")
             return
 
+        xy_positions = [(pos.x, pos.y) for pos, filename in positions]
+        # except Exception as e:
+        #   logger.warning("Falling back to older tileconfig reader: %s", e)
+        #   xy_positions = TileConfigUtils.read_TileConfiguration_coordinates(tile_config_path)
+
         # Create angle subdirectories
         if params["angles"]:
             for angle in params["angles"]:
@@ -421,23 +426,17 @@ def _acquisition_workflow(
                 af_n_steps = af_settings.get("n_steps", af_n_steps)
                 break
 
-        try:
-            xy_positions = [(pos.x, pos.y) for pos, filename in positions]
-            af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, n_tiles=af_n_tiles
-            )
-        except Exception as e:
-            logger.warning("Falling back to older tileconfig reader: %s", e)
-            xy_positions = TileConfigUtils.read_TileConfiguration_coordinates(tile_config_path)
-            af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
-                fov, xy_positions, n_tiles=af_n_tiles
-            )
+        af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
+            fov, xy_positions, n_tiles=af_n_tiles
+        )
 
         logger.info(f"Autofocus positions: {af_positions}")
 
         # Create dynamic autofocus positions set (can be modified during acquisition)
         dynamic_af_positions = set(af_positions)
         deferred_af_positions = set()  # Track positions where AF was deferred
+
+        metadata_txt_for_positions = output_path / "image_positions_metadata.txt"
 
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
@@ -605,6 +604,14 @@ def _acquisition_workflow(
                             data=image,
                         )
                         logger.info(f"  Saved raw image: {raw_image_path}")
+                        pos_read = hardware.get_current_position()
+                        angle_read = hardware.get_psg_ticks()
+                        with open(metadata_txt_for_positions, "a") as metafile_:
+                            metafile_.write(
+                                f"{raw_image_path} ; "
+                                f"{pos_read.x},{pos_read.y},{pos_read.z},{angle_read} ;"
+                                f"{hardware.core.get_exposure()}\n"
+                            )
                     except Exception as e:
                         logger.warning(f"  Failed to save raw image: {e}")
 
