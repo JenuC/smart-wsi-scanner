@@ -565,7 +565,7 @@ def _acquisition_workflow(
                     # Set rotation angle
                     # First angle of each position should reset to "a" polarization state
                     is_sequence_start = angle_idx == 0
-                    hardware.set_psg_ticks(angle)#, is_sequence_start=is_sequence_start)
+                    hardware.set_psg_ticks(angle)  # , is_sequence_start=is_sequence_start)
 
                     # Backup check of angle - seem to be having hardware issues sometimes
                     # actual_angle = hardware.get_psg_ticks()
@@ -662,6 +662,7 @@ def _acquisition_workflow(
 
                     # Save processed image
                     image_path = output_path / str(angle) / filename
+
                     if image_path.parent.exists():
                         TifWriterUtils.ome_writer(
                             filename=str(image_path),
@@ -832,7 +833,7 @@ def simple_background_collection(
             # Set rotation angle if supported
             if hasattr(hardware, "set_psg_ticks"):
                 hardware.set_psg_ticks(
-                    angle#, is_sequence_start=True
+                    angle  # , is_sequence_start=True
                 )  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
@@ -935,7 +936,7 @@ def background_acquisition_workflow(
             # Set rotation angle if PPM
             if hasattr(hardware, "set_psg_ticks"):
                 hardware.set_psg_ticks(
-                    angle#, is_sequence_start=True
+                    angle  # , is_sequence_start=True
                 )  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
