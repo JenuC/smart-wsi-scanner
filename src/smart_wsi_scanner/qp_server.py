@@ -85,26 +85,20 @@ def init_pycromanager_with_logger():
 logger.info("Loading configuration...")
 config_manager = ConfigManager()
 
-# Try to load default PPM configuration
-ppm_settings = config_manager.get_config("config_PPM")
-if not ppm_settings:
-    logger.warning("config_PPM not found, trying to load from file...")
-    # Try to load directly from file
-    config_path = pathlib.Path(__file__).parent / "configurations" / "config_PPM.yml"
-    if config_path.exists():
-        ppm_settings = config_manager.load_config_file(str(config_path))
-    else:
-        logger.error("No configuration found!")
-        sys.exit(1)
+## DEFAULT CONFIG loaded for exploratory XYZ movements
 
-## attach loci-resources to ppm-settings
-loci_rsc_file = str(
+config_path = pathlib.Path(__file__).parent / "configurations" / "config_PPM.yml"
+loci_rsc_file = (
     pathlib.Path(__file__).parent / "configurations" / "resources" / "resources_LOCI.yml"
 )
-loci_resources = config_manager.load_config_file(loci_rsc_file)
+# Try to load default PPM configuration
+ppm_settings = config_manager.get_config("config_PPM")
+loci_resources = config_manager.load_config_file(str(loci_rsc_file))
+if not ppm_settings:
+    logger.error(f"Failed to load configuration from {config_path}")
+    sys.exit(1)
 ppm_settings.update(loci_resources)
 
-# assert "id_detector" in ppm_settings
 
 # Initialize hardware
 core, studio = init_pycromanager_with_logger()

@@ -263,14 +263,14 @@ def _acquisition_workflow(
         # Load configuration using the config manager
         ppm_settings = config_manager.load_config_file(params["yaml_file_path"])
         loci_rsc_file = str(
-            pathlib.Path(__file__).parent / "configurations" / "resources" / "resources_LOCI.yml"
+            pathlib.Path(params["yaml_file_path"]).parent / "resources" / "resources_LOCI.yml"
         )
         loci_resources = config_manager.load_config_file(loci_rsc_file)
         ppm_settings.update(loci_resources)
         hardware.settings = ppm_settings
 
         # Home rot-stage
-        #hardware.home_psg()
+        # hardware.home_psg()
 
         # Extract modality from scan type
         modality = BackgroundCorrectionUtils.get_modality_from_scan_type(params["scan_type"])
