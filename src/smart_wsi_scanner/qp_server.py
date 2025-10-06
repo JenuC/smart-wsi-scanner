@@ -172,20 +172,32 @@ def handle_client(conn, addr):
             # Position query commands
             if data == ExtendedCommand.GETXY:
                 logger.debug(f"Client {addr} requested XY position")
-                current_position_xyz = hardware.get_current_position()
-                response = struct.pack("!ff", current_position_xyz.x, current_position_xyz.y)
-                conn.sendall(response)
-                logger.debug(
-                    f"Sent XY position to {addr}: ({current_position_xyz.x}, {current_position_xyz.y})"
-                )
+                try:
+                    current_position_xyz = hardware.get_current_position()
+                    response = struct.pack("!ff", current_position_xyz.x, current_position_xyz.y)
+                    conn.sendall(response)
+                    logger.debug(
+                        f"Sent XY position to {addr}: ({current_position_xyz.x}, {current_position_xyz.y})"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to get XY position: {e}", exc_info=True)
+                    # Send error message (8 bytes to match expected response size)
+                    error_msg = f"HW_ERROR".ljust(8)[:8]
+                    conn.sendall(error_msg.encode('utf-8'))
                 continue
 
             if data == ExtendedCommand.GETZ:
                 logger.debug(f"Client {addr} requested Z position")
-                current_position_xyz = hardware.get_current_position()
-                response = struct.pack("!f", current_position_xyz.z)
-                conn.sendall(response)
-                logger.debug(f"Sent Z position to {addr}: {current_position_xyz.z}")
+                try:
+                    current_position_xyz = hardware.get_current_position()
+                    response = struct.pack("!f", current_position_xyz.z)
+                    conn.sendall(response)
+                    logger.debug(f"Sent Z position to {addr}: {current_position_xyz.z}")
+                except Exception as e:
+                    logger.error(f"Failed to get Z position: {e}", exc_info=True)
+                    # Send error message (4 bytes to match expected response size)
+                    error_msg = "HWERR"[:4]
+                    conn.sendall(error_msg.encode('utf-8'))
                 continue
 
             if data == ExtendedCommand.GETFOV:
@@ -204,10 +216,16 @@ def handle_client(conn, addr):
 
             if data == ExtendedCommand.GETR:
                 logger.debug(f"Client {addr} requested rotation angle")
-                angle = hardware.get_psg_ticks()
-                response = struct.pack("!f", angle)
-                conn.sendall(response)
-                logger.debug(f"Sent rotation angle to {addr}: {angle}°")
+                try:
+                    angle = hardware.get_psg_ticks()
+                    response = struct.pack("!f", angle)
+                    conn.sendall(response)
+                    logger.debug(f"Sent rotation angle to {addr}: {angle}°")
+                except Exception as e:
+                    logger.error(f"Failed to get rotation angle: {e}", exc_info=True)
+                    # Send error message (4 bytes to match expected response size)
+                    error_msg = "HWERR"[:4]
+                    conn.sendall(error_msg.encode('utf-8'))
                 continue
 
             # Movement commands
@@ -216,8 +234,12 @@ def handle_client(conn, addr):
                 if len(coords) == 8:
                     x, y = struct.unpack("!ff", coords)
                     logger.info(f"Client {addr} requested move to: X={x}, Y={y}")
-                    hardware.move_to_position(Position(x, y))
-                    logger.info(f"Move completed to X={x}, Y={y}")
+                    try:
+                        hardware.move_to_position(Position(x, y))
+                        logger.info(f"Move completed to X={x}, Y={y}")
+                    except Exception as e:
+                        logger.error(f"Failed to move to XY position: {e}", exc_info=True)
+                        # No response expected for movement commands, but log the error
                 else:
                     logger.error(f"Client {addr} sent incomplete move coordinates")
                 continue
@@ -226,18 +248,22 @@ def handle_client(conn, addr):
                 z = conn.recv(4)
                 z_position = struct.unpack("!f", z)[0]
                 logger.info(f"Client {addr} requested move to Z={z_position}")
-                hardware.move_to_position(Position(z=z_position))
-                logger.info(f"Move completed to Z={z_position}")
+                try:
+                    hardware.move_to_position(Position(z=z_position))
+                    logger.info(f"Move completed to Z={z_position}")
+                except Exception as e:
+                    logger.error(f"Failed to move to Z position: {e}", exc_info=True)
                 continue
 
             if data == ExtendedCommand.MOVER:
                 coords = conn.recv(4)
                 angle = struct.unpack("!f", coords)[0]
                 logger.info(f"Client {addr} requested rotation to {angle}°")
-                hardware.set_psg_ticks(
-                    angle
-                )  # , is_sequence_start=True)  # Single rotation command
-                logger.info(f"Rotation completed to {angle}°")
+                try:
+                    hardware.set_psg_ticks(angle)  # , is_sequence_start=True)  # Single rotation command
+                    logger.info(f"Rotation completed to {angle}°")
+                except Exception as e:
+                    logger.error(f"Failed to rotate stage: {e}", exc_info=True)
                 continue
 
             # ============ ACQUISITION STATUS COMMANDS ============
