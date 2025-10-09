@@ -85,8 +85,13 @@ class PycromanagerHardware(MicroscopeHardware):
                 self.rotation_device = self.settings.get("stage", {}).get("r_stage")
             if not self.rotation_device:
                 raise ValueError("No rotation stage device found in configuration")
-            _ = self._ppm_get_psgticks()  # initialize psg_angle
-            logger.info("PPM-specific methods initialized")
+            try:
+                _ = self._ppm_get_psgticks()  # initialize psg_angle
+                logger.info("PPM-specific methods initialized")
+            except Exception as e:
+                # logger.error("Failed to initialize PPM rotation stage", e)
+                print(e)
+                logger.info("Continuing without PPM rotation stage functionality")
 
         if microscope_name == "CAMM":
             self.swap_objective_lens = self._camm_swap_objective_lens
@@ -100,7 +105,7 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Validate position is within range
         if not is_coordinate_in_range(self.settings, position):
-            logger.info( "Current stage limits:", self.settings["stage"])
+            logger.info("Current stage limits:", self.settings["stage"])
             logger.info(f"Requested position: {position}")
             raise ValueError(f"Position out of range: {position}")
 
