@@ -67,7 +67,6 @@ class PycromanagerHardware(MicroscopeHardware):
         self.psg_angle = None
         self.rotation_device = None
 
-
         # Log microscope info
         microscope_info = settings.get("microscope", {})
         logger.info(
@@ -76,7 +75,7 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Set up microscope-specific methods based on name
         microscope_name = microscope_info.get("name", "")
-                
+
         if microscope_name == "PPM":
             if self.settings.get("ppm_optics", "ZCutQuartz") != "NA":
 
@@ -99,7 +98,7 @@ class PycromanagerHardware(MicroscopeHardware):
                     logger.info("PPM-specific methods initialized")
                 except Exception as e:
                     # logger.error("Failed to initialize PPM rotation stage", e)
-                    print(e)
+                    print("Rot-stage Exception: ", e)
                     logger.info("Continuing without PPM rotation stage functionality")
             else:
                 logger.info("PPM optics not installed, skipping PPM-specific methods")
@@ -316,7 +315,7 @@ class PycromanagerHardware(MicroscopeHardware):
 
         current_pos = self.get_current_position()
         z_steps = current_pos.z + steps
-        print(z_steps)
+        # print(z_steps)
         try:
             scores = []
             for step_number in range(n_steps):

@@ -751,9 +751,9 @@ def _acquisition_workflow(
             logger.info(
                 f"Autofocus deferred at {len(deferred_af_positions)} positions due to insufficient tissue: {sorted(deferred_af_positions)}"
             )
-        logger.info(
-            f"Autofocus completed at {len([p for p in af_positions if p not in deferred_af_positions])} positions"
-        )
+        # else:
+        #    logger.info(
+        #    f"Autofocus completed at {len([p for p in af_positions if p not in deferred_af_positions])} positions")
 
     except Exception as e:
         logger.error("=== ACQUISITION FAILED ===")
