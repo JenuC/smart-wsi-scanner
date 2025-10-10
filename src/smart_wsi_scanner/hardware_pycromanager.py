@@ -62,8 +62,11 @@ class PycromanagerHardware(MicroscopeHardware):
         self.settings = settings
 
         ## PPM Specific attributes
+
+        ## PPM Specific attributes
         self.psg_angle = None
         self.rotation_device = None
+
 
         # Log microscope info
         microscope_info = settings.get("microscope", {})
