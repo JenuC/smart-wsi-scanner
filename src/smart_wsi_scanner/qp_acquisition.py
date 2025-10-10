@@ -605,7 +605,12 @@ def _acquisition_workflow(
                         )
                         logger.info(f"  Saved raw image: {raw_image_path}")
                         pos_read = hardware.get_current_position()
-                        angle_read = hardware.get_psg_ticks()
+
+                        if hardware.settings["ppm_optics"] == "NA":
+                            angle_read = "NA"
+                        else:
+                            angle_read = hardware.get_psg_ticks()
+                            
                         with open(metadata_txt_for_positions, "a") as metafile_:
                             metafile_.write(
                                 f"{raw_image_path} ; "
