@@ -76,9 +76,9 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Set up microscope-specific methods based on name
         microscope_name = microscope_info.get("name", "")
-
+                
         if microscope_name == "PPM":
-            if self.settings["ppm_optics"] != "NA":
+            if self.settings.get("ppm_optics", "ZCutQuartz") != "NA":
 
                 self.set_psg_ticks = self._ppm_set_psgticks
                 self.get_psg_ticks = self._ppm_get_psgticks

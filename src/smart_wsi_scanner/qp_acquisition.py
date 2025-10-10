@@ -563,7 +563,7 @@ def _acquisition_workflow(
 
                     # Set rotation angle
                     # First angle of each position should reset to "a" polarization state
-                    is_sequence_start = angle_idx == 0
+                    # is_sequence_start = angle_idx == 0
                     hardware.set_psg_ticks(angle)  # , is_sequence_start=is_sequence_start)
 
                     # Backup check of angle - seem to be having hardware issues sometimes
@@ -605,12 +605,12 @@ def _acquisition_workflow(
                         )
                         logger.info(f"  Saved raw image: {raw_image_path}")
                         pos_read = hardware.get_current_position()
-
-                        if hardware.settings["ppm_optics"] == "NA":
+                        if hardware.settings.get("ppm_optics", "ZCutQuartz") == "NA":
+                            # if hardware.settings["ppm_optics"] == "NA":
                             angle_read = "NA"
                         else:
                             angle_read = hardware.get_psg_ticks()
-                            
+
                         with open(metadata_txt_for_positions, "a") as metafile_:
                             metafile_.write(
                                 f"{raw_image_path} ; "
