@@ -598,7 +598,7 @@ def _acquisition_workflow(
                         raw_image_path.parent.mkdir(parents=True, exist_ok=True)
 
                     try:
-                        TifWriterUtils.ome_writer(
+                        TifWriterUtils.ome_writer(  # raw
                             filename=str(raw_image_path),
                             pixel_size_um=hardware.core.get_pixel_size_um(),
                             data=image,
@@ -676,7 +676,7 @@ def _acquisition_workflow(
                     image_path = output_path / str(angle) / filename
 
                     if image_path.parent.exists():
-                        TifWriterUtils.ome_writer(
+                        TifWriterUtils.ome_writer(  # processed
                             filename=str(image_path),
                             pixel_size_um=hardware.core.get_pixel_size_um(),
                             data=image,
@@ -702,7 +702,7 @@ def _acquisition_workflow(
                     tile_config_source = output_path / str(pos_angle) / "TileConfiguration.txt"
 
                     # Create birefringence image
-                    TifWriterUtils.create_birefringence_tile(
+                    TifWriterUtils.create_birefringence_tile(  # biref
                         pos_image=angle_images[pos_angle],
                         neg_image=angle_images[neg_angle],
                         output_dir=biref_dir,
@@ -730,13 +730,24 @@ def _acquisition_workflow(
                 image_path = output_path / filename
 
                 if image_path.parent.exists():
-                    TifWriterUtils.ome_writer(
+                    TifWriterUtils.ome_writer(  # brightfield
                         filename=str(image_path),
                         pixel_size_um=hardware.core.get_pixel_size_um(),
                         data=image,
                     )
                     image_count += 1
                     update_progress(image_count, total_images)
+
+                try:
+                    pos_read = hardware.get_current_position()
+                    with open(metadata_txt_for_positions, "a") as metafile_:
+                        metafile_.write(
+                            f"{image_path} ; "
+                            f"{pos_read.x},{pos_read.y},{pos_read.z} ;"
+                            f"{hardware.core.get_exposure()}\n"
+                        )
+                except Exception as e:
+                    logger.warning(f"  Failed to save raw image: {e}")
 
         # Save device properties
         current_props = hardware.get_device_properties()
@@ -866,7 +877,7 @@ def simple_background_collection(
 
             # Save background image using new format: angle.tif (not in subdirectory)
             background_path = output_path / f"{angle}.tif"
-            TifWriterUtils.ome_writer(
+            TifWriterUtils.ome_writer(  # background -single
                 filename=str(background_path),
                 pixel_size_um=hardware.core.get_pixel_size_um(),
                 data=image,
@@ -963,7 +974,7 @@ def background_acquisition_workflow(
 
             # Save background image
             background_path = angle_dir / "background.tif"
-            TifWriterUtils.ome_writer(
+            TifWriterUtils.ome_writer(  # background 2 with bkg-workflow
                 filename=str(background_path),
                 pixel_size_um=hardware.core.get_pixel_size_um(),
                 data=image,
