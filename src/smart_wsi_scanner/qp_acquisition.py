@@ -604,19 +604,9 @@ def _acquisition_workflow(
                             data=image,
                         )
                         logger.info(f"  Saved raw image: {raw_image_path}")
-                        pos_read = hardware.get_current_position()
-                        if hardware.settings.get("ppm_optics", "ZCutQuartz") == "NA":
-                            # if hardware.settings["ppm_optics"] == "NA":
-                            angle_read = "NA"
-                        else:
-                            angle_read = hardware.get_psg_ticks()
-
-                        with open(metadata_txt_for_positions, "a") as metafile_:
-                            metafile_.write(
-                                f"{raw_image_path} ; "
-                                f"{pos_read.x},{pos_read.y},{pos_read.z},{angle_read} ;"
-                                f"{hardware.core.get_exposure()}\n"
-                            )
+                        write_position_metadata(
+                            metadata_txt_for_positions, raw_image_path, hardware
+                        )
                     except Exception as e:
                         logger.warning(f"  Failed to save raw image: {e}")
 
@@ -739,13 +729,7 @@ def _acquisition_workflow(
                     update_progress(image_count, total_images)
 
                 try:
-                    pos_read = hardware.get_current_position()
-                    with open(metadata_txt_for_positions, "a") as metafile_:
-                        metafile_.write(
-                            f"{image_path} ; "
-                            f"{pos_read.x},{pos_read.y},{pos_read.z} ;"
-                            f"{hardware.core.get_exposure()}\n"
-                        )
+                    write_position_metadata(metadata_txt_for_positions, image_path, hardware)
                 except Exception as e:
                     logger.warning(f"  Failed to save raw image: {e}")
 
@@ -775,6 +759,27 @@ def _acquisition_workflow(
         logger.error("=== ACQUISITION FAILED ===")
         logger.error(f"Error: {str(e)}", exc_info=True)
         set_state("FAILED")
+
+
+def write_position_metadata(metadata_txt_for_positions, raw_image_path, hardware):
+    pos_read = hardware.get_current_position()
+    line = (
+        f"filename = {raw_image_path} ; "
+        f"(x,y,z) = ({pos_read.x},{pos_read.y},{round(pos_read.z, 3)}); "
+    )
+
+    if hardware.settings.get("modality", "ppm") == "ppm":
+        angle = (
+            hardware.get_psg_ticks()
+            if hardware.settings.get("ppm_optics", "ZCutQuartz") != "NA"
+            else "NA"
+        )
+        line += f"r = {angle} ; "
+
+    line += f"exposure (ms) = {hardware.core.get_exposure()}\n"
+
+    with open(metadata_txt_for_positions, "a") as f:
+        f.write(line)
 
 
 def simple_background_collection(
