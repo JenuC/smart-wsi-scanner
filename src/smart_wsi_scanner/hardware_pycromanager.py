@@ -60,8 +60,11 @@ class PycromanagerHardware(MicroscopeHardware):
         self.core = core
         self.studio = studio
         self.settings = settings
+
+        ## PPM Specific attributes
         self.psg_angle = None
         self.rotation_device = None
+
         # Log microscope info
         microscope_info = settings.get("microscope", {})
         logger.info(
@@ -72,26 +75,49 @@ class PycromanagerHardware(MicroscopeHardware):
         microscope_name = microscope_info.get("name", "")
 
         if microscope_name == "PPM":
-            self.set_psg_ticks = self._ppm_set_psgticks
-            self.get_psg_ticks = self._ppm_get_psgticks
-            self.home_psg = self._ppm_home
-            ppm_config = self.settings.get("modalities", {}).get("ppm", {})
-            r_device_name = ppm_config.get("rotation_stage", {}).get("device")
-            self.rotation_device = (
-                self.settings.get("id_stage", {}).get(r_device_name, {}).get("device")
-            )
-            if not self.rotation_device:
-                # Fallback to looking for r_stage in stage config
-                self.rotation_device = self.settings.get("stage", {}).get("r_stage")
-            if not self.rotation_device:
-                raise ValueError("No rotation stage device found in configuration")
-            try:
-                _ = self._ppm_get_psgticks()  # initialize psg_angle
-                logger.info("PPM-specific methods initialized")
-            except Exception as e:
-                # logger.error("Failed to initialize PPM rotation stage", e)
-                print(e)
-                logger.info("Continuing without PPM rotation stage functionality")
+            if self.settings["ppm_optics"] != "NA":
+
+                self.set_psg_ticks = self._ppm_set_psgticks
+                self.get_psg_ticks = self._ppm_get_psgticks
+                self.home_psg = self._ppm_home
+
+                ppm_config = self.settings.get("modalities", {}).get("ppm", {})
+                r_device_name = ppm_config.get("rotation_stage", {}).get("device")
+                self.rotation_device = (
+                    self.settings.get("id_stage", {}).get(r_device_name, {}).get("device")
+                )
+                if not self.rotation_device:
+                    # Fallback to looking for r_stage in stage config
+                    self.rotation_device = self.settings.get("stage", {}).get("r_stage")
+                if not self.rotation_device:
+                    raise ValueError("No rotation stage device found in configuration")
+                try:
+                    _ = self._ppm_get_psgticks()  # initialize psg_angle
+                    logger.info("PPM-specific methods initialized")
+                except Exception as e:
+                    # logger.error("Failed to initialize PPM rotation stage", e)
+                    print(e)
+                    logger.info("Continuing without PPM rotation stage functionality")
+            else:
+                logger.info("PPM optics not installed, skipping PPM-specific methods")
+                self.psg_angle = 0.0
+                self.get_psg_ticks = lambda theta: self.psg_angle
+                # self.set_psg_ticks = lambda theta: (print(f"Setting psg_angle to: {theta}"), setattr(self, 'psg_angle', theta))[1]
+
+                def dummy_set_psg_ticks(theta):
+                    self.psg_angle = theta
+
+                def dummy_home_psg():
+                    self.psg_angle = 0.0
+
+                self.home_psg = dummy_home_psg
+                self.set_psg_ticks = dummy_set_psg_ticks
+
+                # TODO: change the ppm properties to mutable container
+                ## MUTATBLE CONTAINER SOLUTION
+                # state = {'theta': 0}
+                # get_psg_ticks = lambda : state['theta']
+                # set_psg_ticks = lambda theta: state.update({'theta':theta}) or theta
 
         if microscope_name == "CAMM":
             self.swap_objective_lens = self._camm_swap_objective_lens
@@ -544,12 +570,12 @@ class PycromanagerHardware(MicroscopeHardware):
 
         return device_dict
 
-    def wrap_angle_m180_p180(self, angle_deg):
-        """
-        Wrap an angle in degrees to the range [-180, 180)
-        """
-        wrapped = (angle_deg + 180) % 360 - 180
-        return wrapped
+    # def wrap_angle_m180_p180(self, angle_deg):
+    #     """
+    #     Wrap an angle in degrees to the range [-180, 180)
+    #     """
+    #     wrapped = (angle_deg + 180) % 360 - 180
+    #     return wrapped
 
     # def get_ccw_rot_angle(self, theta, is_sequence_start=False):
     #     """
