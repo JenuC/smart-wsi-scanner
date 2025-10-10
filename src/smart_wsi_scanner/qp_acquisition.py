@@ -393,6 +393,8 @@ def _acquisition_workflow(
                 f"Total rotation steps {total_rotation} exceed Micro-Manager limit of 536870. Acquisition aborted."
             )
 
+        starting_position = hardware.get_current_position()
+
         update_progress(0, total_images)
         logger.info(
             f"Starting acquisition of {total_images} total images "
@@ -759,6 +761,10 @@ def _acquisition_workflow(
         logger.error("=== ACQUISITION FAILED ===")
         logger.error(f"Error: {str(e)}", exc_info=True)
         set_state("FAILED")
+    finally:
+        # Return to starting position
+        logger.info("Returning to starting position")
+        hardware.move_to_position(starting_position)
 
 
 def write_position_metadata(metadata_txt_for_positions, raw_image_path, hardware):
