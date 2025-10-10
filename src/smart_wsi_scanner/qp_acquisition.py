@@ -731,9 +731,13 @@ def _acquisition_workflow(
                     update_progress(image_count, total_images)
 
                 try:
-                    write_position_metadata(metadata_txt_for_positions, image_path, hardware,modality)
+                    write_position_metadata(
+                        metadata_txt_for_positions, image_path, hardware, modality
+                    )
                 except Exception as e:
-                    logger.warning(f"  Failed to write position text {metadata_txt_for_positions}: {e}")
+                    logger.warning(
+                        f"  Failed to write position text {metadata_txt_for_positions}: {e}"
+                    )
 
         # Save device properties
         current_props = hardware.get_device_properties()
@@ -767,7 +771,7 @@ def _acquisition_workflow(
         hardware.move_to_position(starting_position)
 
 
-def write_position_metadata(metadata_txt_for_positions, raw_image_path, hardware,modality):
+def write_position_metadata(metadata_txt_for_positions, raw_image_path, hardware, modality):
     pos_read = hardware.get_current_position()
     line = (
         f"filename = {raw_image_path} ; "
@@ -776,9 +780,10 @@ def write_position_metadata(metadata_txt_for_positions, raw_image_path, hardware
 
     # TODO: modality is chosen on the config , but then overwrittebn by the message parameter
     # here we should use the modality used for acquisition?
-    if modality == "brightfield": # user-set value passed from acquisition parameters
-        pass
-    else hardware.settings.get("modality", "ppm") == "ppm": # config set value from yaml
+    # if modality.lower.count("ppm") > 0:  # user-set value passed from acquisition parameters
+    # if hardware.settings.get("modality", "ppm") == "ppm":  # config set value from yaml
+    
+    if "ppm" in modality.lower():
         angle = (
             hardware.get_psg_ticks()
             if hardware.settings.get("ppm_optics", "ZCutQuartz") != "NA"
