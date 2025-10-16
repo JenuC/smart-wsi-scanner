@@ -107,12 +107,15 @@ class PycromanagerHardware(MicroscopeHardware):
                 # self.get_psg_ticks = lambda theta: self.psg_angle
                 # self.set_psg_ticks = lambda theta: (print(f"Setting psg_angle to: {theta}"), setattr(self, 'psg_angle', theta))[1]
                 def dummy_get_psg_ticks():
+                    logger.info("PPM optics not installed, skipping PPM-specific methods")
                     return self.psg_angle
 
                 def dummy_set_psg_ticks(theta):
+                    logger.info("PPM optics not installed, skipping PPM-specific methods")
                     self.psg_angle = theta
 
                 def dummy_home_psg():
+                    logger.info("PPM optics not installed, skipping PPM-specific methods")
                     self.psg_angle = 0.0
 
                 self.home_psg = dummy_home_psg
