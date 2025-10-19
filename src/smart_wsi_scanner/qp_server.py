@@ -484,7 +484,7 @@ def handle_client(conn, addr):
                                     with acquisition_locks[addr]:
                                         acquisition_progress[addr] = (current, total)
 
-                                simple_background_collection(
+                                final_exposures = simple_background_collection(
                                     yaml_file_path=params["yaml_file_path"],
                                     output_folder_path=params["output_folder_path"],
                                     modality=params["modality"],
@@ -496,10 +496,17 @@ def handle_client(conn, addr):
                                     update_progress=update_progress,
                                 )
 
-                                # Send success response with output path
-                                response = f"SUCCESS:{params['output_folder_path']}".encode()
+                                # Format exposures as angle:exposure pairs
+                                # e.g., "90:137.1,5:245.8,-5:155.2"
+                                exposures_formatted = ",".join(
+                                    f"{angle}:{exposure:.2f}"
+                                    for angle, exposure in sorted(final_exposures.items())
+                                )
+
+                                # Send success response with output path and final exposures
+                                response = f"SUCCESS:{params['output_folder_path']}|{exposures_formatted}".encode()
                                 conn.sendall(response)
-                                logger.info("Background acquisition completed successfully")
+                                logger.info(f"Background acquisition completed successfully with exposures: {exposures_formatted}")
 
                             except Exception as e:
                                 logger.error(

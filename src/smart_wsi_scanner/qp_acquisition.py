@@ -797,6 +797,173 @@ def write_position_metadata(metadata_txt_for_positions, raw_image_path, hardware
         f.write(line)
 
 
+def get_target_intensity_for_background(modality: str, angle: float) -> float:
+    """
+    Get target intensity for background acquisition based on modality and angle.
+
+    Args:
+        modality: Modality identifier (e.g., "ppm", "brightfield")
+        angle: Rotation angle in degrees (for PPM)
+
+    Returns:
+        Target grayscale intensity (0-255)
+
+    Examples:
+        >>> get_target_intensity_for_background("brightfield", 0)
+        250.0
+        >>> get_target_intensity_for_background("ppm", 90)
+        245.0
+        >>> get_target_intensity_for_background("ppm", 5)
+        150.0
+        >>> get_target_intensity_for_background("ppm", -5)
+        155.0
+        >>> get_target_intensity_for_background("ppm", 0)
+        125.0
+    """
+    # Normalize modality to lowercase for comparison
+    modality_lower = modality.lower()
+
+    # Brightfield modality
+    if "brightfield" in modality_lower or "bf" in modality_lower:
+        return 250.0
+
+    # PPM modality - angle-specific targets
+    if "ppm" in modality_lower:
+        # Normalize angle to absolute value for symmetric angles
+        abs_angle = abs(angle)
+
+        if abs_angle == 90:
+            return 245.0
+        elif abs_angle in [7, 5]:
+            # Distinguish between positive and negative angles
+            if angle > 0:
+                return 150.0  # +7 or +5 degrees
+            else:
+                return 155.0  # -7 or -5 degrees
+        elif abs_angle == 0:
+            return 125.0
+        else:
+            # Default for unknown PPM angles
+            logger.warning(f"Unknown PPM angle {angle}, using default target 150")
+            return 150.0
+
+    # Default fallback
+    logger.warning(f"Unknown modality {modality}, using default target 200")
+    return 200.0
+
+
+def acquire_background_with_target_intensity(
+    hardware: PycromanagerHardware,
+    target_intensity: float,
+    tolerance: float = 2.5,
+    initial_exposure_ms: float = 100.0,
+    max_iterations: int = 10,
+    logger = None
+) -> Tuple[np.ndarray, float]:
+    """
+    Acquire background image with adaptive exposure to reach target intensity.
+
+    Uses proportional control to iteratively adjust exposure time until the
+    average image intensity is within tolerance of the target value.
+
+    Args:
+        hardware: Microscope hardware interface
+        target_intensity: Target average grayscale value (0-255)
+        tolerance: Acceptable deviation from target (default ±2.5)
+        initial_exposure_ms: Starting exposure time in milliseconds
+        max_iterations: Maximum adjustment iterations
+        logger: Logger instance for tracking convergence
+
+    Returns:
+        Tuple of (image, final_exposure_ms)
+            image: Acquired image at target intensity
+            final_exposure_ms: Final exposure time used
+
+    Raises:
+        RuntimeError: If image acquisition fails
+    """
+    # Exposure bounds to prevent extreme values
+    MIN_EXPOSURE_MS = 1.0
+    MAX_EXPOSURE_MS = 5000.0
+
+    # Set initial exposure
+    current_exposure = max(MIN_EXPOSURE_MS, min(MAX_EXPOSURE_MS, initial_exposure_ms))
+    hardware.set_exposure(current_exposure)
+
+    if logger:
+        logger.info(
+            f"Starting adaptive exposure: target={target_intensity:.1f}, "
+            f"tolerance={tolerance:.1f}, initial_exposure={current_exposure:.1f}ms"
+        )
+
+    last_image = None
+    last_exposure = current_exposure
+
+    for iteration in range(max_iterations):
+        # Snap image with debayering
+        image, metadata = hardware.snap_image(debayering=True)
+
+        if image is None:
+            raise RuntimeError(f"Failed to acquire image at iteration {iteration}")
+
+        # Calculate mean intensity across all channels
+        mean_intensity = float(image.mean())
+
+        # Store for potential use if we don't converge
+        last_image = image
+        last_exposure = current_exposure
+
+        if logger:
+            logger.info(
+                f"  Iteration {iteration + 1}/{max_iterations}: "
+                f"mean={mean_intensity:.1f}, exposure={current_exposure:.1f}ms"
+            )
+
+        # Check convergence
+        intensity_error = abs(mean_intensity - target_intensity)
+        if intensity_error <= tolerance:
+            if logger:
+                logger.info(
+                    f"Converged! Final: mean={mean_intensity:.1f}, "
+                    f"exposure={current_exposure:.1f}ms, iterations={iteration + 1}"
+                )
+            return image, current_exposure
+
+        # Calculate proportional adjustment
+        # If image is too dark, increase exposure; if too bright, decrease
+        if mean_intensity > 0:
+            adjustment_ratio = target_intensity / mean_intensity
+            new_exposure = current_exposure * adjustment_ratio
+
+            # Clamp to bounds
+            new_exposure = max(MIN_EXPOSURE_MS, min(MAX_EXPOSURE_MS, new_exposure))
+
+            if logger:
+                logger.info(
+                    f"    Adjusting exposure: {current_exposure:.1f}ms → {new_exposure:.1f}ms "
+                    f"(ratio={adjustment_ratio:.2f})"
+                )
+
+            current_exposure = new_exposure
+            hardware.set_exposure(current_exposure)
+        else:
+            # Image is completely black, increase exposure significantly
+            new_exposure = min(current_exposure * 2.0, MAX_EXPOSURE_MS)
+            if logger:
+                logger.warning(f"    Image completely black, doubling exposure to {new_exposure:.1f}ms")
+            current_exposure = new_exposure
+            hardware.set_exposure(current_exposure)
+
+    # Max iterations reached without convergence
+    if logger:
+        logger.warning(
+            f"Did not converge after {max_iterations} iterations. "
+            f"Using last image: mean={last_image.mean():.1f}, exposure={last_exposure:.1f}ms"
+        )
+
+    return last_image, last_exposure
+
+
 def simple_background_collection(
     yaml_file_path: str,
     output_folder_path: str,
@@ -811,26 +978,32 @@ def simple_background_collection(
     """
     Simplified background collection for BackgroundCollectionWorkflow.
 
-    Acquires background images at current position with no processing.
-    Saves directly to correct folder structure for flat field correction.
+    Acquires background images at current position using adaptive exposure
+    to reach target intensities. Saves directly to correct folder structure
+    for flat field correction.
 
     Args:
         yaml_file_path: Path to microscope configuration YAML
         output_folder_path: Base folder for backgrounds
         modality: Modality identifier (e.g., "ppm")
         angles_str: String of angles like "(0,90,5,-5)"
-        exposures_str: String of exposures like "(800,10,500,500)"
+        exposures_str: DEPRECATED - Exposure is now automatically determined
+                      based on target intensity. Parameter kept for compatibility.
         hardware: Microscope hardware interface
         config_manager: Configuration manager
         logger: Logger instance
         update_progress: Progress callback function
+
+    Returns:
+        Dict[float, float]: Dictionary mapping angles to final exposure times (ms)
+                           e.g., {90.0: 137.1, 5.0: 245.8, ...}
     """
     logger.info("=== SIMPLE BACKGROUND COLLECTION STARTED ===")
 
     try:
-        # Parse angles and exposures
-        angles, exposures = parse_angles_exposures(angles_str, exposures_str)
-        logger.info(f"Collecting backgrounds for angles: {angles} with exposures: {exposures}")
+        # Parse angles (exposures_str is deprecated, not used)
+        angles, _ = parse_angles_exposures(angles_str, exposures_str)
+        logger.info(f"Collecting backgrounds for angles: {angles} using adaptive exposure")
 
         # Load microscope configuration
         if not pathlib.Path(yaml_file_path).exists():
@@ -869,6 +1042,9 @@ def simple_background_collection(
         total_images = len(angles)
         update_progress(0, total_images)
 
+        # Track final exposures for each angle
+        final_exposures = {}
+
         # Acquire background for each angle
         for angle_idx, angle in enumerate(angles):
             logger.info(f"Acquiring background {angle_idx + 1}/{total_images} for angle {angle}°")
@@ -880,20 +1056,29 @@ def simple_background_collection(
                 )  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
-            # Set exposure time
-            if angle_idx < len(exposures):
-                exposure_ms = exposures[angle_idx]
-                hardware.set_exposure(exposure_ms)
-                logger.info(f"Set exposure to {exposure_ms}ms")
+            # Get target intensity for this modality/angle
+            target_intensity = get_target_intensity_for_background(modality, angle)
+            logger.info(f"Target intensity: {target_intensity:.1f}")
 
-            # Acquire image with debayering but NO other processing
-            image, metadata = hardware.snap_image(debayering=True)
-
-            if image is None:
-                logger.error(f"Failed to acquire background image at angle {angle}°")
+            # Acquire with adaptive exposure to reach target intensity
+            try:
+                image, final_exposure = acquire_background_with_target_intensity(
+                    hardware=hardware,
+                    target_intensity=target_intensity,
+                    tolerance=2.5,
+                    initial_exposure_ms=100.0,
+                    max_iterations=10,
+                    logger=logger
+                )
+                logger.info(
+                    f"Acquired background: shape={image.shape}, mean={image.mean():.1f}, "
+                    f"final_exposure={final_exposure:.1f}ms"
+                )
+                # Store final exposure for this angle
+                final_exposures[angle] = final_exposure
+            except RuntimeError as e:
+                logger.error(f"Failed to acquire background at angle {angle}°: {e}")
                 continue
-
-            logger.info(f"Acquired background image: shape={image.shape}, mean={image.mean():.1f}")
 
             # Save background image using new format: angle.tif (not in subdirectory)
             background_path = output_path / f"{angle}.tif"
@@ -910,6 +1095,9 @@ def simple_background_collection(
 
         logger.info("=== SIMPLE BACKGROUND COLLECTION COMPLETE ===")
         logger.info(f"Successfully collected {len(angles)} background images")
+
+        # Return final exposures for metadata writing
+        return final_exposures
 
     except Exception as e:
         logger.error(f"Simple background collection failed: {str(e)}", exc_info=True)
@@ -930,18 +1118,24 @@ def background_acquisition_workflow(
     Acquire background images for flat-field correction.
 
     IMPORTANT: Position the microscope at a blank area before calling this function.
-    The system will acquire images at the current position.
+    The system will acquire images at the current position using adaptive exposure
+    to reach target intensities.
 
     Args:
         yaml_file_path: Path to microscope configuration YAML
         output_folder_path: Base folder for backgrounds (will create modality subfolder)
         modality: Modality identifier (e.g., "PPM_20x")
         angles_str: String of angles like "(0,90,5,-5)"
-        exposures_str: Optional string of exposures like "(800,10,500,500)".
-                If None, defaults will be used based on angles.
+        exposures_str: DEPRECATED - Exposure is now automatically determined
+                      based on target intensity. Parameter kept for compatibility.
         hardware: Microscope hardware interface
         config_manager: Configuration manager
         logger: Logger instance
+
+    Returns:
+        Tuple[str, Dict[float, float]]: (output_path, final_exposures)
+            output_path: Path where backgrounds were saved
+            final_exposures: Dictionary mapping angles to final exposure times (ms)
     """
     logger.info("=== BACKGROUND ACQUISITION WORKFLOW STARTED ===")
     logger.warning("Ensure microscope is positioned at a clean, blank area!")
@@ -954,8 +1148,8 @@ def background_acquisition_workflow(
     )
 
     try:
-        # Parse angles and exposures
-        angles, exposures = parse_angles_exposures(angles_str, exposures_str)
+        # Parse angles (exposures_str is deprecated, not used)
+        angles, _ = parse_angles_exposures(angles_str, exposures_str)
 
         # Load the microscope configuration
         if not pathlib.Path(yaml_file_path).exists():
@@ -970,6 +1164,9 @@ def background_acquisition_workflow(
 
         logger.info(f"Saving backgrounds to: {output_path}")
 
+        # Track final exposures for each angle
+        final_exposures = {}
+
         # Acquire background for each angle
         for angle_idx, angle in enumerate(angles):
             # Create angle subdirectory
@@ -983,14 +1180,29 @@ def background_acquisition_workflow(
                 )  # Each background is independent
                 logger.info(f"Set angle to {angle}°")
 
-            # Set exposure time
-            if angle_idx < len(exposures):
-                exposure_ms = exposures[angle_idx]
-                hardware.set_exposure(exposure_ms)
-                logger.info(f"Set exposure to {exposure_ms}ms")
+            # Get target intensity for this modality/angle
+            target_intensity = get_target_intensity_for_background(modality, angle)
+            logger.info(f"Target intensity: {target_intensity:.1f}")
 
-            # Acquire image with debayering
-            image, metadata = hardware.snap_image(debayering=True)
+            # Acquire with adaptive exposure to reach target intensity
+            try:
+                image, final_exposure = acquire_background_with_target_intensity(
+                    hardware=hardware,
+                    target_intensity=target_intensity,
+                    tolerance=2.5,
+                    initial_exposure_ms=100.0,
+                    max_iterations=10,
+                    logger=logger
+                )
+                logger.info(
+                    f"Acquired background: mean={image.mean():.1f}, "
+                    f"final_exposure={final_exposure:.1f}ms"
+                )
+                # Store final exposure for this angle
+                final_exposures[angle] = final_exposure
+            except RuntimeError as e:
+                logger.error(f"Failed to acquire background at angle {angle}°: {e}")
+                continue
 
             # Save background image
             background_path = angle_dir / "background.tif"
@@ -1003,7 +1215,7 @@ def background_acquisition_workflow(
             logger.info(f"Saved background for {angle}° to {background_path}")
 
         logger.info("=== BACKGROUND ACQUISITION COMPLETE ===")
-        return str(output_path)
+        return str(output_path), final_exposures
 
     except Exception as e:
         logger.error(f"Background acquisition failed: {str(e)}", exc_info=True)
