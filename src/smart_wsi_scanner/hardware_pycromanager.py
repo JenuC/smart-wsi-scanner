@@ -74,6 +74,14 @@ class PycromanagerHardware(MicroscopeHardware):
         )
 
         # Set up microscope-specific methods based on name
+        self._initialize_microscope_methods()
+
+    def _initialize_microscope_methods(self):
+        """Initialize microscope-specific methods based on settings.
+
+        This can be called both during __init__ and when settings are updated.
+        """
+        microscope_info = self.settings.get("microscope", {})
         microscope_name = microscope_info.get("name", "")
 
         if microscope_name == "PPM":

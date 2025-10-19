@@ -1039,6 +1039,12 @@ def simple_background_collection(
 
         hardware.settings = settings
 
+        # Re-initialize microscope-specific methods with updated settings
+        # This is critical for PPM rotation to work correctly
+        if hasattr(hardware, '_initialize_microscope_methods'):
+            hardware._initialize_microscope_methods()
+            logger.info("Re-initialized hardware methods with updated settings")
+
         # Get current position for reference
         current_pos = hardware.get_current_position()
         logger.info(
@@ -1176,6 +1182,12 @@ def background_acquisition_workflow(
 
         settings = config_manager.load_config_file(yaml_file_path)
         hardware.settings = settings
+
+        # Re-initialize microscope-specific methods with updated settings
+        # This is critical for PPM rotation to work correctly
+        if hasattr(hardware, '_initialize_microscope_methods'):
+            hardware._initialize_microscope_methods()
+            logger.info("Re-initialized hardware methods with updated settings")
 
         # Create output directory structure with modality
         output_path = pathlib.Path(output_folder_path) / "backgrounds" / modality
