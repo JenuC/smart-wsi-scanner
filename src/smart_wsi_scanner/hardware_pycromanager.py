@@ -85,7 +85,9 @@ class PycromanagerHardware(MicroscopeHardware):
         microscope_name = microscope_info.get("name", "")
 
         if microscope_name == "PPM":
-            if self.settings.get("ppm_optics", "ZCutQuartz") != "NA":
+            ppm_optics_value = self.settings.get("ppm_optics", "ZCutQuartz")
+            logger.info(f"DEBUG: ppm_optics value = {ppm_optics_value!r} (type: {type(ppm_optics_value).__name__})")
+            if ppm_optics_value != "NA":
 
                 self.set_psg_ticks = self._ppm_set_psgticks
                 self.get_psg_ticks = self._ppm_get_psgticks
