@@ -931,7 +931,17 @@ def acquire_background_with_target_intensity(
 
         # Calculate proportional adjustment
         # If image is too dark, increase exposure; if too bright, decrease
-        if mean_intensity > 0:
+        if mean_intensity >= 254.0:
+            # Image is saturated - decrease exposure aggressively
+            # Proportional control alone is too slow when saturated
+            new_exposure = max(current_exposure * 0.5, MIN_EXPOSURE_MS)
+            if logger:
+                logger.warning(
+                    f"    Image saturated (mean={mean_intensity:.1f}), halving exposure to {new_exposure:.1f}ms"
+                )
+            current_exposure = new_exposure
+            hardware.set_exposure(current_exposure)
+        elif mean_intensity > 0:
             adjustment_ratio = target_intensity / mean_intensity
             new_exposure = current_exposure * adjustment_ratio
 
@@ -987,8 +997,8 @@ def simple_background_collection(
         output_folder_path: Base folder for backgrounds
         modality: Modality identifier (e.g., "ppm")
         angles_str: String of angles like "(0,90,5,-5)"
-        exposures_str: DEPRECATED - Exposure is now automatically determined
-                      based on target intensity. Parameter kept for compatibility.
+        exposures_str: String of initial exposure times like "(1.5,100,50,50)".
+                      These are used as starting points for adaptive exposure.
         hardware: Microscope hardware interface
         config_manager: Configuration manager
         logger: Logger instance
@@ -996,14 +1006,16 @@ def simple_background_collection(
 
     Returns:
         Dict[float, float]: Dictionary mapping angles to final exposure times (ms)
-                           e.g., {90.0: 137.1, 5.0: 245.8, ...}
+                           e.g., {90.0: 1.2, 5.0: 45.8, ...}
     """
     logger.info("=== SIMPLE BACKGROUND COLLECTION STARTED ===")
 
     try:
-        # Parse angles (exposures_str is deprecated, not used)
-        angles, _ = parse_angles_exposures(angles_str, exposures_str)
+        # Parse angles and exposures from QuPath
+        # Use QuPath's exposures as initial values for adaptive exposure
+        angles, exposures = parse_angles_exposures(angles_str, exposures_str)
         logger.info(f"Collecting backgrounds for angles: {angles} using adaptive exposure")
+        logger.info(f"Initial exposures from QuPath: {exposures}")
 
         # Load microscope configuration
         if not pathlib.Path(yaml_file_path).exists():
@@ -1060,13 +1072,18 @@ def simple_background_collection(
             target_intensity = get_target_intensity_for_background(modality, angle)
             logger.info(f"Target intensity: {target_intensity:.1f}")
 
+            # Use exposure from QuPath as initial value for adaptive exposure
+            # This is typically based on modality defaults and provides a good starting point
+            initial_exposure_ms = exposures[angle_idx] if angle_idx < len(exposures) else 100.0
+            logger.info(f"Initial exposure from QuPath: {initial_exposure_ms:.2f}ms")
+
             # Acquire with adaptive exposure to reach target intensity
             try:
                 image, final_exposure = acquire_background_with_target_intensity(
                     hardware=hardware,
                     target_intensity=target_intensity,
                     tolerance=2.5,
-                    initial_exposure_ms=100.0,
+                    initial_exposure_ms=initial_exposure_ms,
                     max_iterations=10,
                     logger=logger
                 )
@@ -1126,8 +1143,8 @@ def background_acquisition_workflow(
         output_folder_path: Base folder for backgrounds (will create modality subfolder)
         modality: Modality identifier (e.g., "PPM_20x")
         angles_str: String of angles like "(0,90,5,-5)"
-        exposures_str: DEPRECATED - Exposure is now automatically determined
-                      based on target intensity. Parameter kept for compatibility.
+        exposures_str: String of initial exposure times like "(1.5,100,50,50)".
+                      These are used as starting points for adaptive exposure.
         hardware: Microscope hardware interface
         config_manager: Configuration manager
         logger: Logger instance
@@ -1148,8 +1165,10 @@ def background_acquisition_workflow(
     )
 
     try:
-        # Parse angles (exposures_str is deprecated, not used)
-        angles, _ = parse_angles_exposures(angles_str, exposures_str)
+        # Parse angles and exposures from QuPath
+        # Use QuPath's exposures as initial values for adaptive exposure
+        angles, exposures = parse_angles_exposures(angles_str, exposures_str)
+        logger.info(f"Initial exposures from QuPath: {exposures}")
 
         # Load the microscope configuration
         if not pathlib.Path(yaml_file_path).exists():
@@ -1184,13 +1203,18 @@ def background_acquisition_workflow(
             target_intensity = get_target_intensity_for_background(modality, angle)
             logger.info(f"Target intensity: {target_intensity:.1f}")
 
+            # Use exposure from QuPath as initial value for adaptive exposure
+            # This is typically based on modality defaults and provides a good starting point
+            initial_exposure_ms = exposures[angle_idx] if angle_idx < len(exposures) else 100.0
+            logger.info(f"Initial exposure from QuPath: {initial_exposure_ms:.2f}ms")
+
             # Acquire with adaptive exposure to reach target intensity
             try:
                 image, final_exposure = acquire_background_with_target_intensity(
                     hardware=hardware,
                     target_intensity=target_intensity,
                     tolerance=2.5,
-                    initial_exposure_ms=100.0,
+                    initial_exposure_ms=initial_exposure_ms,
                     max_iterations=10,
                     logger=logger
                 )
