@@ -816,7 +816,7 @@ def get_target_intensity_for_background(modality: str, angle: float) -> float:
         >>> get_target_intensity_for_background("ppm", 5)
         150.0
         >>> get_target_intensity_for_background("ppm", -5)
-        155.0
+        150.0
         >>> get_target_intensity_for_background("ppm", 0)
         125.0
     """
@@ -835,11 +835,8 @@ def get_target_intensity_for_background(modality: str, angle: float) -> float:
         if abs_angle == 90:
             return 245.0
         elif abs_angle in [7, 5]:
-            # Distinguish between positive and negative angles
-            if angle > 0:
-                return 150.0  # +7 or +5 degrees
-            else:
-                return 155.0  # -7 or -5 degrees
+            # Same target for positive and negative angles
+            return 150.0  # ±7 or ±5 degrees
         elif abs_angle == 0:
             return 125.0
         else:
@@ -864,11 +861,12 @@ def acquire_background_with_target_intensity(
     Acquire background image with adaptive exposure to reach target intensity.
 
     Uses proportional control to iteratively adjust exposure time until the
-    average image intensity is within tolerance of the target value.
+    median image intensity is within tolerance of the target value. Median is
+    used instead of mean as it is more robust to outliers and hot pixels.
 
     Args:
         hardware: Microscope hardware interface
-        target_intensity: Target average grayscale value (0-255)
+        target_intensity: Target median grayscale value (0-255)
         tolerance: Acceptable deviation from target (default ±2.5)
         initial_exposure_ms: Starting exposure time in milliseconds
         max_iterations: Maximum adjustment iterations
@@ -906,8 +904,8 @@ def acquire_background_with_target_intensity(
         if image is None:
             raise RuntimeError(f"Failed to acquire image at iteration {iteration}")
 
-        # Calculate mean intensity across all channels
-        mean_intensity = float(image.mean())
+        # Calculate median intensity across all channels (more robust than mean)
+        mean_intensity = float(np.median(image))
 
         # Store for potential use if we don't converge
         last_image = image
@@ -916,7 +914,7 @@ def acquire_background_with_target_intensity(
         if logger:
             logger.info(
                 f"  Iteration {iteration + 1}/{max_iterations}: "
-                f"mean={mean_intensity:.1f}, exposure={current_exposure:.1f}ms"
+                f"median={mean_intensity:.1f}, exposure={current_exposure:.1f}ms"
             )
 
         # Check convergence
@@ -924,7 +922,7 @@ def acquire_background_with_target_intensity(
         if intensity_error <= tolerance:
             if logger:
                 logger.info(
-                    f"Converged! Final: mean={mean_intensity:.1f}, "
+                    f"Converged! Final: median={mean_intensity:.1f}, "
                     f"exposure={current_exposure:.1f}ms, iterations={iteration + 1}"
                 )
             return image, current_exposure
@@ -937,7 +935,7 @@ def acquire_background_with_target_intensity(
             new_exposure = max(current_exposure * 0.5, MIN_EXPOSURE_MS)
             if logger:
                 logger.warning(
-                    f"    Image saturated (mean={mean_intensity:.1f}), halving exposure to {new_exposure:.1f}ms"
+                    f"    Image saturated (median={mean_intensity:.1f}), halving exposure to {new_exposure:.1f}ms"
                 )
             current_exposure = new_exposure
             hardware.set_exposure(current_exposure)
@@ -968,7 +966,7 @@ def acquire_background_with_target_intensity(
     if logger:
         logger.warning(
             f"Did not converge after {max_iterations} iterations. "
-            f"Using last image: mean={last_image.mean():.1f}, exposure={last_exposure:.1f}ms"
+            f"Using last image: median={float(np.median(last_image)):.1f}, exposure={last_exposure:.1f}ms"
         )
 
     return last_image, last_exposure
@@ -1094,7 +1092,7 @@ def simple_background_collection(
                     logger=logger
                 )
                 logger.info(
-                    f"Acquired background: shape={image.shape}, mean={image.mean():.1f}, "
+                    f"Acquired background: shape={image.shape}, median={float(np.median(image)):.1f}, "
                     f"final_exposure={final_exposure:.1f}ms"
                 )
                 # Store final exposure for this angle
@@ -1231,7 +1229,7 @@ def background_acquisition_workflow(
                     logger=logger
                 )
                 logger.info(
-                    f"Acquired background: mean={image.mean():.1f}, "
+                    f"Acquired background: median={float(np.median(image)):.1f}, "
                     f"final_exposure={final_exposure:.1f}ms"
                 )
                 # Store final exposure for this angle
