@@ -940,7 +940,7 @@ def acquire_background_with_target_intensity(
 
             if logger:
                 logger.info(
-                    f"    Adjusting exposure: {current_exposure:.1f}ms → {new_exposure:.1f}ms "
+                    f"    Adjusting exposure: {current_exposure:.1f}ms -> {new_exposure:.1f}ms "
                     f"(ratio={adjustment_ratio:.2f})"
                 )
 
