@@ -45,6 +45,17 @@ def ppm_thor_to_psgticks(kinesis_pos: float) -> float:
     return (276 - kinesis_pos) / 2
 
 
+def ppm_polstate_to_PIStage(theta: float) -> float:
+    """Convert PPM angle (in degrees) to PI stage position."""
+    # PIZStage uses direct angle in [-180, 180)
+    return (theta * 1000) + 50280.0
+
+
+def ppm_PIStage_to_polstate(pi_pos: float) -> float:
+    """Convert PI stage position to PPM angle (in degrees)."""
+    return (pi_pos - 50280) / 1000.0
+
+
 class PycromanagerHardware(MicroscopeHardware):
     """Implementation for Pycromanager-based microscopes."""
 
@@ -86,7 +97,9 @@ class PycromanagerHardware(MicroscopeHardware):
 
         if microscope_name == "PPM":
             ppm_optics_value = self.settings.get("ppm_optics", "ZCutQuartz")
-            logger.info(f"DEBUG: ppm_optics value = {ppm_optics_value!r} (type: {type(ppm_optics_value).__name__})")
+            logger.info(
+                f"DEBUG: ppm_optics value = {ppm_optics_value!r} (type: {type(ppm_optics_value).__name__})"
+            )
             if ppm_optics_value != "NA":
 
                 self.set_psg_ticks = self._ppm_set_psgticks
@@ -729,17 +742,26 @@ class PycromanagerHardware(MicroscopeHardware):
         # Try to get rotation stage device from settings
         rotation_device = self.rotation_device
 
-        theta_thor = ppm_psgticks_to_thor(theta)
-        self.core.set_position(rotation_device, theta_thor)
-        self.core.wait_for_device(rotation_device)
+        if rotation_device == "PIZStage":
+            # PIZ stage requires angle wrapping to [-180, 180)
+            theta_pistage = ppm_PIStage_to_polstate(theta)
+            self.core.set_position(rotation_device, theta_pistage)
+        else:
+            theta_thor = ppm_psgticks_to_thor(theta)
+            self.core.set_position(rotation_device, theta_thor)
 
+        self.core.wait_for_device(rotation_device)
         logger.debug(f"Set rotation angle to {theta}° (Thor position: {theta_thor})")
 
     def _ppm_get_psgticks(self) -> float:
         """Get the current PPM rotation angle."""
         rotation_device = self.rotation_device
-        thor_pos = self.core.get_position(rotation_device)
-        return ppm_thor_to_psgticks(thor_pos)
+        if rotation_device == "PIZStage":
+            pistage_pos = self.core.get_position(rotation_device)
+            return ppm_PIStage_to_polstate(pistage_pos)
+        else:
+            thor_pos = self.core.get_position(rotation_device)
+            return ppm_thor_to_psgticks(thor_pos)
 
     def _ppm_home(self) -> None:
         """Set the PPM rotation stage to a specific angle."""
