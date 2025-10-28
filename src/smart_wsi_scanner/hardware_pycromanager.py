@@ -597,7 +597,7 @@ class PycromanagerHardware(MicroscopeHardware):
         rotation_device = self.rotation_device
 
         if rotation_device == "PIZStage":
-            theta_pistage = self.ppm_PIStage_to_polstate(theta)
+            theta_pistage = self.ppm_rlpangle_to_PIStage(theta)
             self.core.set_position(rotation_device, theta_pistage)
             self.core.wait_for_device(rotation_device)
             logger.debug(f"Set rotation angle to {theta}° (Thor position: {theta_pistage})")
@@ -619,7 +619,7 @@ class PycromanagerHardware(MicroscopeHardware):
 
         if rotation_device == "PIZStage":
             pistage_pos = self.core.get_position(rotation_device)
-            return self.ppm_PIStage_to_polstate(pistage_pos)
+            return self.ppm_PIStage_to_rlpangle(pistage_pos)
         elif rotation_device == "KBD101_Thor_Rotation":
             thor_pos = self.core.get_position(rotation_device)
             return ppm_thor_to_psgticks(thor_pos)
@@ -638,14 +638,14 @@ class PycromanagerHardware(MicroscopeHardware):
         logger.debug("Homed rotation stage")
 
     ## since offset is going to be optimized, it need to stay with the config
-    def ppm_polstate_to_PIStage(self, theta: float) -> float:
+    def ppm_rlpangle_to_PIStage(self, theta: float) -> float:
         """Convert PPM angle (in degrees) to PI stage position."""
-        offset = self.settings.get("pi_offset", 50280.0)
+        offset = self.settings.get("ppm_pizstage_offset", 50280.0)
         return (theta * 1000) + offset
 
-    def ppm_PIStage_to_polstate(self, pi_pos: float) -> float:
+    def ppm_PIStage_to_rlpangle(self, pi_pos: float) -> float:
         """Convert PI stage position to PPM angle (in degrees)."""
-        offset = self.settings.get("pi_offset", 50280.0)
+        offset = self.settings.get("ppm_pizstage_offset", 50280.0)
         return (pi_pos - offset) / 1000.0
 
     def _camm_swap_objective_lens(self, desired_imaging_mode: Dict[str, Any]):
