@@ -1276,17 +1276,14 @@ class PolarizerCalibrationUtils:
     physically repositioned or replaced.
 
     Note on Angle Conventions:
-        All methods work with OPTICAL ANGLES (user-facing angles in degrees).
-        The conversion to motor positions is handled internally by the hardware
-        layer (hardware.set_psg_ticks() and hardware.get_psg_ticks()).
+        - OPTICAL ANGLES: User-facing angles in degrees (0-360 deg)
+        - HARDWARE POSITIONS: Motor encoder counts (device-specific units)
 
-        Optical angles are what appear in config files:
-            - Crossed polarizers: typically near -5 deg, 0 deg, 5 deg (intensity minima)
-            - Uncrossed polarizers: typically near 90 deg (intensity maximum)
+        For PI Stage: hardware_position = (optical_angle * 1000) + ppm_pizstage_offset
+        For Thor Stage: hardware_position = -2 * optical_angle + 276
 
-        Motor positions (Thor stage values) use device-specific units and are
-        converted via ppm_psgticks_to_thor() / ppm_thor_to_psgticks() in
-        hardware_pycromanager.py. Calibration users don't need to know these.
+        The calibration function calculates the hardware offset needed to align
+        the optical reference (0 deg) with a physical crossed polarizer position.
     """
 
     @staticmethod
@@ -1448,4 +1445,279 @@ class PolarizerCalibrationUtils:
             'minima_intensities': minima_intensities,
             'fit_params': popt,
             'fit_curve': fit_curve
+        }
+
+    @staticmethod
+    def calibrate_hardware_offset_two_stage(
+        hardware,
+        coarse_range_deg: float = 360.0,
+        coarse_step_deg: float = 5.0,
+        fine_range_deg: float = 5.0,
+        fine_step_deg: float = 0.1,
+        exposure_ms: float = 10.0,
+        channel: int = 1,
+        logger_instance = None
+    ) -> Dict[str, Any]:
+        """
+        Two-stage calibration to determine exact hardware offset for PPM rotation stage.
+
+        This function performs precise hardware position calibration in two stages:
+        1. Coarse sweep: Find approximate locations of crossed polarizer minima
+        2. Fine sweep: Determine exact hardware encoder positions for each minimum
+
+        The result provides the exact hardware position that should be set as
+        ppm_pizstage_offset in config_PPM.yml.
+
+        **CRITICAL**: This calculates the hardware offset itself, not optical angles.
+        Run this ONLY when:
+            - Installing or repositioning rotation stage hardware
+            - After optical component changes
+            - When ppm_pizstage_offset needs recalibration
+
+        Args:
+            hardware: PycromanagerHardware instance with PPM methods.
+            coarse_range_deg: Full range to sweep in coarse stage (default: 360.0 deg).
+            coarse_step_deg: Step size for coarse sweep (default: 5.0 deg).
+            fine_range_deg: Range around each minimum for fine sweep (default: 5.0 deg).
+            fine_step_deg: Step size for fine sweep (default: 0.1 deg).
+            exposure_ms: Camera exposure time in milliseconds (default: 10.0).
+            channel: Which RGB channel to analyze (0=R, 1=G, 2=B, None=mean).
+            logger_instance: Logger for output messages.
+
+        Returns:
+            Dictionary containing:
+                - 'rotation_device': Name of rotation device (PIZStage or Thor)
+                - 'coarse_hardware_positions': Hardware positions tested in coarse sweep
+                - 'coarse_intensities': Intensities from coarse sweep
+                - 'approximate_minima': Approximate hardware positions of minima
+                - 'fine_results': List of dicts with fine sweep data for each minimum
+                - 'exact_minima': List of exact hardware positions at intensity minima
+                - 'recommended_offset': Hardware position to use as ppm_pizstage_offset
+                - 'optical_angles': Optical angles corresponding to exact minima
+
+        Raises:
+            AttributeError: If hardware lacks PPM methods or rotation device.
+            RuntimeError: If image acquisition fails.
+            ValueError: If fewer than 2 minima detected (expected for 360 deg sweep).
+        """
+        from scipy.optimize import curve_fit
+        from scipy.signal import find_peaks
+
+        if logger_instance is None:
+            logger_instance = logger
+
+        # Verify hardware has PPM methods
+        if not hasattr(hardware, 'rotation_device'):
+            raise AttributeError(
+                "Hardware does not have rotation_device attribute. "
+                "Check that PPM is properly initialized."
+            )
+
+        rotation_device = hardware.rotation_device
+        logger_instance.info(f"=== TWO-STAGE HARDWARE OFFSET CALIBRATION ===")
+        logger_instance.info(f"Rotation device: {rotation_device}")
+
+        # Get current hardware position as reference
+        current_hw_pos = hardware.core.get_position(rotation_device)
+        logger_instance.info(f"Current hardware position: {current_hw_pos:.1f}")
+
+        # Determine conversion factor based on device type
+        if rotation_device == "PIZStage":
+            # For PI: 1 deg optical = 1000 encoder counts
+            hw_per_deg = 1000.0
+            logger_instance.info("PI Stage detected: 1 deg = 1000 encoder counts")
+        elif rotation_device == "KBD101_Thor_Rotation":
+            # For Thor: Uses ppm_psgticks_to_thor conversion (-2x + 276)
+            # For sweep purposes, we treat it as 2 counts per degree
+            hw_per_deg = 2.0
+            logger_instance.info("Thor Stage detected: 1 deg = 2 encoder counts (approx)")
+        else:
+            raise ValueError(f"Unknown rotation device: {rotation_device}")
+
+        # ===== STAGE 1: COARSE SWEEP =====
+        logger_instance.info("\n--- STAGE 1: COARSE SWEEP ---")
+
+        # Calculate hardware range for coarse sweep
+        coarse_hw_range = coarse_range_deg * hw_per_deg
+        coarse_hw_step = coarse_step_deg * hw_per_deg
+
+        # Center sweep on current position
+        coarse_start_hw = current_hw_pos - (coarse_hw_range / 2)
+        coarse_end_hw = current_hw_pos + (coarse_hw_range / 2)
+
+        coarse_hw_positions = np.arange(coarse_start_hw, coarse_end_hw + coarse_hw_step, coarse_hw_step)
+        coarse_intensities = []
+
+        hardware.set_exposure(exposure_ms)
+
+        logger_instance.info(
+            f"Sweeping {coarse_start_hw:.0f} to {coarse_end_hw:.0f} "
+            f"in steps of {coarse_hw_step:.0f} ({len(coarse_hw_positions)} positions)"
+        )
+        logger_instance.info(f"Expected duration: ~{len(coarse_hw_positions) * 0.5:.0f} seconds")
+
+        for i, hw_pos in enumerate(coarse_hw_positions):
+            # Set hardware position directly
+            hardware.core.set_position(rotation_device, hw_pos)
+            hardware.core.wait_for_device(rotation_device)
+
+            # Capture image
+            try:
+                img, tags = hardware.snap_image(debayering=True)
+            except Exception as e:
+                raise RuntimeError(f"Image acquisition failed at hardware position {hw_pos:.0f}: {e}")
+
+            # Calculate mean intensity
+            if channel is not None and len(img.shape) == 3:
+                intensity = float(np.mean(img[:, :, channel]))
+            else:
+                intensity = float(np.mean(img))
+
+            coarse_intensities.append(intensity)
+
+            # Progress indicator
+            if (i + 1) % 10 == 0 or i == 0:
+                logger_instance.info(f"  Position {hw_pos:.0f}: intensity = {intensity:.1f}")
+
+        coarse_intensities = np.array(coarse_intensities)
+        logger_instance.info(
+            f"Coarse sweep complete. Intensity range: {coarse_intensities.min():.1f} to "
+            f"{coarse_intensities.max():.1f}"
+        )
+
+        # Fit sine curve to coarse data
+        intensities_norm = (coarse_intensities - coarse_intensities.min()) / (
+            coarse_intensities.max() - coarse_intensities.min()
+        )
+
+        def sine_func(x, amplitude, frequency, phase, offset):
+            return amplitude * np.sin(2 * np.pi * frequency * x + phase) + offset
+
+        # Initial guess for sine fit (180 deg period)
+        period_hw = 180.0 * hw_per_deg
+        initial_guess = [0.5, 1.0/period_hw, 0.0, 0.5]
+
+        try:
+            popt, _ = curve_fit(sine_func, coarse_hw_positions, intensities_norm, p0=initial_guess)
+            logger_instance.info("Sine fit successful")
+        except Exception as e:
+            logger_instance.warning(f"Sine fit failed: {e}. Using initial guess.")
+            popt = initial_guess
+
+        # Find local minima in coarse sweep
+        inverted = -intensities_norm
+        min_distance = int(len(coarse_hw_positions) / 4)  # At least 90 deg apart
+        peaks, properties = find_peaks(inverted, prominence=0.1, distance=min_distance)
+
+        if len(peaks) < 2:
+            logger_instance.warning(
+                f"Only found {len(peaks)} minimum. Expected 2 for full 360 deg sweep. "
+                "Continuing with found minima..."
+            )
+
+        approximate_minima = coarse_hw_positions[peaks].tolist()
+        logger_instance.info(f"Found {len(approximate_minima)} approximate minima:")
+        for hw_pos in approximate_minima:
+            logger_instance.info(f"  Hardware position: {hw_pos:.0f}")
+
+        # ===== STAGE 2: FINE SWEEP AROUND EACH MINIMUM =====
+        logger_instance.info("\n--- STAGE 2: FINE SWEEP ---")
+
+        fine_hw_range = fine_range_deg * hw_per_deg
+        fine_hw_step = fine_step_deg * hw_per_deg
+
+        fine_results = []
+        exact_minima = []
+
+        for min_idx, approx_hw_pos in enumerate(approximate_minima):
+            logger_instance.info(f"\nFine sweep {min_idx + 1}/{len(approximate_minima)}:")
+            logger_instance.info(f"  Centered on hardware position: {approx_hw_pos:.0f}")
+
+            # Calculate fine sweep range
+            fine_start_hw = approx_hw_pos - (fine_hw_range / 2)
+            fine_end_hw = approx_hw_pos + (fine_hw_range / 2)
+
+            fine_hw_positions = np.arange(fine_start_hw, fine_end_hw + fine_hw_step, fine_hw_step)
+            fine_intensities = []
+
+            logger_instance.info(
+                f"  Sweeping {fine_start_hw:.1f} to {fine_end_hw:.1f} "
+                f"in steps of {fine_hw_step:.1f} ({len(fine_hw_positions)} positions)"
+            )
+
+            for hw_pos in fine_hw_positions:
+                hardware.core.set_position(rotation_device, hw_pos)
+                hardware.core.wait_for_device(rotation_device)
+
+                try:
+                    img, tags = hardware.snap_image(debayering=True)
+                except Exception as e:
+                    raise RuntimeError(f"Fine sweep image acquisition failed at {hw_pos:.1f}: {e}")
+
+                if channel is not None and len(img.shape) == 3:
+                    intensity = float(np.mean(img[:, :, channel]))
+                else:
+                    intensity = float(np.mean(img))
+
+                fine_intensities.append(intensity)
+
+            fine_intensities = np.array(fine_intensities)
+
+            # Find exact minimum
+            min_idx_local = np.argmin(fine_intensities)
+            exact_hw_pos = fine_hw_positions[min_idx_local]
+            exact_intensity = fine_intensities[min_idx_local]
+
+            exact_minima.append(exact_hw_pos)
+
+            logger_instance.info(f"  Exact minimum found:")
+            logger_instance.info(f"    Hardware position: {exact_hw_pos:.1f}")
+            logger_instance.info(f"    Intensity: {exact_intensity:.1f}")
+
+            fine_results.append({
+                'approximate_position': approx_hw_pos,
+                'fine_hw_positions': fine_hw_positions,
+                'fine_intensities': fine_intensities,
+                'exact_position': exact_hw_pos,
+                'exact_intensity': exact_intensity
+            })
+
+        # ===== CALCULATE RECOMMENDATIONS =====
+        logger_instance.info("\n--- CALIBRATION RESULTS ---")
+
+        # Sort minima by hardware position
+        exact_minima_sorted = sorted(exact_minima)
+
+        # Recommend the minimum closest to current offset as reference (0 deg)
+        # For PI stage, current offset is approximately current_hw_pos
+        recommended_offset = exact_minima_sorted[0]
+
+        # Calculate optical angles for all minima relative to recommended offset
+        optical_angles = []
+        for hw_pos in exact_minima_sorted:
+            if rotation_device == "PIZStage":
+                optical_angle = (hw_pos - recommended_offset) / hw_per_deg
+            elif rotation_device == "KBD101_Thor_Rotation":
+                # Thor uses: hw_pos = -2 * angle + 276
+                # Need to account for this in angle calculation
+                optical_angle = (hw_pos - recommended_offset) / hw_per_deg
+            else:
+                optical_angle = 0.0
+            optical_angles.append(optical_angle)
+
+        logger_instance.info(f"Recommended ppm_pizstage_offset: {recommended_offset:.1f}")
+        logger_instance.info(f"Exact minima positions (hardware):")
+        for i, (hw_pos, opt_angle) in enumerate(zip(exact_minima_sorted, optical_angles)):
+            logger_instance.info(f"  Minimum {i+1}: {hw_pos:.1f} ({opt_angle:.2f} deg optical)")
+
+        return {
+            'rotation_device': rotation_device,
+            'coarse_hardware_positions': coarse_hw_positions,
+            'coarse_intensities': coarse_intensities,
+            'approximate_minima': approximate_minima,
+            'fine_results': fine_results,
+            'exact_minima': exact_minima_sorted,
+            'recommended_offset': recommended_offset,
+            'optical_angles': optical_angles,
+            'hw_per_deg': hw_per_deg
         }

@@ -1337,20 +1337,22 @@ def polarizer_calibration_workflow(
         # Import the calibration utility
         from smart_wsi_scanner.qp_utils import PolarizerCalibrationUtils
 
-        # Run calibration
+        # Run two-stage calibration to determine exact hardware offset
         logger.info(
-            f"Starting angle sweep: {start_angle} deg to {end_angle} deg, "
-            f"step {step_size} deg, exposure {exposure_ms} ms"
+            f"Starting two-stage hardware calibration: "
+            f"Coarse: 0-360 deg in {step_size} deg steps, "
+            f"Fine: +/-{step_size} deg in 0.1 deg steps"
         )
+        logger.info(f"Exposure: {exposure_ms} ms")
 
-        result = PolarizerCalibrationUtils.find_crossed_polarizer_positions(
+        result = PolarizerCalibrationUtils.calibrate_hardware_offset_two_stage(
             hardware=hardware,
-            start_angle=start_angle,
-            end_angle=end_angle,
-            step_size=step_size,
+            coarse_range_deg=360.0,  # Full rotation
+            coarse_step_deg=step_size,  # Use user-specified step size for coarse
+            fine_range_deg=step_size,  # Fine sweep range = coarse step size
+            fine_step_deg=0.1,  # Fine step for precise positioning
             exposure_ms=exposure_ms,
             channel=1,  # Green channel
-            min_prominence=0.1,
             logger_instance=logger
         )
 
@@ -1365,63 +1367,101 @@ def polarizer_calibration_workflow(
 
         with open(report_path, 'w') as f:
             f.write("=" * 80 + "\n")
-            f.write("POLARIZER CALIBRATION REPORT\n")
+            f.write("HARDWARE OFFSET CALIBRATION REPORT (TWO-STAGE)\n")
             f.write("=" * 80 + "\n\n")
 
             f.write(f"Calibration Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Configuration File: {yaml_file_path}\n")
-            f.write(f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n\n")
+            f.write(f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n")
+            f.write(f"Rotation Device: {result['rotation_device']}\n\n")
+
+            f.write("CALIBRATION METHOD:\n")
+            f.write("  Stage 1: Coarse sweep to locate approximate minima\n")
+            f.write("  Stage 2: Fine sweep around each minimum for exact position\n\n")
 
             f.write("CALIBRATION PARAMETERS:\n")
-            f.write(f"  Start Angle: {start_angle} deg\n")
-            f.write(f"  End Angle: {end_angle} deg\n")
-            f.write(f"  Step Size: {step_size} deg\n")
+            f.write(f"  Coarse Range: 360.0 deg\n")
+            f.write(f"  Coarse Step Size: {step_size} deg\n")
+            f.write(f"  Fine Range: +/-{step_size} deg around each minimum\n")
+            f.write(f"  Fine Step Size: 0.1 deg\n")
             f.write(f"  Exposure: {exposure_ms} ms\n")
             f.write(f"  Channel: Green (1)\n\n")
 
-            f.write("INTENSITY STATISTICS:\n")
-            f.write(f"  Minimum Intensity: {result['intensities'].min():.1f}\n")
-            f.write(f"  Maximum Intensity: {result['intensities'].max():.1f}\n")
-            f.write(f"  Dynamic Range: {result['intensities'].max() / result['intensities'].min():.2f}x\n\n")
-
-            f.write("SINE FIT PARAMETERS:\n")
-            fit_params = result['fit_params']
-            f.write(f"  Amplitude: {fit_params[0]:.4f}\n")
-            f.write(f"  Frequency: {fit_params[1]:.6f} (period: {1/fit_params[1]:.1f} deg)\n")
-            f.write(f"  Phase: {fit_params[2]:.4f} rad ({np.degrees(fit_params[2]):.1f} deg)\n")
-            f.write(f"  Offset: {fit_params[3]:.4f}\n\n")
+            f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
+            coarse_intensities = result['coarse_intensities']
+            f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
+            f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
+            f.write(f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n")
 
             f.write("=" * 80 + "\n")
-            f.write("CROSSED POLARIZER POSITIONS (MINIMA)\n")
+            f.write("EXACT HARDWARE POSITIONS (CROSSED POLARIZERS)\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write(f"Found {len(result['minima_angles'])} crossed polarizer positions:\n\n")
+            f.write(f"Found {len(result['exact_minima'])} crossed polarizer positions:\n\n")
 
-            for i, (angle, intensity) in enumerate(zip(result['minima_angles'], result['minima_intensities'])):
-                f.write(f"  Position {i+1}:\n")
-                f.write(f"    Angle: {angle:.2f} deg\n")
-                f.write(f"    Intensity: {intensity:.1f}\n\n")
+            for i, (hw_pos, opt_angle) in enumerate(zip(result['exact_minima'], result['optical_angles'])):
+                f.write(f"  Minimum {i+1}:\n")
+                f.write(f"    Hardware Position: {hw_pos:.1f} encoder counts\n")
+                f.write(f"    Optical Angle: {opt_angle:.2f} deg (relative to recommended offset)\n")
+
+                # Find corresponding fine sweep result
+                for fine_result in result['fine_results']:
+                    if abs(fine_result['exact_position'] - hw_pos) < 0.1:
+                        f.write(f"    Intensity: {fine_result['exact_intensity']:.1f}\n")
+                        break
+                f.write("\n")
+
+            # Calculate separation between minima
+            if len(result['exact_minima']) >= 2:
+                separation = abs(result['exact_minima'][1] - result['exact_minima'][0])
+                separation_deg = separation / result['hw_per_deg']
+                f.write(f"Separation between minima: {separation:.1f} counts ({separation_deg:.1f} deg)\n")
+                f.write(f"Expected: {180.0 * result['hw_per_deg']:.1f} counts (180.0 deg)\n\n")
 
             f.write("\n" + "=" * 80 + "\n")
-            f.write("CONFIG_PPM.YML UPDATE SUGGESTIONS\n")
+            f.write("CONFIG_PPM.YML UPDATE RECOMMENDATIONS\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write("Update the rotation_angles section in config_PPM.yml:\n\n")
+            f.write("CRITICAL: Update ppm_pizstage_offset to the recommended value below.\n")
+            f.write("This sets the hardware reference position for optical angle 0 deg.\n\n")
+
+            f.write(f"ppm_pizstage_offset: {result['recommended_offset']:.1f}\n\n")
+
+            f.write("After updating the offset, you can use the following optical angles:\n\n")
             f.write("rotation_angles:\n")
             f.write("  - name: 'crossed'\n")
-            f.write("    angles: [")
-            f.write(", ".join([f"{angle:.1f}" for angle in result['minima_angles']]))
-            f.write("]\n")
+            f.write("    tick: 0   # Reference position (hardware: {:.1f})\n".format(result['recommended_offset']))
+
+            # If there's a second minimum, suggest it as the other crossed position
+            if len(result['exact_minima']) >= 2:
+                other_angle = result['optical_angles'][1]
+                other_hw = result['exact_minima'][1]
+                f.write("    # OR tick: {:.0f}   # Alternate crossed (hardware: {:.1f})\n".format(
+                    other_angle, other_hw))
+
             f.write("  - name: 'uncrossed'\n")
-            f.write("    angles: [90.0]  # Typically 90 deg from crossed\n\n")
+            f.write("    tick: 90  # 90 deg from crossed (perpendicular)\n\n")
+
+            f.write("Note: The 'tick' values use simplified angle convention.\n")
+            f.write("Hardware automatically applies offset: hw_pos = (tick * 1000) + offset\n\n")
 
             f.write("=" * 80 + "\n")
-            f.write("RAW DATA\n")
+            f.write("RAW DATA - COARSE SWEEP\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write("Angle (deg), Intensity, Fitted\n")
-            for angle, intensity, fitted in zip(result['angles'], result['intensities'], result['fit_curve']):
-                f.write(f"{angle:.2f}, {intensity:.2f}, {fitted:.2f}\n")
+            f.write("Hardware Position (counts), Intensity\n")
+            for hw_pos, intensity in zip(result['coarse_hardware_positions'], result['coarse_intensities']):
+                f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("RAW DATA - FINE SWEEPS\n")
+            f.write("=" * 80 + "\n\n")
+
+            for i, fine_result in enumerate(result['fine_results']):
+                f.write(f"\nFine Sweep {i+1} (centered on {fine_result['approximate_position']:.1f}):\n")
+                f.write("Hardware Position (counts), Intensity\n")
+                for hw_pos, intensity in zip(fine_result['fine_hw_positions'], fine_result['fine_intensities']):
+                    f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
 
         logger.info(f"Calibration report saved to: {report_path}")
         logger.info("=== POLARIZER CALIBRATION WORKFLOW COMPLETE ===")
