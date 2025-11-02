@@ -542,6 +542,143 @@ def handle_client(conn, addr):
 
                 continue
 
+            if data == ExtendedCommand.POLCAL:
+                logger.info(f"Client {addr} requested polarizer calibration")
+
+                # Read the message using the same pattern as BGACQUIRE
+                message_parts = []
+                total_bytes = 0
+                start_time = time.time()
+
+                conn.settimeout(5.0)
+
+                try:
+                    while True:
+                        chunk = conn.recv(1024)
+                        if not chunk:
+                            logger.error("Connection closed while reading polarizer calibration message")
+                            conn.sendall(b"FAILED:Connection closed")
+                            break
+
+                        message_parts.append(chunk.decode("utf-8"))
+                        total_bytes += len(chunk)
+
+                        full_message = "".join(message_parts)
+
+                        if "END_MARKER" in full_message:
+                            message = full_message.replace("END_MARKER", "").strip()
+
+                            # Parse the message
+                            params = {}
+
+                            # Split by known flags
+                            flags = ["--yaml", "--output", "--start", "--end", "--step", "--exposure"]
+
+                            for i, flag in enumerate(flags):
+                                if flag in message:
+                                    # Find where this flag starts
+                                    start_idx = message.index(flag) + len(flag)
+
+                                    # Find where the next flag starts (or use end of string)
+                                    end_idx = len(message)
+                                    for next_flag in flags[i + 1 :]:
+                                        if next_flag in message[start_idx:]:
+                                            next_pos = message.index(next_flag, start_idx)
+                                            if next_pos < end_idx:
+                                                end_idx = next_pos
+                                                break
+
+                                    # Extract the value and clean it up
+                                    value = message[start_idx:end_idx].strip()
+
+                                    # Map to the parameter name
+                                    if flag == "--yaml":
+                                        params["yaml_file_path"] = value
+                                    elif flag == "--output":
+                                        params["output_folder_path"] = value
+                                    elif flag == "--start":
+                                        params["start_angle"] = float(value)
+                                    elif flag == "--end":
+                                        params["end_angle"] = float(value)
+                                    elif flag == "--step":
+                                        params["step_size"] = float(value)
+                                    elif flag == "--exposure":
+                                        params["exposure_ms"] = float(value)
+
+                            # Validate required parameters
+                            required = ["yaml_file_path", "output_folder_path"]
+                            missing = [key for key in required if key not in params]
+                            if missing:
+                                error_msg = f"Missing required parameters: {missing}"
+                                logger.error(error_msg)
+                                conn.sendall(f"FAILED:{error_msg}".encode())
+                                break
+
+                            # Set defaults for optional parameters
+                            params.setdefault("start_angle", 0.0)
+                            params.setdefault("end_angle", 360.0)
+                            params.setdefault("step_size", 5.0)
+                            params.setdefault("exposure_ms", 10.0)
+
+                            # Send immediate acknowledgment to prevent client timeout
+                            try:
+                                ack_response = f"STARTED:{params['output_folder_path']}".encode()
+                                conn.sendall(ack_response)
+                                logger.info("Sent STARTED acknowledgment for polarizer calibration")
+
+                                # Execute polarizer calibration workflow
+                                from smart_wsi_scanner.qp_acquisition import (
+                                    polarizer_calibration_workflow,
+                                )
+
+                                report_path = polarizer_calibration_workflow(
+                                    yaml_file_path=params["yaml_file_path"],
+                                    output_folder_path=params["output_folder_path"],
+                                    start_angle=params["start_angle"],
+                                    end_angle=params["end_angle"],
+                                    step_size=params["step_size"],
+                                    exposure_ms=params["exposure_ms"],
+                                    hardware=hardware,
+                                    config_manager=config_manager,
+                                    logger=logger,
+                                )
+
+                                # Send success response with report path
+                                response = f"SUCCESS:{report_path}".encode()
+                                conn.sendall(response)
+
+                                logger.info(f"Polarizer calibration completed. Report: {report_path}")
+
+                            except Exception as e:
+                                logger.error(f"Polarizer calibration failed: {str(e)}", exc_info=True)
+                                response = f"FAILED:{str(e)}".encode()
+                                conn.sendall(response)
+
+                            # We found and processed the END_MARKER, so break the while loop
+                            break
+
+                        # Safety checks for the while loop
+                        if total_bytes > 10000:  # 10KB max
+                            logger.error(f"Polarizer calibration message too large: {total_bytes} bytes")
+                            conn.sendall(b"FAILED:Message too large")
+                            break
+
+                        if time.time() - start_time > 10:
+                            logger.error("Timeout reading polarizer calibration message")
+                            conn.sendall(b"FAILED:Timeout waiting for complete message")
+                            break
+
+                except socket.timeout:
+                    logger.error(f"Timeout reading polarizer calibration message from {addr}")
+                    conn.sendall(b"FAILED:Timeout reading message")
+                except Exception as e:
+                    logger.error(f"Error in polarizer calibration: {str(e)}", exc_info=True)
+                    conn.sendall(f"FAILED:{str(e)}".encode())
+                finally:
+                    conn.settimeout(None)  # Reset to blocking mode
+
+                continue
+
             # Legacy GET/SET commands (not implemented)
             if data == ExtendedCommand.GET:
                 logger.debug("GET property not yet implemented")

@@ -4,11 +4,14 @@ A smart whole slide image scanner with hardware abstraction and configuration ma
 
 ## Features
 
-- Hardware abstraction layer for different microscope types
-- Flexible configuration management with YAML support
-- Support for multiple imaging modes and objectives
-- Autofocus capabilities
-- Image acquisition and processing
+- **Hardware abstraction layer** for different microscope types
+- **Flexible configuration management** with YAML support
+- **Support for multiple imaging modes** and objectives
+- **Autofocus capabilities** with adaptive search
+- **Image acquisition and processing**
+- **Adaptive exposure control** for background acquisition (automatically adjusts to target intensities)
+- **Polarizer calibration utilities** for PPM rotation stage (sine fitting and minima detection)
+- **Socket-based server** for QuPath integration with real-time progress reporting
 
 ``` python
 from smart_wsi_scanner.qupath import QuPathProject, QuPathScanner

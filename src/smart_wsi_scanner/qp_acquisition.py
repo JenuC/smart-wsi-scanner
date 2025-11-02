@@ -881,7 +881,7 @@ def acquire_background_with_target_intensity(
         RuntimeError: If image acquisition fails
     """
     # Exposure bounds to prevent extreme values
-    MIN_EXPOSURE_MS = 1.0
+    MIN_EXPOSURE_MS = 0.1
     MAX_EXPOSURE_MS = 5000.0
 
     # Set initial exposure
@@ -1253,4 +1253,165 @@ def background_acquisition_workflow(
 
     except Exception as e:
         logger.error(f"Background acquisition failed: {str(e)}", exc_info=True)
+        raise
+
+
+def polarizer_calibration_workflow(
+    yaml_file_path: str,
+    output_folder_path: str,
+    start_angle: float,
+    end_angle: float,
+    step_size: float,
+    exposure_ms: float,
+    hardware: PycromanagerHardware,
+    config_manager,
+    logger,
+) -> str:
+    """
+    Calibrate PPM polarizer rotation stage to find crossed polarizer positions.
+
+    IMPORTANT: Position microscope at uniform, bright background before calling.
+    This workflow sweeps the rotation stage through angles, measures intensity,
+    and determines optimal crossed polarizer positions for config_PPM.yml.
+
+    Args:
+        yaml_file_path: Path to microscope configuration YAML
+        output_folder_path: Base folder for backgrounds (will write report at top level)
+        start_angle: Starting angle for sweep (degrees)
+        end_angle: Ending angle for sweep (degrees)
+        step_size: Step size for sweep (degrees)
+        exposure_ms: Exposure time (milliseconds)
+        hardware: Microscope hardware interface
+        config_manager: Configuration manager
+        logger: Logger instance
+
+    Returns:
+        str: Path to the calibration report text file
+    """
+    logger.info("=== POLARIZER CALIBRATION WORKFLOW STARTED ===")
+    logger.warning("Ensure microscope is positioned at a uniform, bright background!")
+
+    # Get and log current position for reference
+    current_pos = hardware.get_current_position()
+    logger.info(
+        f"Running calibration at position: X={current_pos.x:.1f}, "
+        f"Y={current_pos.y:.1f}, Z={current_pos.z:.1f}"
+    )
+
+    try:
+        # Load the microscope configuration
+        if not pathlib.Path(yaml_file_path).exists():
+            raise FileNotFoundError(f"YAML file {yaml_file_path} does not exist")
+
+        settings = config_manager.load_config_file(yaml_file_path)
+        hardware.settings = settings
+
+        # Re-initialize microscope-specific methods
+        if hasattr(hardware, '_initialize_microscope_methods'):
+            hardware._initialize_microscope_methods()
+            logger.info("Re-initialized hardware methods with updated settings")
+
+        # Verify PPM is available
+        if not hasattr(hardware, 'set_psg_ticks'):
+            raise RuntimeError(
+                "PPM rotation stage methods not available. "
+                "Check ppm_optics setting in configuration."
+            )
+
+        # Import the calibration utility
+        from smart_wsi_scanner.qp_utils import PolarizerCalibrationUtils
+
+        # Run calibration
+        logger.info(
+            f"Starting angle sweep: {start_angle} deg to {end_angle} deg, "
+            f"step {step_size} deg, exposure {exposure_ms} ms"
+        )
+
+        result = PolarizerCalibrationUtils.find_crossed_polarizer_positions(
+            hardware=hardware,
+            start_angle=start_angle,
+            end_angle=end_angle,
+            step_size=step_size,
+            exposure_ms=exposure_ms,
+            channel=1,  # Green channel
+            min_prominence=0.1,
+            logger_instance=logger
+        )
+
+        # Write calibration report
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_filename = f"polarizer_calibration_{timestamp}.txt"
+        report_path = pathlib.Path(output_folder_path) / report_filename
+
+        # Ensure output directory exists
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(report_path, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write("POLARIZER CALIBRATION REPORT\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(f"Calibration Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Configuration File: {yaml_file_path}\n")
+            f.write(f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n\n")
+
+            f.write("CALIBRATION PARAMETERS:\n")
+            f.write(f"  Start Angle: {start_angle} deg\n")
+            f.write(f"  End Angle: {end_angle} deg\n")
+            f.write(f"  Step Size: {step_size} deg\n")
+            f.write(f"  Exposure: {exposure_ms} ms\n")
+            f.write(f"  Channel: Green (1)\n\n")
+
+            f.write("INTENSITY STATISTICS:\n")
+            f.write(f"  Minimum Intensity: {result['intensities'].min():.1f}\n")
+            f.write(f"  Maximum Intensity: {result['intensities'].max():.1f}\n")
+            f.write(f"  Dynamic Range: {result['intensities'].max() / result['intensities'].min():.2f}x\n\n")
+
+            f.write("SINE FIT PARAMETERS:\n")
+            fit_params = result['fit_params']
+            f.write(f"  Amplitude: {fit_params[0]:.4f}\n")
+            f.write(f"  Frequency: {fit_params[1]:.6f} (period: {1/fit_params[1]:.1f} deg)\n")
+            f.write(f"  Phase: {fit_params[2]:.4f} rad ({np.degrees(fit_params[2]):.1f} deg)\n")
+            f.write(f"  Offset: {fit_params[3]:.4f}\n\n")
+
+            f.write("=" * 80 + "\n")
+            f.write("CROSSED POLARIZER POSITIONS (MINIMA)\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(f"Found {len(result['minima_angles'])} crossed polarizer positions:\n\n")
+
+            for i, (angle, intensity) in enumerate(zip(result['minima_angles'], result['minima_intensities'])):
+                f.write(f"  Position {i+1}:\n")
+                f.write(f"    Angle: {angle:.2f} deg\n")
+                f.write(f"    Intensity: {intensity:.1f}\n\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("CONFIG_PPM.YML UPDATE SUGGESTIONS\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write("Update the rotation_angles section in config_PPM.yml:\n\n")
+            f.write("rotation_angles:\n")
+            f.write("  - name: 'crossed'\n")
+            f.write("    angles: [")
+            f.write(", ".join([f"{angle:.1f}" for angle in result['minima_angles']]))
+            f.write("]\n")
+            f.write("  - name: 'uncrossed'\n")
+            f.write("    angles: [90.0]  # Typically 90 deg from crossed\n\n")
+
+            f.write("=" * 80 + "\n")
+            f.write("RAW DATA\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write("Angle (deg), Intensity, Fitted\n")
+            for angle, intensity, fitted in zip(result['angles'], result['intensities'], result['fit_curve']):
+                f.write(f"{angle:.2f}, {intensity:.2f}, {fitted:.2f}\n")
+
+        logger.info(f"Calibration report saved to: {report_path}")
+        logger.info("=== POLARIZER CALIBRATION WORKFLOW COMPLETE ===")
+
+        return str(report_path)
+
+    except Exception as e:
+        logger.error(f"Polarizer calibration failed: {str(e)}", exc_info=True)
         raise

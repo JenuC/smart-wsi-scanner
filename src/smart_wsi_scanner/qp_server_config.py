@@ -52,3 +52,4 @@ class ExtendedCommand:
     PROGRESS = b"progress"  # Get acquisition progress
     CANCEL = b"cancel__"  # Cancel acquisition
     BGACQUIRE = b"bgacquir"  # Acquire background images
+    POLCAL = b"polcal__"  # Calibrate polarizer rotation stage

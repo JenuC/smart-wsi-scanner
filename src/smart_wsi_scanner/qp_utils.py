@@ -1264,3 +1264,188 @@ class BackgroundCorrectionUtils:
             logger.info(f"Saved background for {angle}° to {background_path}")
 
         logger.info("=== BACKGROUND ACQUISITION COMPLETE ===")
+
+
+class PolarizerCalibrationUtils:
+    """
+    Utilities for calibrating polarized light microscopy (PPM) rotation stage.
+
+    This class provides methods for determining crossed polarizer positions,
+    which are critical for PPM imaging. These calibration functions should be
+    run infrequently - only when optical components or rotation stage are
+    physically repositioned or replaced.
+
+    Note on Angle Conventions:
+        All methods work with OPTICAL ANGLES (user-facing angles in degrees).
+        The conversion to motor positions is handled internally by the hardware
+        layer (hardware.set_psg_ticks() and hardware.get_psg_ticks()).
+
+        Optical angles are what appear in config files:
+            - Crossed polarizers: typically near -5 deg, 0 deg, 5 deg (intensity minima)
+            - Uncrossed polarizers: typically near 90 deg (intensity maximum)
+
+        Motor positions (Thor stage values) use device-specific units and are
+        converted via ppm_psgticks_to_thor() / ppm_thor_to_psgticks() in
+        hardware_pycromanager.py. Calibration users don't need to know these.
+    """
+
+    @staticmethod
+    def find_crossed_polarizer_positions(
+        hardware,
+        start_angle: float = 0.0,
+        end_angle: float = 360.0,
+        step_size: float = 5.0,
+        exposure_ms: float = 10.0,
+        channel: int = 1,
+        min_prominence: float = 0.1,
+        logger_instance = None
+    ) -> Dict[str, Any]:
+        """
+        Calibrate polarizer by sweeping rotation angles and finding crossed positions.
+
+        This function rotates the polarization stage through a range of angles,
+        captures images at each position, measures intensity, fits the data to
+        a sinusoidal function, and identifies local minima corresponding to
+        crossed polarizer orientations.
+
+        **When to use this:**
+            - After installing or repositioning polarization optics
+            - After reseating or replacing the rotation stage
+            - When validating polarizer alignment
+            - To verify/update rotation_angles in config_PPM.yml
+
+        **NOT needed for:**
+            - Regular imaging sessions
+            - Between samples
+            - After software updates
+
+        Args:
+            hardware: PycromanagerHardware instance with PPM methods.
+            start_angle: Starting optical angle in degrees (default: 0.0).
+            end_angle: Ending optical angle in degrees (default: 360.0).
+            step_size: Angular step size in degrees (default: 5.0).
+            exposure_ms: Camera exposure time in milliseconds (default: 10.0).
+            channel: Which RGB channel to analyze (0=R, 1=G, 2=B, None=mean).
+            min_prominence: Minimum prominence for peak detection (default: 0.1).
+            logger_instance: Logger for output messages.
+
+        Returns:
+            Dictionary containing:
+                - 'angles': np.ndarray of optical angles tested
+                - 'intensities': np.ndarray of mean intensities
+                - 'minima_angles': List of crossed polarizer angles
+                - 'minima_intensities': List of intensities at minima
+                - 'fit_params': Fitted sine parameters
+                - 'fit_curve': Fitted intensity values
+
+        Raises:
+            AttributeError: If hardware lacks PPM methods.
+            RuntimeError: If image acquisition fails.
+            ValueError: If no minima detected.
+        """
+        # Use scipy imports locally to avoid import issues if not available
+        from scipy.optimize import curve_fit
+        from scipy.signal import find_peaks
+
+        if logger_instance is None:
+            logger_instance = logger
+
+        # Verify hardware has PPM methods
+        if not hasattr(hardware, 'set_psg_ticks') or not hasattr(hardware, 'get_psg_ticks'):
+            raise AttributeError(
+                "Hardware does not have PPM methods initialized. "
+                "Check that ppm_optics is set in configuration and not 'NA'."
+            )
+
+        # Generate angle array
+        angles = np.arange(start_angle, end_angle + step_size, step_size)
+        intensities = []
+
+        # Set exposure
+        hardware.set_exposure(exposure_ms)
+
+        logger_instance.info(
+            f"Starting polarizer calibration sweep: "
+            f"{start_angle} deg to {end_angle} deg in {step_size} deg steps"
+        )
+        logger_instance.info(f"Exposure: {exposure_ms} ms, Channel: {channel if channel is not None else 'mean'}")
+        logger_instance.info(f"Expected duration: ~{len(angles) * 0.5:.0f} seconds")
+
+        # Sweep through optical angles
+        for i, angle in enumerate(angles):
+            # Set rotation angle
+            hardware.set_psg_ticks(angle)
+
+            # Capture image
+            try:
+                img, tags = hardware.snap_image(debayering=True)
+            except Exception as e:
+                raise RuntimeError(f"Image acquisition failed at angle {angle} deg: {e}")
+
+            # Calculate mean intensity
+            if channel is not None and len(img.shape) == 3:
+                intensity = float(np.mean(img[:, :, channel]))
+            else:
+                intensity = float(np.mean(img))
+
+            intensities.append(intensity)
+
+            # Progress indicator
+            if (i + 1) % 10 == 0 or i == 0:
+                logger_instance.info(f"  Angle {angle:.1f} deg: intensity = {intensity:.1f}")
+
+        intensities = np.array(intensities)
+        logger_instance.info(f"Intensity range: {intensities.min():.1f} to {intensities.max():.1f}")
+
+        # Normalize intensities
+        intensities_norm = (intensities - intensities.min()) / (intensities.max() - intensities.min())
+
+        # Define sine function
+        def sine_func(x, amplitude, frequency, phase, offset):
+            return amplitude * np.sin(2 * np.pi * frequency * x + phase) + offset
+
+        # Initial guess (180 deg period for polarizers)
+        initial_guess = [0.5, 1.0/180.0, 0.0, 0.5]
+
+        # Fit sine function
+        try:
+            popt, pcov = curve_fit(sine_func, angles, intensities_norm, p0=initial_guess)
+            fit_curve_norm = sine_func(angles, *popt)
+            fit_curve = fit_curve_norm * (intensities.max() - intensities.min()) + intensities.min()
+
+            logger_instance.info("Sine fit successful:")
+            logger_instance.info(f"  Amplitude: {popt[0]:.4f}")
+            logger_instance.info(f"  Frequency: {popt[1]:.6f} (period: {1/popt[1]:.1f} deg)")
+            logger_instance.info(f"  Phase: {popt[2]:.4f} rad ({np.degrees(popt[2]):.1f} deg)")
+            logger_instance.info(f"  Offset: {popt[3]:.4f}")
+        except Exception as e:
+            logger_instance.warning(f"Sine fit failed: {e}. Using initial guess.")
+            popt = initial_guess
+            fit_curve_norm = sine_func(angles, *popt)
+            fit_curve = fit_curve_norm * (intensities.max() - intensities.min()) + intensities.min()
+
+        # Find local minima
+        inverted = -intensities_norm
+        peaks, properties = find_peaks(inverted, prominence=min_prominence, distance=len(angles)/10)
+
+        if len(peaks) == 0:
+            raise ValueError(
+                "No minima detected. Try adjusting: "
+                "exposure_ms, step_size, min_prominence, or angular_range"
+            )
+
+        minima_angles = angles[peaks].tolist()
+        minima_intensities = intensities[peaks].tolist()
+
+        logger_instance.info(f"Found {len(minima_angles)} crossed polarizer positions:")
+        for angle, intensity in zip(minima_angles, minima_intensities):
+            logger_instance.info(f"  {angle:.1f} deg: intensity = {intensity:.1f}")
+
+        return {
+            'angles': angles,
+            'intensities': intensities,
+            'minima_angles': minima_angles,
+            'minima_intensities': minima_intensities,
+            'fit_params': popt,
+            'fit_curve': fit_curve
+        }
