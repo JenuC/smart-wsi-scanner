@@ -303,8 +303,8 @@ class PycromanagerHardware(MicroscopeHardware):
 
     def autofocus(
         self,
-        n_steps=5,
-        search_range=45,
+        n_steps=4000000,
+        search_range=20,
         interp_strength=100,
         interp_kind="quadratic",
         score_metric=skimage.filters.sobel,
