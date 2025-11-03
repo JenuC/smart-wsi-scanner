@@ -1340,6 +1340,18 @@ def polarizer_calibration_workflow(
             raise FileNotFoundError(f"YAML file {yaml_file_path} does not exist")
 
         settings = config_manager.load_config_file(yaml_file_path)
+
+        # Load and merge LOCI resources (required for rotation stage device lookup)
+        loci_rsc_file = str(
+            pathlib.Path(yaml_file_path).parent / "resources" / "resources_LOCI.yml"
+        )
+        if pathlib.Path(loci_rsc_file).exists():
+            loci_resources = config_manager.load_config_file(loci_rsc_file)
+            settings.update(loci_resources)
+            logger.info("Loaded and merged LOCI resources")
+        else:
+            logger.warning(f"LOCI resources file not found: {loci_rsc_file}")
+
         hardware.settings = settings
 
         # Re-initialize microscope-specific methods
