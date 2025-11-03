@@ -410,6 +410,9 @@ def _acquisition_workflow(
         af_n_tiles = 5  # default
         af_search_range = 50  # default
         af_n_steps = 11  # default
+        af_interp_strength = 100  # default
+        af_interp_kind = "quadratic"  # default
+        af_score_metric_name = "laplacian_variance"  # default
 
         # Try to get current objective from hardware
         microscope = ppm_settings.get("microscope", {})
@@ -434,15 +437,31 @@ def _acquisition_workflow(
                         af_n_tiles = af_setting.get("n_tiles", af_n_tiles)
                         af_search_range = af_setting.get("search_range_um", af_search_range)
                         af_n_steps = af_setting.get("n_steps", af_n_steps)
+                        af_interp_strength = af_setting.get("interp_strength", af_interp_strength)
+                        af_interp_kind = af_setting.get("interp_kind", af_interp_kind)
+                        af_score_metric_name = af_setting.get("score_metric", af_score_metric_name)
                         logger.info(
                             f"Loaded autofocus settings for {current_objective}: "
-                            f"n_steps={af_n_steps}, search_range={af_search_range}um, n_tiles={af_n_tiles}"
+                            f"n_steps={af_n_steps}, search_range={af_search_range}um, n_tiles={af_n_tiles}, "
+                            f"interp_strength={af_interp_strength}, interp_kind={af_interp_kind}, "
+                            f"score_metric={af_score_metric_name}"
                         )
                         break
             else:
                 logger.warning(f"Autofocus config file not found: {autofocus_file}. Using defaults.")
         except Exception as e:
             logger.error(f"Error loading autofocus settings: {e}. Using defaults.")
+
+        # Map score metric name to function
+        score_metric_map = {
+            "laplacian_variance": AutofocusUtils.autofocus_profile_laplacian_variance,
+            "sobel": AutofocusUtils.autofocus_profile_sobel,
+            "brenner_gradient": AutofocusUtils.autofocus_profile_brenner_gradient,
+            "robust_sharpness": AutofocusUtils.autofocus_profile_robust_sharpness_metric,
+            "hybrid_sharpness": AutofocusUtils.autofocus_profile_hybrid_sharpness_metric,
+        }
+        af_score_metric = score_metric_map.get(af_score_metric_name,
+            AutofocusUtils.autofocus_profile_laplacian_variance)
 
         af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
             fov, xy_positions, n_tiles=af_n_tiles
@@ -534,8 +553,9 @@ def _acquisition_workflow(
                         move_stage_to_estimate=True,
                         n_steps=af_n_steps,
                         search_range=af_search_range,
-                        interp_strength=100,
-                        score_metric=AutofocusUtils.autofocus_profile_laplacian_variance,
+                        interp_strength=af_interp_strength,
+                        interp_kind=af_interp_kind,
+                        score_metric=af_score_metric,
                     )
                     logger.info(f"  Autofocus :: New Z {new_z}")
                 else:
