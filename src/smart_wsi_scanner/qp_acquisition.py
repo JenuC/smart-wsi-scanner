@@ -448,7 +448,9 @@ def _acquisition_workflow(
                         )
                         break
             else:
-                logger.warning(f"Autofocus config file not found: {autofocus_file}. Using defaults.")
+                logger.warning(
+                    f"Autofocus config file not found: {autofocus_file}. Using defaults."
+                )
         except Exception as e:
             logger.error(f"Error loading autofocus settings: {e}. Using defaults.")
 
@@ -460,8 +462,9 @@ def _acquisition_workflow(
             "robust_sharpness": AutofocusUtils.autofocus_profile_robust_sharpness_metric,
             "hybrid_sharpness": AutofocusUtils.autofocus_profile_hybrid_sharpness_metric,
         }
-        af_score_metric = score_metric_map.get(af_score_metric_name,
-            AutofocusUtils.autofocus_profile_laplacian_variance)
+        af_score_metric = score_metric_map.get(
+            af_score_metric_name, AutofocusUtils.autofocus_profile_laplacian_variance
+        )
 
         af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
             fov, xy_positions, n_tiles=af_n_tiles
@@ -818,7 +821,7 @@ def write_position_metadata(metadata_txt_for_positions, raw_image_path, hardware
     # here we should use the modality used for acquisition?
     # if modality.lower.count("ppm") > 0:  # user-set value passed from acquisition parameters
     # if hardware.settings.get("modality", "ppm") == "ppm":  # config set value from yaml
-    
+
     if "ppm" in modality.lower():
         angle = (
             hardware.get_psg_ticks()
@@ -891,7 +894,7 @@ def acquire_background_with_target_intensity(
     tolerance: float = 2.5,
     initial_exposure_ms: float = 100.0,
     max_iterations: int = 10,
-    logger = None
+    logger=None,
 ) -> Tuple[np.ndarray, float]:
     """
     Acquire background image with adaptive exposure to reach target intensity.
@@ -917,7 +920,7 @@ def acquire_background_with_target_intensity(
         RuntimeError: If image acquisition fails
     """
     # Exposure bounds to prevent extreme values
-    MIN_EXPOSURE_MS = 0.1
+    MIN_EXPOSURE_MS = 0.0001
     MAX_EXPOSURE_MS = 5000.0
 
     # Set initial exposure
@@ -994,7 +997,9 @@ def acquire_background_with_target_intensity(
             # Image is completely black, increase exposure significantly
             new_exposure = min(current_exposure * 2.0, MAX_EXPOSURE_MS)
             if logger:
-                logger.warning(f"    Image completely black, doubling exposure to {new_exposure:.1f}ms")
+                logger.warning(
+                    f"    Image completely black, doubling exposure to {new_exposure:.1f}ms"
+                )
             current_exposure = new_exposure
             hardware.set_exposure(current_exposure)
 
@@ -1075,7 +1080,7 @@ def simple_background_collection(
 
         # Re-initialize microscope-specific methods with updated settings
         # This is critical for PPM rotation to work correctly
-        if hasattr(hardware, '_initialize_microscope_methods'):
+        if hasattr(hardware, "_initialize_microscope_methods"):
             hardware._initialize_microscope_methods()
             logger.info("Re-initialized hardware methods with updated settings")
 
@@ -1125,7 +1130,7 @@ def simple_background_collection(
                     tolerance=2.5,
                     initial_exposure_ms=initial_exposure_ms,
                     max_iterations=10,
-                    logger=logger
+                    logger=logger,
                 )
                 logger.info(
                     f"Acquired background: shape={image.shape}, median={float(np.median(image)):.1f}, "
@@ -1219,7 +1224,7 @@ def background_acquisition_workflow(
 
         # Re-initialize microscope-specific methods with updated settings
         # This is critical for PPM rotation to work correctly
-        if hasattr(hardware, '_initialize_microscope_methods'):
+        if hasattr(hardware, "_initialize_microscope_methods"):
             hardware._initialize_microscope_methods()
             logger.info("Re-initialized hardware methods with updated settings")
 
@@ -1262,7 +1267,7 @@ def background_acquisition_workflow(
                     tolerance=2.5,
                     initial_exposure_ms=initial_exposure_ms,
                     max_iterations=10,
-                    logger=logger
+                    logger=logger,
                 )
                 logger.info(
                     f"Acquired background: median={float(np.median(image)):.1f}, "
@@ -1355,12 +1360,12 @@ def polarizer_calibration_workflow(
         hardware.settings = settings
 
         # Re-initialize microscope-specific methods
-        if hasattr(hardware, '_initialize_microscope_methods'):
+        if hasattr(hardware, "_initialize_microscope_methods"):
             hardware._initialize_microscope_methods()
             logger.info("Re-initialized hardware methods with updated settings")
 
         # Verify PPM is available
-        if not hasattr(hardware, 'set_psg_ticks'):
+        if not hasattr(hardware, "set_psg_ticks"):
             raise RuntimeError(
                 "PPM rotation stage methods not available. "
                 "Check ppm_optics setting in configuration."
@@ -1385,11 +1390,12 @@ def polarizer_calibration_workflow(
             fine_step_deg=0.1,  # Fine step for precise positioning
             exposure_ms=exposure_ms,
             channel=1,  # Green channel
-            logger_instance=logger
+            logger_instance=logger,
         )
 
         # Write calibration report
         import datetime
+
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         report_filename = f"polarizer_calibration_{timestamp}.txt"
         report_path = pathlib.Path(output_folder_path) / report_filename
@@ -1397,14 +1403,16 @@ def polarizer_calibration_workflow(
         # Ensure output directory exists
         report_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(report_path, 'w') as f:
+        with open(report_path, "w") as f:
             f.write("=" * 80 + "\n")
             f.write("HARDWARE OFFSET CALIBRATION REPORT (TWO-STAGE)\n")
             f.write("=" * 80 + "\n\n")
 
             f.write(f"Calibration Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Configuration File: {yaml_file_path}\n")
-            f.write(f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n")
+            f.write(
+                f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n"
+            )
             f.write(f"Rotation Device: {result['rotation_device']}\n\n")
 
             f.write("CALIBRATION METHOD:\n")
@@ -1420,10 +1428,12 @@ def polarizer_calibration_workflow(
             f.write(f"  Channel: Green (1)\n\n")
 
             f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
-            coarse_intensities = result['coarse_intensities']
+            coarse_intensities = result["coarse_intensities"]
             f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
             f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
-            f.write(f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n")
+            f.write(
+                f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n"
+            )
 
             f.write("=" * 80 + "\n")
             f.write("EXACT HARDWARE POSITIONS (CROSSED POLARIZERS)\n")
@@ -1431,23 +1441,29 @@ def polarizer_calibration_workflow(
 
             f.write(f"Found {len(result['exact_minima'])} crossed polarizer positions:\n\n")
 
-            for i, (hw_pos, opt_angle) in enumerate(zip(result['exact_minima'], result['optical_angles'])):
+            for i, (hw_pos, opt_angle) in enumerate(
+                zip(result["exact_minima"], result["optical_angles"])
+            ):
                 f.write(f"  Minimum {i+1}:\n")
                 f.write(f"    Hardware Position: {hw_pos:.1f} encoder counts\n")
-                f.write(f"    Optical Angle: {opt_angle:.2f} deg (relative to recommended offset)\n")
+                f.write(
+                    f"    Optical Angle: {opt_angle:.2f} deg (relative to recommended offset)\n"
+                )
 
                 # Find corresponding fine sweep result
-                for fine_result in result['fine_results']:
-                    if abs(fine_result['exact_position'] - hw_pos) < 0.1:
+                for fine_result in result["fine_results"]:
+                    if abs(fine_result["exact_position"] - hw_pos) < 0.1:
                         f.write(f"    Intensity: {fine_result['exact_intensity']:.1f}\n")
                         break
                 f.write("\n")
 
             # Calculate separation between minima
-            if len(result['exact_minima']) >= 2:
-                separation = abs(result['exact_minima'][1] - result['exact_minima'][0])
-                separation_deg = separation / result['hw_per_deg']
-                f.write(f"Separation between minima: {separation:.1f} counts ({separation_deg:.1f} deg)\n")
+            if len(result["exact_minima"]) >= 2:
+                separation = abs(result["exact_minima"][1] - result["exact_minima"][0])
+                separation_deg = separation / result["hw_per_deg"]
+                f.write(
+                    f"Separation between minima: {separation:.1f} counts ({separation_deg:.1f} deg)\n"
+                )
                 f.write(f"Expected: {180.0 * result['hw_per_deg']:.1f} counts (180.0 deg)\n\n")
 
             f.write("\n" + "=" * 80 + "\n")
@@ -1462,14 +1478,21 @@ def polarizer_calibration_workflow(
             f.write("After updating the offset, you can use the following optical angles:\n\n")
             f.write("rotation_angles:\n")
             f.write("  - name: 'crossed'\n")
-            f.write("    tick: 0   # Reference position (hardware: {:.1f})\n".format(result['recommended_offset']))
+            f.write(
+                "    tick: 0   # Reference position (hardware: {:.1f})\n".format(
+                    result["recommended_offset"]
+                )
+            )
 
             # If there's a second minimum, suggest it as the other crossed position
-            if len(result['exact_minima']) >= 2:
-                other_angle = result['optical_angles'][1]
-                other_hw = result['exact_minima'][1]
-                f.write("    # OR tick: {:.0f}   # Alternate crossed (hardware: {:.1f})\n".format(
-                    other_angle, other_hw))
+            if len(result["exact_minima"]) >= 2:
+                other_angle = result["optical_angles"][1]
+                other_hw = result["exact_minima"][1]
+                f.write(
+                    "    # OR tick: {:.0f}   # Alternate crossed (hardware: {:.1f})\n".format(
+                        other_angle, other_hw
+                    )
+                )
 
             f.write("  - name: 'uncrossed'\n")
             f.write("    tick: 90  # 90 deg from crossed (perpendicular)\n\n")
@@ -1482,17 +1505,23 @@ def polarizer_calibration_workflow(
             f.write("=" * 80 + "\n\n")
 
             f.write("Hardware Position (counts), Intensity\n")
-            for hw_pos, intensity in zip(result['coarse_hardware_positions'], result['coarse_intensities']):
+            for hw_pos, intensity in zip(
+                result["coarse_hardware_positions"], result["coarse_intensities"]
+            ):
                 f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
 
             f.write("\n" + "=" * 80 + "\n")
             f.write("RAW DATA - FINE SWEEPS\n")
             f.write("=" * 80 + "\n\n")
 
-            for i, fine_result in enumerate(result['fine_results']):
-                f.write(f"\nFine Sweep {i+1} (centered on {fine_result['approximate_position']:.1f}):\n")
+            for i, fine_result in enumerate(result["fine_results"]):
+                f.write(
+                    f"\nFine Sweep {i+1} (centered on {fine_result['approximate_position']:.1f}):\n"
+                )
                 f.write("Hardware Position (counts), Intensity\n")
-                for hw_pos, intensity in zip(fine_result['fine_hw_positions'], fine_result['fine_intensities']):
+                for hw_pos, intensity in zip(
+                    fine_result["fine_hw_positions"], fine_result["fine_intensities"]
+                ):
                     f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
 
         logger.info(f"Calibration report saved to: {report_path}")
