@@ -539,7 +539,7 @@ def _acquisition_workflow(
                 # Pass modality for modality-specific thresholds
                 has_tissue, tissue_stats = AutofocusUtils.has_sufficient_tissue(
                     test_img,
-                    texture_threshold=0.010,
+                    texture_threshold=0.005,  # Lowered from 0.010 for smoother tissue
                     tissue_area_threshold=0.2,
                     modality=modality,
                     logger=logger,
