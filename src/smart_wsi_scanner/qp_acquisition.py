@@ -258,13 +258,13 @@ def _acquisition_workflow(
         # Load the yaml file
         if not params["yaml_file_path"]:
             raise ValueError("YAML file path is required")
-        if not pathlib.Path(params["yaml_file_path"]).exists():
+        if not Path(params["yaml_file_path"]).exists():
             raise FileNotFoundError(f"YAML file {params['yaml_file_path']} does not exist")
 
         # Load configuration using the config manager
         ppm_settings = config_manager.load_config_file(params["yaml_file_path"])
         loci_rsc_file = str(
-            pathlib.Path(params["yaml_file_path"]).parent / "resources" / "resources_LOCI.yml"
+            Path(params["yaml_file_path"]).parent / "resources" / "resources_LOCI.yml"
         )
         loci_resources = config_manager.load_config_file(loci_rsc_file)
         ppm_settings.update(loci_resources)
@@ -312,7 +312,7 @@ def _acquisition_workflow(
 
             # Priority 1: Message parameter
             if "background_folder" in params:
-                background_dir = pathlib.Path(params["background_folder"])
+                background_dir = Path(params["background_folder"])
                 logger.info(f"Using background folder from message: {background_dir}")
             else:
                 # Priority 2: YAML configuration
@@ -322,7 +322,7 @@ def _acquisition_workflow(
 
                 if bc_settings.get("enabled") and bc_settings.get("base_folder"):
                     # For YAML config, construct path with modality subdirectory
-                    background_dir = pathlib.Path(bc_settings["base_folder"]) / modality
+                    background_dir = Path(bc_settings["base_folder"]) / modality
                     logger.info(f"Using background folder from YAML config: {background_dir}")
 
             # Load background images if directory is valid
@@ -353,7 +353,7 @@ def _acquisition_workflow(
             logger.info(f"Loaded white balance settings for {len(angles_wb)} angles")
 
         # Set up output paths
-        project_path = pathlib.Path(params["projects_folder_path"]) / params["sample_label"]
+        project_path = Path(params["projects_folder_path"]) / params["sample_label"]
         output_path = project_path / params["scan_type"] / params["region_name"]
         if not output_path.exists():
             output_path.mkdir(parents=True, exist_ok=True)
@@ -1058,7 +1058,7 @@ def simple_background_collection(
         logger.info(f"Initial exposures from QuPath: {exposures}")
 
         # Load microscope configuration
-        if not pathlib.Path(yaml_file_path).exists():
+        if not Path(yaml_file_path).exists():
             raise FileNotFoundError(f"YAML file {yaml_file_path} does not exist")
 
         # Load main configuration file
@@ -1066,7 +1066,7 @@ def simple_background_collection(
 
         # Load and merge LOCI resources (same pattern as regular acquisition workflow)
         loci_rsc_file = str(
-            pathlib.Path(__file__).parent / "configurations" / "resources" / "resources_LOCI.yml"
+            Path(__file__).parent / "configurations" / "resources" / "resources_LOCI.yml"
         )
         try:
             loci_resources = config_manager.load_config_file(loci_rsc_file)
@@ -1092,7 +1092,7 @@ def simple_background_collection(
         )
 
         # Create output directory structure
-        output_path = pathlib.Path(output_folder_path)
+        output_path = Path(output_folder_path)
         output_path.mkdir(parents=True, exist_ok=True)
         logger.info(f"Saving backgrounds to: {output_path}")
 
@@ -1217,7 +1217,7 @@ def background_acquisition_workflow(
         logger.info(f"Initial exposures from QuPath: {exposures}")
 
         # Load the microscope configuration
-        if not pathlib.Path(yaml_file_path).exists():
+        if not Path(yaml_file_path).exists():
             raise FileNotFoundError(f"YAML file {yaml_file_path} does not exist")
 
         settings = config_manager.load_config_file(yaml_file_path)
@@ -1230,7 +1230,7 @@ def background_acquisition_workflow(
             logger.info("Re-initialized hardware methods with updated settings")
 
         # Create output directory structure with modality
-        output_path = pathlib.Path(output_folder_path) / "backgrounds" / modality
+        output_path = Path(output_folder_path) / "backgrounds" / modality
         output_path.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"Saving backgrounds to: {output_path}")
@@ -1342,16 +1342,16 @@ def polarizer_calibration_workflow(
 
     try:
         # Load the microscope configuration
-        if not pathlib.Path(yaml_file_path).exists():
+        if not Path(yaml_file_path).exists():
             raise FileNotFoundError(f"YAML file {yaml_file_path} does not exist")
 
         settings = config_manager.load_config_file(yaml_file_path)
 
         # Load and merge LOCI resources (required for rotation stage device lookup)
         loci_rsc_file = str(
-            pathlib.Path(yaml_file_path).parent / "resources" / "resources_LOCI.yml"
+            Path(yaml_file_path).parent / "resources" / "resources_LOCI.yml"
         )
-        if pathlib.Path(loci_rsc_file).exists():
+        if Path(loci_rsc_file).exists():
             loci_resources = config_manager.load_config_file(loci_rsc_file)
             settings.update(loci_resources)
             logger.info("Loaded and merged LOCI resources")
@@ -1399,7 +1399,7 @@ def polarizer_calibration_workflow(
 
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         report_filename = f"polarizer_calibration_{timestamp}.txt"
-        report_path = pathlib.Path(output_folder_path) / report_filename
+        report_path = Path(output_folder_path) / report_filename
 
         # Ensure output directory exists
         report_path.parent.mkdir(parents=True, exist_ok=True)
