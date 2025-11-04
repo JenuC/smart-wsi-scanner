@@ -422,7 +422,7 @@ def _acquisition_workflow(
         try:
             # Derive autofocus config path from main config path
             # e.g., "config_PPM.yml" -> "autofocus_PPM.yml"
-            config_path = Path(yaml_file_path)
+            config_path = Path(params["yaml_file_path"])
             config_name = config_path.stem  # "config_PPM"
             microscope_name = config_name.replace("config_", "")  # "PPM"
             autofocus_file = config_path.parent / f"autofocus_{microscope_name}.yml"
