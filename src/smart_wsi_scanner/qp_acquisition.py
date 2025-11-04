@@ -414,6 +414,8 @@ def _acquisition_workflow(
         af_interp_strength = 100  # default
         af_interp_kind = "quadratic"  # default
         af_score_metric_name = "laplacian_variance"  # default
+        af_texture_threshold = 0.005  # default - tissue detection sensitivity
+        af_tissue_area_threshold = 0.2  # default - minimum tissue coverage
 
         # Try to get current objective from hardware
         microscope = ppm_settings.get("microscope", {})
@@ -441,11 +443,14 @@ def _acquisition_workflow(
                         af_interp_strength = af_setting.get("interp_strength", af_interp_strength)
                         af_interp_kind = af_setting.get("interp_kind", af_interp_kind)
                         af_score_metric_name = af_setting.get("score_metric", af_score_metric_name)
+                        af_texture_threshold = af_setting.get("texture_threshold", af_texture_threshold)
+                        af_tissue_area_threshold = af_setting.get("tissue_area_threshold", af_tissue_area_threshold)
                         logger.info(
                             f"Loaded autofocus settings for {current_objective}: "
                             f"n_steps={af_n_steps}, search_range={af_search_range}um, n_tiles={af_n_tiles}, "
                             f"interp_strength={af_interp_strength}, interp_kind={af_interp_kind}, "
-                            f"score_metric={af_score_metric_name}"
+                            f"score_metric={af_score_metric_name}, "
+                            f"texture_threshold={af_texture_threshold}, tissue_area_threshold={af_tissue_area_threshold}"
                         )
                         break
             else:
@@ -536,11 +541,11 @@ def _acquisition_workflow(
                         logger.info("Converted float image to uint8 for tissue detection")
 
                 # Check if there's sufficient tissue for reliable autofocus
-                # Pass modality for modality-specific thresholds
+                # Use thresholds from autofocus config (per-objective settings)
                 has_tissue, tissue_stats = AutofocusUtils.has_sufficient_tissue(
                     test_img,
-                    texture_threshold=0.005,  # Lowered from 0.010 for smoother tissue
-                    tissue_area_threshold=0.2,
+                    texture_threshold=af_texture_threshold,
+                    tissue_area_threshold=af_tissue_area_threshold,
                     modality=modality,
                     logger=logger,
                     return_stats=True,
