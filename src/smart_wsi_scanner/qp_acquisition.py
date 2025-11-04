@@ -1402,31 +1402,9 @@ def polarizer_calibration_workflow(
             f.write("HARDWARE OFFSET CALIBRATION REPORT (TWO-STAGE)\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write(f"Calibration Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Configuration File: {yaml_file_path}\n")
-            f.write(f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n")
-            f.write(f"Rotation Device: {result['rotation_device']}\n\n")
-
-            f.write("CALIBRATION METHOD:\n")
-            f.write("  Stage 1: Coarse sweep to locate approximate minima\n")
-            f.write("  Stage 2: Fine sweep around each minimum for exact position\n\n")
-
-            f.write("CALIBRATION PARAMETERS:\n")
-            f.write(f"  Coarse Range: 360.0 deg\n")
-            f.write(f"  Coarse Step Size: {step_size} deg\n")
-            f.write(f"  Fine Range: +/-{step_size} deg around each minimum\n")
-            f.write(f"  Fine Step Size: 0.1 deg\n")
-            f.write(f"  Exposure: {exposure_ms} ms\n")
-            f.write(f"  Channel: Green (1)\n\n")
-
-            f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
-            coarse_intensities = result['coarse_intensities']
-            f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
-            f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
-            f.write(f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n")
-
+            # ===== RESULTS FIRST - MOST IMPORTANT INFORMATION =====
             f.write("=" * 80 + "\n")
-            f.write("EXACT HARDWARE POSITIONS (CROSSED POLARIZERS)\n")
+            f.write("CALIBRATION RESULTS\n")
             f.write("=" * 80 + "\n\n")
 
             f.write(f"Found {len(result['exact_minima'])} crossed polarizer positions:\n\n")
@@ -1476,6 +1454,34 @@ def polarizer_calibration_workflow(
 
             f.write("Note: The 'tick' values use simplified angle convention.\n")
             f.write("Hardware automatically applies offset: hw_pos = (tick * 1000) + offset\n\n")
+
+            # ===== METADATA AND PARAMETERS - REFERENCE INFORMATION =====
+            f.write("=" * 80 + "\n")
+            f.write("CALIBRATION METADATA\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(f"Calibration Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Configuration File: {yaml_file_path}\n")
+            f.write(f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n")
+            f.write(f"Rotation Device: {result['rotation_device']}\n\n")
+
+            f.write("CALIBRATION METHOD:\n")
+            f.write("  Stage 1: Coarse sweep to locate approximate minima\n")
+            f.write("  Stage 2: Fine sweep around each minimum for exact position\n\n")
+
+            f.write("CALIBRATION PARAMETERS:\n")
+            f.write(f"  Coarse Range: 360.0 deg\n")
+            f.write(f"  Coarse Step Size: {step_size} deg\n")
+            f.write(f"  Fine Range: +/-{step_size} deg around each minimum\n")
+            f.write(f"  Fine Step Size: 0.1 deg\n")
+            f.write(f"  Exposure: {exposure_ms} ms\n")
+            f.write(f"  Channel: Green (1)\n\n")
+
+            f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
+            coarse_intensities = result['coarse_intensities']
+            f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
+            f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
+            f.write(f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n")
 
             f.write("=" * 80 + "\n")
             f.write("RAW DATA - COARSE SWEEP\n")
