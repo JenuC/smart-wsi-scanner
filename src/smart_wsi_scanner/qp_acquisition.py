@@ -416,6 +416,11 @@ def _acquisition_workflow(
         af_score_metric_name = "laplacian_variance"  # default
         af_texture_threshold = 0.005  # default - tissue detection sensitivity
         af_tissue_area_threshold = 0.2  # default - minimum tissue coverage
+        # Adaptive autofocus parameters
+        af_adaptive_initial_step = 10.0  # default
+        af_adaptive_min_step = 2.0  # default
+        af_adaptive_max_steps = 25  # default
+        af_adaptive_focus_threshold = 0.95  # default
 
         # Try to get current objective from hardware
         microscope = ppm_settings.get("microscope", {})
@@ -445,12 +450,18 @@ def _acquisition_workflow(
                         af_score_metric_name = af_setting.get("score_metric", af_score_metric_name)
                         af_texture_threshold = af_setting.get("texture_threshold", af_texture_threshold)
                         af_tissue_area_threshold = af_setting.get("tissue_area_threshold", af_tissue_area_threshold)
+                        af_adaptive_initial_step = af_setting.get("adaptive_initial_step_um", af_adaptive_initial_step)
+                        af_adaptive_min_step = af_setting.get("adaptive_min_step_um", af_adaptive_min_step)
+                        af_adaptive_max_steps = af_setting.get("adaptive_max_steps", af_adaptive_max_steps)
+                        af_adaptive_focus_threshold = af_setting.get("adaptive_focus_threshold", af_adaptive_focus_threshold)
                         logger.info(
                             f"Loaded autofocus settings for {current_objective}: "
                             f"n_steps={af_n_steps}, search_range={af_search_range}um, n_tiles={af_n_tiles}, "
                             f"interp_strength={af_interp_strength}, interp_kind={af_interp_kind}, "
                             f"score_metric={af_score_metric_name}, "
-                            f"texture_threshold={af_texture_threshold}, tissue_area_threshold={af_tissue_area_threshold}"
+                            f"texture_threshold={af_texture_threshold}, tissue_area_threshold={af_tissue_area_threshold}, "
+                            f"adaptive: initial_step={af_adaptive_initial_step}um, min_step={af_adaptive_min_step}um, "
+                            f"max_steps={af_adaptive_max_steps}, focus_threshold={af_adaptive_focus_threshold}"
                         )
                         break
             else:
@@ -481,6 +492,10 @@ def _acquisition_workflow(
         # Create dynamic autofocus positions set (can be modified during acquisition)
         dynamic_af_positions = set(af_positions)
         deferred_af_positions = set()  # Track positions where AF was deferred
+
+        # Track whether we've performed the first successful autofocus with tissue
+        # Use standard autofocus on first tissue, then adaptive for speed on subsequent
+        first_tissue_autofocus_done = False
 
         metadata_txt_for_positions = output_path / "image_positions_metadata.txt"
 
@@ -558,15 +573,32 @@ def _acquisition_workflow(
                         f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})"
                     )
 
-                    new_z = hardware.autofocus(
-                        move_stage_to_estimate=True,
-                        n_steps=af_n_steps,
-                        search_range=af_search_range,
-                        interp_strength=af_interp_strength,
-                        interp_kind=af_interp_kind,
-                        score_metric=af_score_metric,
-                    )
-                    logger.info(f"  Autofocus :: New Z {new_z}")
+                    # Use STANDARD autofocus on first tissue position for accuracy
+                    # Then use ADAPTIVE autofocus on subsequent positions for speed
+                    if not first_tissue_autofocus_done:
+                        logger.info(f"  First tissue position - using STANDARD autofocus for accuracy")
+                        new_z = hardware.autofocus(
+                            move_stage_to_estimate=True,
+                            n_steps=af_n_steps,
+                            search_range=af_search_range,
+                            interp_strength=af_interp_strength,
+                            interp_kind=af_interp_kind,
+                            score_metric=af_score_metric,
+                        )
+                        first_tissue_autofocus_done = True
+                        logger.info(f"  Standard autofocus :: New Z {new_z}")
+                    else:
+                        logger.info(f"  Subsequent tissue position - using ADAPTIVE autofocus for speed")
+                        new_z = hardware.autofocus_adaptive_search(
+                            initial_step_size=af_adaptive_initial_step,
+                            min_step_size=af_adaptive_min_step,
+                            focus_threshold=af_adaptive_focus_threshold,
+                            max_total_steps=af_adaptive_max_steps,
+                            score_metric=af_score_metric,
+                            pop_a_plot=False,
+                            move_stage_to_estimate=True,
+                        )
+                        logger.info(f"  Adaptive autofocus :: New Z {new_z}")
                 else:
                     logger.warning(
                         f"Insufficient tissue at position {pos_idx} - deferring autofocus"

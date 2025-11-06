@@ -204,19 +204,20 @@ def test_adaptive_autofocus_at_current_position(
         af_settings = _load_autofocus_settings(yaml_file_path, objective, logger)
 
         logger.info(f"  Adaptive autofocus settings:")
-        logger.info(f"    initial_step_size: 10 um")
-        logger.info(f"    min_step_size: 2 um")
-        logger.info(f"    max_total_steps: 25")
+        logger.info(f"    initial_step_size: {af_settings['adaptive_initial_step_um']} um")
+        logger.info(f"    min_step_size: {af_settings['adaptive_min_step_um']} um")
+        logger.info(f"    max_total_steps: {af_settings['adaptive_max_steps']}")
+        logger.info(f"    focus_threshold: {af_settings['adaptive_focus_threshold']}")
         logger.info(f"    score_metric: {af_settings['score_metric_name']}")
 
         # Call the ACTUAL hardware.autofocus_adaptive_search() method
         logger.info("  Calling hardware.autofocus_adaptive_search()...")
 
         final_z = hardware.autofocus_adaptive_search(
-            initial_step_size=10,
-            min_step_size=2,
-            focus_threshold=0.95,
-            max_total_steps=25,
+            initial_step_size=af_settings['adaptive_initial_step_um'],
+            min_step_size=af_settings['adaptive_min_step_um'],
+            focus_threshold=af_settings['adaptive_focus_threshold'],
+            max_total_steps=af_settings['adaptive_max_steps'],
             score_metric=af_settings['score_metric'],
             pop_a_plot=False,
             move_stage_to_estimate=True,
@@ -547,6 +548,10 @@ def _load_autofocus_settings(yaml_file_path: str, objective: str, logger) -> Dic
         'interp_strength': 100,
         'interp_kind': 'quadratic',
         'score_metric_name': 'laplacian_variance',
+        'adaptive_initial_step_um': 10.0,
+        'adaptive_min_step_um': 2.0,
+        'adaptive_max_steps': 25,
+        'adaptive_focus_threshold': 0.95,
     }
 
     if autofocus_file.exists():
@@ -562,6 +567,10 @@ def _load_autofocus_settings(yaml_file_path: str, objective: str, logger) -> Dic
                     settings['interp_strength'] = af_setting.get('interp_strength', settings['interp_strength'])
                     settings['interp_kind'] = af_setting.get('interp_kind', settings['interp_kind'])
                     settings['score_metric_name'] = af_setting.get('score_metric', settings['score_metric_name'])
+                    settings['adaptive_initial_step_um'] = af_setting.get('adaptive_initial_step_um', settings['adaptive_initial_step_um'])
+                    settings['adaptive_min_step_um'] = af_setting.get('adaptive_min_step_um', settings['adaptive_min_step_um'])
+                    settings['adaptive_max_steps'] = af_setting.get('adaptive_max_steps', settings['adaptive_max_steps'])
+                    settings['adaptive_focus_threshold'] = af_setting.get('adaptive_focus_threshold', settings['adaptive_focus_threshold'])
                     break
         except Exception as e:
             logger.warning(f"Error loading autofocus settings, using defaults: {e}")
