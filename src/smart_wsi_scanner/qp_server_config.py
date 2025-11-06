@@ -53,4 +53,5 @@ class ExtendedCommand:
     CANCEL = b"cancel__"  # Cancel acquisition
     BGACQUIRE = b"bgacquir"  # Acquire background images
     POLCAL = b"polcal__"  # Calibrate polarizer rotation stage
-    TESTAF = b"testaf__"  # Test autofocus at current position
+    TESTAF = b"testaf__"  # Test standard autofocus at current position
+    TESTADAF = b"testadaf"  # Test adaptive autofocus at current position

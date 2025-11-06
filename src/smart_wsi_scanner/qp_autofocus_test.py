@@ -28,6 +28,218 @@ from smart_wsi_scanner.qp_utils import AutofocusUtils
 from smart_wsi_scanner.hardware import Position
 
 
+def test_standard_autofocus_at_current_position(
+    hardware,
+    config_manager,
+    yaml_file_path: str,
+    output_folder_path: str,
+    objective: str,
+    logger: Optional[logging.Logger] = None,
+) -> Dict[str, Any]:
+    """
+    Test STANDARD autofocus at current microscope position.
+    Calls hardware.autofocus() with settings from config file.
+
+    This performs a symmetric sweep around current position using fixed n_steps.
+
+    Args:
+        hardware: PycromanagerHardware instance
+        config_manager: ConfigManager instance
+        yaml_file_path: Path to microscope config YAML
+        output_folder_path: Where to save diagnostic plots and data
+        objective: Objective identifier
+        logger: Optional logger instance
+
+    Returns:
+        Dict containing test results and plot path
+    """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
+    logger.info("=== STANDARD AUTOFOCUS TEST STARTED ===")
+    logger.info(f"  Objective: {objective}")
+    logger.info(f"  Config file: {yaml_file_path}")
+
+    # Create output directory
+    output_path = Path(output_folder_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    result = {
+        "success": False,
+        "initial_z": None,
+        "final_z": None,
+        "z_shift": None,
+        "raw_best_z": None,
+        "interp_best_z": None,
+        "raw_scores": [],
+        "plot_path": None,
+        "message": "",
+        "test_type": "standard",
+    }
+
+    try:
+        # Get current position
+        initial_pos = hardware.get_current_position()
+        result["initial_z"] = initial_pos.z
+        logger.info(f"  Initial position: X={initial_pos.x:.2f}, Y={initial_pos.y:.2f}, Z={initial_pos.z:.2f}")
+
+        # Load autofocus settings
+        af_settings = _load_autofocus_settings(yaml_file_path, objective, logger)
+
+        logger.info(f"  Autofocus settings:")
+        logger.info(f"    n_steps: {af_settings['n_steps']}")
+        logger.info(f"    search_range: {af_settings['search_range']} um (centered on current Z)")
+        logger.info(f"    interp_strength: {af_settings['interp_strength']}")
+        logger.info(f"    interp_kind: {af_settings['interp_kind']}")
+        logger.info(f"    score_metric: {af_settings['score_metric_name']}")
+
+        # Call the ACTUAL hardware.autofocus() method
+        logger.info("  Calling hardware.autofocus() with config settings...")
+
+        final_z = hardware.autofocus(
+            n_steps=af_settings['n_steps'],
+            search_range=af_settings['search_range'],
+            interp_strength=af_settings['interp_strength'],
+            interp_kind=af_settings['interp_kind'],
+            score_metric=af_settings['score_metric'],
+            pop_a_plot=False,
+            move_stage_to_estimate=True,
+        )
+
+        result["final_z"] = final_z
+        result["z_shift"] = final_z - initial_pos.z
+
+        logger.info(f"  Standard autofocus completed:")
+        logger.info(f"    Final Z: {final_z:.2f} um")
+        logger.info(f"    Z shift: {result['z_shift']:.2f} um")
+
+        # Since the hardware method doesn't return intermediate data,
+        # we note that in the result
+        result["message"] = f"Standard autofocus completed. Z shift: {result['z_shift']:.2f} um. Note: Uses hardware's built-in algorithm."
+        result["success"] = True
+
+        logger.info("=== STANDARD AUTOFOCUS TEST COMPLETED ===")
+
+    except Exception as e:
+        logger.error(f"Standard autofocus test failed: {e}", exc_info=True)
+        result["message"] = f"Standard autofocus test failed: {str(e)}"
+
+        # Try to return to initial position
+        if result["initial_z"] is not None:
+            try:
+                hardware.move_to_position(
+                    Position(initial_pos.x, initial_pos.y, result["initial_z"])
+                )
+                logger.info("Returned to initial Z position after error")
+            except:
+                pass
+
+    return result
+
+
+def test_adaptive_autofocus_at_current_position(
+    hardware,
+    config_manager,
+    yaml_file_path: str,
+    output_folder_path: str,
+    objective: str,
+    logger: Optional[logging.Logger] = None,
+) -> Dict[str, Any]:
+    """
+    Test ADAPTIVE autofocus at current microscope position.
+    Calls hardware.autofocus_adaptive_search() with settings from config file.
+
+    This starts at current position and searches intelligently, stopping when "good enough".
+
+    Args:
+        hardware: PycromanagerHardware instance
+        config_manager: ConfigManager instance
+        yaml_file_path: Path to microscope config YAML
+        output_folder_path: Where to save diagnostic plots and data
+        objective: Objective identifier
+        logger: Optional logger instance
+
+    Returns:
+        Dict containing test results and plot path
+    """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
+    logger.info("=== ADAPTIVE AUTOFOCUS TEST STARTED ===")
+    logger.info(f"  Objective: {objective}")
+    logger.info(f"  Config file: {yaml_file_path}")
+
+    # Create output directory
+    output_path = Path(output_folder_path)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    result = {
+        "success": False,
+        "initial_z": None,
+        "final_z": None,
+        "z_shift": None,
+        "plot_path": None,
+        "message": "",
+        "test_type": "adaptive",
+    }
+
+    try:
+        # Get current position
+        initial_pos = hardware.get_current_position()
+        result["initial_z"] = initial_pos.z
+        logger.info(f"  Initial position: X={initial_pos.x:.2f}, Y={initial_pos.y:.2f}, Z={initial_pos.z:.2f}")
+
+        # Load autofocus settings
+        af_settings = _load_autofocus_settings(yaml_file_path, objective, logger)
+
+        logger.info(f"  Adaptive autofocus settings:")
+        logger.info(f"    initial_step_size: 10 um")
+        logger.info(f"    min_step_size: 2 um")
+        logger.info(f"    max_total_steps: 25")
+        logger.info(f"    score_metric: {af_settings['score_metric_name']}")
+
+        # Call the ACTUAL hardware.autofocus_adaptive_search() method
+        logger.info("  Calling hardware.autofocus_adaptive_search()...")
+
+        final_z = hardware.autofocus_adaptive_search(
+            initial_step_size=10,
+            min_step_size=2,
+            focus_threshold=0.95,
+            max_total_steps=25,
+            score_metric=af_settings['score_metric'],
+            pop_a_plot=False,
+            move_stage_to_estimate=True,
+        )
+
+        result["final_z"] = final_z
+        result["z_shift"] = final_z - initial_pos.z
+
+        logger.info(f"  Adaptive autofocus completed:")
+        logger.info(f"    Final Z: {final_z:.2f} um")
+        logger.info(f"    Z shift: {result['z_shift']:.2f} um")
+
+        result["message"] = f"Adaptive autofocus completed. Z shift: {result['z_shift']:.2f} um. Note: Uses hardware's adaptive algorithm."
+        result["success"] = True
+
+        logger.info("=== ADAPTIVE AUTOFOCUS TEST COMPLETED ===")
+
+    except Exception as e:
+        logger.error(f"Adaptive autofocus test failed: {e}", exc_info=True)
+        result["message"] = f"Adaptive autofocus test failed: {str(e)}"
+
+        # Try to return to initial position
+        if result["initial_z"] is not None:
+            try:
+                hardware.move_to_position(
+                    Position(initial_pos.x, initial_pos.y, result["initial_z"])
+                )
+                logger.info("Returned to initial Z position after error")
+            except:
+                pass
+
+    return result
+
+
 def test_autofocus_at_current_position(
     hardware,
     config_manager,

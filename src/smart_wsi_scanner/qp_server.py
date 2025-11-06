@@ -612,12 +612,12 @@ def handle_client(conn, addr):
                             try:
                                 ack_response = f"STARTED:{params['output_folder_path']}".encode()
                                 conn.sendall(ack_response)
-                                logger.info("Sent STARTED acknowledgment for autofocus test")
+                                logger.info("Sent STARTED acknowledgment for standard autofocus test")
 
-                                # Execute autofocus test
-                                from smart_wsi_scanner.qp_autofocus_test import test_autofocus_at_current_position
+                                # Execute STANDARD autofocus test
+                                from smart_wsi_scanner.qp_autofocus_test import test_standard_autofocus_at_current_position
 
-                                result = test_autofocus_at_current_position(
+                                result = test_standard_autofocus_at_current_position(
                                     hardware=hardware,
                                     config_manager=config_manager,
                                     yaml_file_path=params["yaml_file_path"],
@@ -661,6 +661,131 @@ def handle_client(conn, addr):
                     conn.sendall(b"FAILED:Timeout reading message")
                 except Exception as e:
                     logger.error(f"Error in autofocus test: {str(e)}", exc_info=True)
+                    conn.sendall(f"FAILED:{str(e)}".encode())
+                finally:
+                    conn.settimeout(None)  # Reset to blocking mode
+
+                continue
+
+            if data == ExtendedCommand.TESTADAF:
+                logger.info(f"Client {addr} requested adaptive autofocus test")
+
+                # Read the message using the same pattern as TESTAF
+                message_parts = []
+                total_bytes = 0
+                start_time = time.time()
+
+                conn.settimeout(5.0)
+
+                try:
+                    while True:
+                        chunk = conn.recv(1024)
+                        if not chunk:
+                            logger.error("Connection closed while reading adaptive autofocus test message")
+                            conn.sendall(b"FAILED:Connection closed")
+                            break
+
+                        message_parts.append(chunk.decode("utf-8"))
+                        total_bytes += len(chunk)
+
+                        full_message = "".join(message_parts)
+
+                        if "END_MARKER" in full_message:
+                            message = full_message.replace("END_MARKER", "").strip()
+
+                            # Parse the message
+                            params = {}
+
+                            # Split by known flags to avoid issues with spaces in paths
+                            flags = ["--yaml", "--output", "--objective"]
+
+                            for i, flag in enumerate(flags):
+                                if flag in message:
+                                    # Find where this flag starts
+                                    start_idx = message.index(flag) + len(flag)
+
+                                    # Find where the next flag starts (or use end of string)
+                                    end_idx = len(message)
+                                    for next_flag in flags[i + 1:]:
+                                        if next_flag in message[start_idx:]:
+                                            next_pos = message.index(next_flag, start_idx)
+                                            if next_pos < end_idx:
+                                                end_idx = next_pos
+                                                break
+
+                                    # Extract the value and clean it up
+                                    value = message[start_idx:end_idx].strip()
+
+                                    # Map to the parameter name
+                                    if flag == "--yaml":
+                                        params["yaml_file_path"] = value
+                                    elif flag == "--output":
+                                        params["output_folder_path"] = value
+                                    elif flag == "--objective":
+                                        params["objective"] = value
+
+                            # Validate required parameters
+                            required = ["yaml_file_path", "output_folder_path", "objective"]
+                            missing = [key for key in required if key not in params]
+                            if missing:
+                                error_msg = f"Missing required parameters: {missing}"
+                                logger.error(error_msg)
+                                conn.sendall(f"FAILED:{error_msg}".encode())
+                                break
+
+                            # Send immediate acknowledgment to prevent client timeout
+                            try:
+                                ack_response = f"STARTED:{params['output_folder_path']}".encode()
+                                conn.sendall(ack_response)
+                                logger.info("Sent STARTED acknowledgment for adaptive autofocus test")
+
+                                # Execute ADAPTIVE autofocus test
+                                from smart_wsi_scanner.qp_autofocus_test import test_adaptive_autofocus_at_current_position
+
+                                result = test_adaptive_autofocus_at_current_position(
+                                    hardware=hardware,
+                                    config_manager=config_manager,
+                                    yaml_file_path=params["yaml_file_path"],
+                                    output_folder_path=params["output_folder_path"],
+                                    objective=params["objective"],
+                                    logger=logger,
+                                )
+
+                                if result["success"]:
+                                    # Format result as: SUCCESS:message|initial_z:final_z:z_shift
+                                    result_data = f"{result['initial_z']:.2f}:{result['final_z']:.2f}:{result['z_shift']:.2f}"
+                                    response = f"SUCCESS:{result['message']}|{result_data}".encode()
+                                    conn.sendall(response)
+                                    logger.info(f"Adaptive autofocus test completed: {result['message']}")
+                                else:
+                                    response = f"FAILED:{result['message']}".encode()
+                                    conn.sendall(response)
+                                    logger.error(f"Adaptive autofocus test failed: {result['message']}")
+
+                            except Exception as e:
+                                logger.error(f"Adaptive autofocus test failed: {str(e)}", exc_info=True)
+                                response = f"FAILED:{str(e)}".encode()
+                                conn.sendall(response)
+
+                            # We found and processed the END_MARKER, so break the while loop
+                            break
+
+                        # Safety checks for the while loop
+                        if total_bytes > 10000:  # 10KB max
+                            logger.error(f"Adaptive autofocus test message too large: {total_bytes} bytes")
+                            conn.sendall(b"FAILED:Message too large")
+                            break
+
+                        if time.time() - start_time > 10:
+                            logger.error("Timeout reading adaptive autofocus test message")
+                            conn.sendall(b"FAILED:Timeout waiting for complete message")
+                            break
+
+                except socket.timeout:
+                    logger.error(f"Timeout reading adaptive autofocus test message from {addr}")
+                    conn.sendall(b"FAILED:Timeout reading message")
+                except Exception as e:
+                    logger.error(f"Error in adaptive autofocus test: {str(e)}", exc_info=True)
                     conn.sendall(f"FAILED:{str(e)}".encode())
                 finally:
                     conn.settimeout(None)  # Reset to blocking mode
