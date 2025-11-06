@@ -113,9 +113,20 @@ def test_standard_autofocus_at_current_position(
         logger.info(f"    Final Z: {final_z:.2f} um")
         logger.info(f"    Z shift: {result['z_shift']:.2f} um")
 
-        # Since the hardware method doesn't return intermediate data,
-        # we note that in the result
-        result["message"] = f"Standard autofocus completed. Z shift: {result['z_shift']:.2f} um. Note: Uses hardware's built-in algorithm."
+        # Generate diagnostic plot by doing a post-hoc scan
+        # This shows what the focus curve looks like with current settings
+        logger.info("  Generating diagnostic plot...")
+        try:
+            plot_path = _generate_diagnostic_scan_plot(
+                hardware, final_z, af_settings, output_path, logger
+            )
+            result["plot_path"] = str(plot_path)
+            logger.info(f"  Diagnostic plot saved: {plot_path}")
+        except Exception as e:
+            logger.warning(f"Failed to generate diagnostic plot: {e}")
+            result["plot_path"] = "None"
+
+        result["message"] = f"Standard autofocus completed. Z shift: {result['z_shift']:.2f} um."
         result["success"] = True
 
         logger.info("=== STANDARD AUTOFOCUS TEST COMPLETED ===")
@@ -218,7 +229,20 @@ def test_adaptive_autofocus_at_current_position(
         logger.info(f"    Final Z: {final_z:.2f} um")
         logger.info(f"    Z shift: {result['z_shift']:.2f} um")
 
-        result["message"] = f"Adaptive autofocus completed. Z shift: {result['z_shift']:.2f} um. Note: Uses hardware's adaptive algorithm."
+        # Generate diagnostic plot by doing a post-hoc scan
+        # This shows what the focus curve looks like around the found focus
+        logger.info("  Generating diagnostic plot...")
+        try:
+            plot_path = _generate_diagnostic_scan_plot(
+                hardware, final_z, af_settings, output_path, logger, test_type="adaptive"
+            )
+            result["plot_path"] = str(plot_path)
+            logger.info(f"  Diagnostic plot saved: {plot_path}")
+        except Exception as e:
+            logger.warning(f"Failed to generate diagnostic plot: {e}")
+            result["plot_path"] = "None"
+
+        result["message"] = f"Adaptive autofocus completed. Z shift: {result['z_shift']:.2f} um."
         result["success"] = True
 
         logger.info("=== ADAPTIVE AUTOFOCUS TEST COMPLETED ===")
@@ -238,6 +262,105 @@ def test_adaptive_autofocus_at_current_position(
                 pass
 
     return result
+
+
+def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path, logger, test_type="standard"):
+    """
+    Generate a diagnostic plot by scanning around the center_z position.
+
+    Args:
+        hardware: Hardware instance
+        center_z: Z position to center the scan around
+        af_settings: Autofocus settings dict
+        output_path: Path object for output directory
+        logger: Logger instance
+        test_type: "standard" or "adaptive" for plot labeling
+
+    Returns:
+        Path to generated plot file
+    """
+    from datetime import datetime
+
+    # Do a diagnostic scan centered on the final Z
+    scan_range = af_settings['search_range']
+    n_steps = af_settings['n_steps']
+    score_metric = af_settings['score_metric']
+
+    # Generate Z positions centered on final result
+    z_positions = np.linspace(center_z - scan_range/2, center_z + scan_range/2, n_steps)
+
+    logger.info(f"  Scanning {n_steps} positions from {z_positions[0]:.2f} to {z_positions[-1]:.2f} um")
+
+    scores = []
+    for i, z in enumerate(z_positions):
+        # Move to position
+        new_pos = Position(hardware.get_current_position().x, hardware.get_current_position().y, z)
+        hardware.move_to_position(new_pos)
+
+        # Acquire and score
+        img, tags = hardware.snap_image()
+
+        # Extract grayscale
+        if hardware.core.get_property("Core", "Camera") == "JAICamera":
+            img_gray = np.mean(img, 2)
+        else:
+            green1 = img[0::2, 0::2]
+            green2 = img[1::2, 1::2]
+            img_gray = ((green1 + green2) / 2.0).astype(np.float32)
+
+        score = score_metric(img_gray)
+        if hasattr(score, 'ndim') and score.ndim == 2:
+            score = np.mean(score)
+        scores.append(float(score))
+
+    scores = np.array(scores)
+
+    # Generate plot
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    plot_filename = f"autofocus_test_{test_type}_{timestamp}.png"
+    plot_path = output_path / plot_filename
+
+    try:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+
+        # Plot focus curve
+        ax.plot(z_positions, scores, 'o-', markersize=6, linewidth=2, color='steelblue', label='Focus scores')
+        ax.axvline(center_z, color='red', linestyle='--', linewidth=2, label=f'Autofocus result ({center_z:.2f} um)')
+
+        # Find peak in scan
+        peak_idx = np.argmax(scores)
+        peak_z = z_positions[peak_idx]
+        ax.axvline(peak_z, color='green', linestyle=':', linewidth=1.5, label=f'Scan peak ({peak_z:.2f} um)')
+
+        ax.set_xlabel('Z Position (um)', fontsize=11)
+        ax.set_ylabel('Focus Score', fontsize=11)
+        ax.set_title(f'{test_type.capitalize()} Autofocus Test - Diagnostic Scan\n' +
+                    f'Metric: {af_settings["score_metric_name"]}', fontsize=12, fontweight='bold')
+        ax.legend(fontsize=9)
+        ax.grid(True, alpha=0.3)
+
+        # Add text summary
+        textstr = f'Autofocus result: {center_z:.2f} um\n'
+        textstr += f'Scan peak: {peak_z:.2f} um\n'
+        textstr += f'Difference: {abs(center_z - peak_z):.2f} um\n'
+        textstr += f'Score at result: {scores[np.argmin(np.abs(z_positions - center_z))]:.2f}\n'
+        textstr += f'Score at peak: {scores[peak_idx]:.2f}'
+
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=9,
+                verticalalignment='top', bbox=props)
+
+        plt.tight_layout()
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
+        plt.close()
+
+        logger.info(f"  Plot saved: {plot_path}")
+
+    except Exception as e:
+        logger.error(f"Failed to generate plot: {e}", exc_info=True)
+        raise
+
+    return plot_path
 
 
 def test_autofocus_at_current_position(
