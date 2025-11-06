@@ -25,6 +25,7 @@ from typing import Dict, Any, Optional, Tuple
 import logging
 
 from smart_wsi_scanner.qp_utils import AutofocusUtils
+from smart_wsi_scanner.hardware import Position
 
 
 def test_autofocus_at_current_position(
@@ -151,7 +152,7 @@ def test_autofocus_at_current_position(
             interp_best_z = raw_best_z
 
         # Move to best focus position
-        final_pos = hardware.Position(initial_pos.x, initial_pos.y, interp_best_z)
+        final_pos = Position(initial_pos.x, initial_pos.y, interp_best_z)
         hardware.move_to_position(final_pos)
 
         result["final_z"] = interp_best_z
@@ -185,7 +186,7 @@ def test_autofocus_at_current_position(
         if result["initial_z"] is not None:
             try:
                 hardware.move_to_position(
-                    hardware.Position(initial_pos.x, initial_pos.y, result["initial_z"])
+                    Position(initial_pos.x, initial_pos.y, result["initial_z"])
                 )
                 logger.info("Returned to initial Z position after error")
             except:
@@ -275,7 +276,7 @@ def _detailed_autofocus_scan(hardware, initial_pos, af_settings, logger) -> Tupl
 
     for i, z in enumerate(z_positions):
         # Move to position
-        new_pos = hardware.Position(initial_pos.x, initial_pos.y, z)
+        new_pos = Position(initial_pos.x, initial_pos.y, z)
         hardware.move_to_position(new_pos)
 
         # Acquire image
