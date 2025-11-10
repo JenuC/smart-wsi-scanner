@@ -270,6 +270,13 @@ def _acquisition_workflow(
         ppm_settings.update(loci_resources)
         hardware.settings = ppm_settings
 
+        # Re-initialize microscope-specific methods with updated settings
+        # This is critical for PPM rotation to work correctly and to ensure
+        # correct focus device configuration for autofocus
+        if hasattr(hardware, "_initialize_microscope_methods"):
+            hardware._initialize_microscope_methods()
+            logger.info("Re-initialized hardware methods with updated settings")
+
         # Home rot-stage
         # hardware.home_psg()
 

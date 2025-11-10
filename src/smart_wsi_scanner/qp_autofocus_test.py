@@ -316,6 +316,12 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
 
     scores = np.array(scores)
 
+    # CRITICAL: Move back to the focused position after diagnostic scan
+    # The scan leaves us at the last Z position, not the optimal focus
+    logger.info(f"  Moving back to focused position: Z={center_z:.2f} um")
+    focused_pos = Position(hardware.get_current_position().x, hardware.get_current_position().y, center_z)
+    hardware.move_to_position(focused_pos)
+
     # Generate plot
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     plot_filename = f"autofocus_test_{test_type}_{timestamp}.png"
