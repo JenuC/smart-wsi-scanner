@@ -316,10 +316,14 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
 
     scores = np.array(scores)
 
-    # CRITICAL: Move back to the focused position after diagnostic scan
-    # The scan leaves us at the last Z position, not the optimal focus
-    logger.info(f"  Moving back to focused position: Z={center_z:.2f} um")
-    focused_pos = Position(hardware.get_current_position().x, hardware.get_current_position().y, center_z)
+    # Find peak in the diagnostic scan
+    peak_idx = np.argmax(scores)
+    peak_z = z_positions[peak_idx]
+
+    # CRITICAL: Move to the peak position found in diagnostic scan
+    # The scan leaves us at the last Z position, need to move to actual focus peak
+    logger.info(f"  Diagnostic scan peak found at Z={peak_z:.2f} um (autofocus result was {center_z:.2f} um)")
+    focused_pos = Position(hardware.get_current_position().x, hardware.get_current_position().y, peak_z)
     hardware.move_to_position(focused_pos)
 
     # Generate plot
@@ -334,9 +338,7 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
         ax.plot(z_positions, scores, 'o-', markersize=6, linewidth=2, color='steelblue', label='Focus scores')
         ax.axvline(center_z, color='red', linestyle='--', linewidth=2, label=f'Autofocus result ({center_z:.2f} um)')
 
-        # Find peak in scan
-        peak_idx = np.argmax(scores)
-        peak_z = z_positions[peak_idx]
+        # Plot the peak we found and moved to (calculated earlier)
         ax.axvline(peak_z, color='green', linestyle=':', linewidth=1.5, label=f'Scan peak ({peak_z:.2f} um)')
 
         ax.set_xlabel('Z Position (um)', fontsize=11)
