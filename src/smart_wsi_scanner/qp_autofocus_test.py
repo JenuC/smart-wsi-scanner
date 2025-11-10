@@ -230,18 +230,11 @@ def test_adaptive_autofocus_at_current_position(
         logger.info(f"    Final Z: {final_z:.2f} um")
         logger.info(f"    Z shift: {result['z_shift']:.2f} um")
 
-        # Generate diagnostic plot by doing a post-hoc scan
-        # This shows what the focus curve looks like around the found focus
-        logger.info("  Generating diagnostic plot...")
-        try:
-            plot_path = _generate_diagnostic_scan_plot(
-                hardware, final_z, af_settings, output_path, logger, test_type="adaptive"
-            )
-            result["plot_path"] = str(plot_path)
-            logger.info(f"  Diagnostic plot saved: {plot_path}")
-        except Exception as e:
-            logger.warning(f"Failed to generate diagnostic plot: {e}")
-            result["plot_path"] = "None"
+        # Adaptive autofocus does not generate a diagnostic plot
+        # It is designed to be fast and efficient - running an additional scan defeats that purpose
+        # The hardware.autofocus_adaptive_search() method already completed and found focus
+        result["plot_path"] = None
+        logger.info("  No diagnostic plot for adaptive autofocus (designed for speed)")
 
         result["message"] = f"Adaptive autofocus completed. Z shift: {result['z_shift']:.2f} um."
         result["success"] = True
@@ -283,15 +276,8 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
     from datetime import datetime
 
     # Do a diagnostic scan centered on the final Z
-    # For adaptive autofocus, use a smaller range since it already converged efficiently
-    if test_type == "adaptive":
-        scan_range = 6.0  # ±3 µm around focus point
-        n_steps = 9  # Smaller scan
-        logger.info(f"  Using reduced scan parameters for adaptive autofocus verification")
-    else:
-        scan_range = af_settings['search_range']
-        n_steps = af_settings['n_steps']
-
+    scan_range = af_settings['search_range']
+    n_steps = af_settings['n_steps']
     score_metric = af_settings['score_metric']
 
     # Generate Z positions centered on final result
