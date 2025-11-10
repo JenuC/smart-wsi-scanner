@@ -283,8 +283,15 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
     from datetime import datetime
 
     # Do a diagnostic scan centered on the final Z
-    scan_range = af_settings['search_range']
-    n_steps = af_settings['n_steps']
+    # For adaptive autofocus, use a smaller range since it already converged efficiently
+    if test_type == "adaptive":
+        scan_range = 6.0  # ±3 µm around focus point
+        n_steps = 9  # Smaller scan
+        logger.info(f"  Using reduced scan parameters for adaptive autofocus verification")
+    else:
+        scan_range = af_settings['search_range']
+        n_steps = af_settings['n_steps']
+
     score_metric = af_settings['score_metric']
 
     # Generate Z positions centered on final result
