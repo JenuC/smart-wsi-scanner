@@ -395,11 +395,11 @@ def _acquisition_workflow(
         # check if total image is 720_psg_degs (should be 360, MSN tested 720) x number_of_tiles < MM2 limit
         # for DDR25 limit is 536870.9 (thorlabs)degs or 268573 (ticks)
         # that is 372 tiles
-        total_rotation = 720 * len(positions)  #
-        if total_rotation > 2**18:  # 262144
-            logger.error(
-                f"Total rotation steps {total_rotation} exceed Micro-Manager limit of 536870. Acquisition aborted."
-            )
+        #total_rotation = 720 * len(positions)  #
+        #if total_rotation > 2**18:  # 262144
+        #    logger.error(
+        #        f"Total rotation steps {total_rotation} exceed Micro-Manager limit of 536870. Acquisition aborted."
+        #    )
 
         starting_position = hardware.get_current_position()
 
