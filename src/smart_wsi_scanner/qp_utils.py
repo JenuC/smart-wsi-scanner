@@ -148,7 +148,8 @@ class AutofocusUtils:
         fov_x, fov_y = fov
 
         # Compute the minimum required distance between autofocus positions
-        af_min_distance = cdist([[0, 0]], [[fov_x * n_tiles, fov_y * n_tiles]])[0][0]
+        # Use average FOV dimension (not diagonal) for consistent spacing
+        af_min_distance = ((fov_x + fov_y) / 2) * n_tiles
 
         # For each tile, if dist is higher, perform autofocus
         af_positions = []
