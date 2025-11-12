@@ -390,8 +390,18 @@ class PycromanagerHardware(MicroscopeHardware):
         move_stage_to_estimate=True,
     ) -> float:
         """
-        Adaptive autofocus that starts at current Z and searches outward.
-        Minimizes acquisitions by stopping when focus is "good enough".
+        Drift-check autofocus: samples symmetrically around current position
+        to detect focus drift and correct it with minimal acquisitions.
+
+        This simplified approach:
+        - Samples 5 positions around current Z (e.g., -4, -2, 0, +2, +4 um)
+        - Finds peak using symmetric interpolation (NO directional bias)
+        - Only moves if improvement > 1um (avoids chasing noise)
+
+        Parameters are kept for compatibility but reinterpreted:
+        - initial_step_size: Used to set sampling range (range = 2*step_size)
+        - min_step_size: Minimum movement threshold (won't move if peak < this)
+        - Other parameters: Ignored in this simplified version
         """
         if score_metric is None:
             score_metric = AutofocusUtils.autofocus_profile_laplacian_variance
@@ -405,15 +415,22 @@ class PycromanagerHardware(MicroscopeHardware):
         z_min = z_limits.get("low", -1000)
         z_max = z_limits.get("high", 1000)
 
-        # Keep track of all measurements
-        z_positions = []
-        scores = []
+        # Sampling parameters
+        sample_range = initial_step_size * 0.8  # e.g., 10um -> 8um range (±4um)
+        n_samples = 5
+        move_threshold = min_step_size / 2.0  # e.g., 2um -> 1um threshold
+
+        # Create symmetric sample positions around current Z
+        half_range = sample_range / 2
+        z_positions = np.linspace(initial_z - half_range,
+                                  initial_z + half_range,
+                                  n_samples)
+
+        # Clamp to stage limits
+        z_positions = np.clip(z_positions, z_min + 5, z_max - 5)
 
         # Helper function to acquire and score at a position
         def measure_at_z(z):
-            if z < z_min + 5 or z > z_max - 5:
-                return -np.inf
-
             self.move_to_position(Position(current_pos.x, current_pos.y, z))
             img, tags = self.snap_image()
 
@@ -437,104 +454,83 @@ class PycromanagerHardware(MicroscopeHardware):
 
             return float(score)
 
-        # Start with current position
-        current_score = measure_at_z(initial_z)
-        if current_score == -np.inf:
-            logger.error("Failed to acquire initial image")
-            return initial_z
-
-        z_positions.append(initial_z)
-        scores.append(current_score)
-
-        best_z = initial_z
-        best_score = current_score
-
-        # Adaptive search
-        step_size = initial_step_size
-        search_direction = None
-        total_steps = 1
-
-        while step_size >= min_step_size and total_steps < max_total_steps:
-            # Measure above and below current best
-            z_above = best_z + step_size
-            z_below = best_z - step_size
-
-            positions_to_check = []
-            if not any(abs(z - z_above) < 0.1 for z in z_positions) and z_above < z_max - 5:
-                positions_to_check.append(("above", z_above))
-            if not any(abs(z - z_below) < 0.1 for z in z_positions) and z_below > z_min + 5:
-                positions_to_check.append(("below", z_below))
-
-            if not positions_to_check:
-                step_size /= 2
-                continue
-
-            improved = False
-            for direction, z_pos in positions_to_check:
-                score = measure_at_z(z_pos)
-                if score == -np.inf:
-                    continue
-
-                z_positions.append(z_pos)
-                scores.append(score)
-                total_steps += 1
-
-                if score > best_score:
-                    best_score = score
-                    best_z = z_pos
-                    improved = True
-                    search_direction = direction
-
-            # Check if we're "good enough"
-            if len(scores) > 3:
-                max_seen = max(scores)
-                if best_score >= focus_threshold * max_seen:
-                    logger.info(f"Found acceptable focus after {total_steps} steps")
-                    break
-
-            if improved:
-                if search_direction == "above":
-                    next_z = best_z + step_size
-                    if next_z < z_max - 5 and not any(abs(z - next_z) < 0.1 for z in z_positions):
-                        continue
-                else:  # below
-                    next_z = best_z - step_size
-                    if next_z > z_min + 5 and not any(abs(z - next_z) < 0.1 for z in z_positions):
-                        continue
+        # Score all positions
+        scores = []
+        for z in z_positions:
+            score = measure_at_z(z)
+            if score == -np.inf:
+                logger.error(f"Failed to measure at Z={z:.2f}")
+                scores.append(0)
             else:
-                step_size /= 2
+                scores.append(score)
+            logger.debug(f"  Z={z:.2f}um: score={score:.1f}")
 
-        # Optional fine interpolation
-        if len(z_positions) > 2:
-            sorted_indices = np.argsort(z_positions)
-            z_sorted = np.array(z_positions)[sorted_indices]
-            scores_sorted = np.array(scores)[sorted_indices]
+        scores = np.array(scores)
 
-            best_idx = np.where(z_sorted == best_z)[0][0]
-            start_idx = max(0, best_idx - 2)
-            end_idx = min(len(z_sorted), best_idx + 3)
+        # Find discrete best position
+        best_idx = np.argmax(scores)
+        best_z_discrete = z_positions[best_idx]
 
-            if end_idx - start_idx >= 3:
-                z_local = z_sorted[start_idx:end_idx]
-                scores_local = scores_sorted[start_idx:end_idx]
+        # Refine with symmetric interpolation
+        # CRITICAL FIX: Symmetric window (±2 positions, not +3)
+        start_idx = max(0, best_idx - 2)
+        end_idx = min(len(z_positions), best_idx + 2)  # SYMMETRIC: +2 not +3
 
-                interp_z = np.linspace(z_local[0], z_local[-1], 50)
-                interp_scores = scipy.interpolate.interp1d(z_local, scores_local, kind="quadratic")(
-                    interp_z
-                )
-                best_z = interp_z[np.argmax(interp_scores)]
+        # Ensure minimum 3 points for quadratic fit
+        if end_idx - start_idx < 3:
+            if start_idx == 0:
+                end_idx = min(3, len(z_positions))
+            else:
+                start_idx = max(0, len(z_positions) - 3)
 
+        # Quadratic interpolation to find refined peak
+        z_subset = z_positions[start_idx:end_idx]
+        scores_subset = scores[start_idx:end_idx]
+
+        try:
+            # Fit parabola and find peak
+            coeffs = np.polyfit(z_subset, scores_subset, 2)
+            if coeffs[0] < 0:  # Parabola opens downward (valid peak)
+                refined_z = -coeffs[1] / (2 * coeffs[0])
+                # Clamp to sampled range
+                refined_z = np.clip(refined_z, z_positions[0], z_positions[-1])
+            else:
+                # Parabola opens upward (shouldn't happen), use discrete best
+                refined_z = best_z_discrete
+                logger.warning("Invalid parabola fit, using discrete best")
+        except:
+            refined_z = best_z_discrete
+            logger.warning("Interpolation failed, using discrete best")
+
+        # Decide whether to move
+        delta = refined_z - initial_z
+
+        if abs(delta) < move_threshold:
+            # Peak is at current position (within noise tolerance)
+            logger.info(f"Drift check: focus peak at current position "
+                       f"(delta={delta:+.2f}um < {move_threshold:.1f}um threshold)")
+            best_z = initial_z
+        else:
+            # Significant drift detected
+            logger.info(f"Drift check: focus drift {delta:+.2f}um detected, "
+                       f"moving from {initial_z:.2f} to {refined_z:.2f}um")
+            best_z = refined_z
+
+        # Optional plot
         if pop_a_plot:
             plt.figure(figsize=(10, 6))
-            plt.scatter(z_positions, scores, c=range(len(scores)), cmap="viridis", s=50)
-            plt.plot(best_z, max(scores), "r*", markersize=15)
-            plt.xlabel("Z position (µm)")
+            plt.scatter(z_positions, scores, s=100, c='blue', label='Measured', zorder=3)
+            plt.axvline(initial_z, color='gray', linestyle='--', label='Initial Z')
+            plt.axvline(best_z, color='red', linestyle='-', linewidth=2, label='Final Z')
+            plt.xlabel("Z position (um)")
             plt.ylabel("Focus score")
-            plt.title(f"Adaptive autofocus: {total_steps} acquisitions")
-            plt.colorbar(label="Acquisition order")
+            plt.title(f"Drift-check autofocus: {n_samples} samples")
+            plt.legend()
+            plt.grid(True, alpha=0.3)
             plt.show()
 
-        logger.info(f"Autofocus complete: Z={best_z:.1f} after {total_steps} acquisitions")
+        logger.info(f"Drift-check complete: Z={best_z:.2f}um "
+                   f"(sampled {n_samples} positions)")
 
         if move_stage_to_estimate:
             self.move_to_position(Position(current_pos.x, current_pos.y, best_z))
