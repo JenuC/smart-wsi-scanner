@@ -605,7 +605,7 @@ def _acquisition_workflow(
                         logger.info(f"  Standard autofocus :: New Z {new_z}")
                     else:
                         # Get Z position before adaptive autofocus for drift detection
-                        z_before_adaptive = hardware.get_z()
+                        z_before_adaptive = hardware.get_current_position().z
 
                         logger.info(f"  Subsequent tissue position - using ADAPTIVE autofocus for speed")
                         new_z = hardware.autofocus_adaptive_search(
