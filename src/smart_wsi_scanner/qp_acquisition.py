@@ -746,19 +746,26 @@ def _acquisition_workflow(
                     # Acquire image
                     t_snap = time.perf_counter()
                     image, metadata = hardware.snap_image(debayering=False)
-                    t_snap = log_timing(logger, f"Snap image at {angle}deg", t_snap)
+                    t_snap = log_timing(logger, f"Snap image at {angle}deg (includes camera+USB+internal processing)", t_snap)
 
                     if image is None:
                         logger.error(f"Failed to acquire image at angle {angle}")
                         continue
 
-                    logger.info(f"  Image shape: {image.shape}, mean: {image.mean((0,1))}")
+                    # Calculate image stats (numpy operation)
+                    t_stats = time.perf_counter()
+                    img_mean = image.mean((0,1))
+                    t_stats = log_timing(logger, f"Calculate image stats at {angle}deg", t_stats)
+                    logger.info(f"  Image shape: {image.shape}, mean: {img_mean}")
 
                     # Save raw (unprocessed) image for comparison
                     raw_output_path = output_path.parent / "Raw" / output_path.name
                     raw_image_path = raw_output_path / str(angle) / filename
+
+                    t_mkdir = time.perf_counter()
                     if not raw_image_path.parent.exists():
                         raw_image_path.parent.mkdir(parents=True, exist_ok=True)
+                    t_mkdir = log_timing(logger, f"Create directories at {angle}deg", t_mkdir)
 
                     try:
                         t_save_raw = time.perf_counter()
@@ -767,7 +774,7 @@ def _acquisition_workflow(
                             pixel_size_um=hardware.core.get_pixel_size_um(),
                             data=image,
                         )
-                        t_save_raw = log_timing(logger, f"Save raw image at {angle}deg", t_save_raw)
+                        t_save_raw = log_timing(logger, f"Save raw image at {angle}deg (OME-TIFF write)", t_save_raw)
                         logger.info(f"  Saved raw image: {raw_image_path}")
                         write_position_metadata(
                             metadata_txt_for_positions, raw_image_path, hardware, modality
@@ -867,6 +874,7 @@ def _acquisition_workflow(
                     tile_config_source = output_path / str(pos_angle) / "TileConfiguration.txt"
 
                     # Create birefringence image
+                    t_biref = time.perf_counter()
                     TifWriterUtils.create_birefringence_tile(  # biref
                         pos_image=angle_images[pos_angle],
                         neg_image=angle_images[neg_angle],
@@ -876,6 +884,7 @@ def _acquisition_workflow(
                         tile_config_source=tile_config_source,
                         logger=logger,
                     )
+                    t_biref = log_timing(logger, f"Birefringence calculation and save", t_biref)
 
                     # # Create sum image alongside birefringence image
                     # sum_dir = output_path / f"{pos_angle}.sum"

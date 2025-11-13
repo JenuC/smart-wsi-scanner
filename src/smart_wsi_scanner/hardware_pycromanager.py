@@ -203,13 +203,21 @@ class PycromanagerHardware(MicroscopeHardware):
             self.core.set_property("JAICamera", "WhiteBalance", "Off")
 
         # Capture image
+        import time
+        t_cam_start = time.perf_counter()
         self.core.snap_image()
+        t_cam_snap = time.perf_counter()
+        logger.debug(f"    [TIMING-INTERNAL] Camera snap (exposure+readout): {(t_cam_snap - t_cam_start)*1000:.1f}ms")
+
         tagged_image = self.core.get_tagged_image()
+        t_cam_transfer = time.perf_counter()
+        logger.debug(f"    [TIMING-INTERNAL] Get tagged image (buffer transfer): {(t_cam_transfer - t_cam_snap)*1000:.1f}ms")
 
         # Sort tags for consistency
         tags = OrderedDict(sorted(tagged_image.tags.items()))
 
         # Process pixels
+        t_proc_start = time.perf_counter()
         pixels = tagged_image.pix
         total_pixels = pixels.shape[0]
         height, width = tags["Height"], tags["Width"]
@@ -220,6 +228,8 @@ class PycromanagerHardware(MicroscopeHardware):
             pixels = pixels.reshape(height, width, nchannels)
         else:
             pixels = pixels.reshape(height, width)
+        t_reshape = time.perf_counter()
+        logger.debug(f"    [TIMING-INTERNAL] Pixel reshape: {(t_reshape - t_proc_start)*1000:.1f}ms")
 
         # Apply debayering if requested
         if debayering and (camera == "MicroPublisher6"):
@@ -242,9 +252,12 @@ class PycromanagerHardware(MicroscopeHardware):
         # Handle different camera types
         if camera in ["QCamera", "MicroPublisher6", "JAICamera"]:
             if nchannels > 1:
+                t_color_start = time.perf_counter()
                 pixels = pixels[:, :, ::-1]  # BGRA to ARGB
                 if (camera != "QCamera") and remove_alpha:
                     pixels = pixels[:, :, 1:]  # Remove alpha channel
+                t_color_end = time.perf_counter()
+                logger.debug(f"    [TIMING-INTERNAL] Color channel processing: {(t_color_end - t_color_start)*1000:.1f}ms")
 
         elif camera == "OSc-LSM":
             pass
