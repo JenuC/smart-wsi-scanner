@@ -43,6 +43,9 @@ class TileConfigUtils:
         """
         positions: List[Tuple[Position, str]] = []
         if tile_config_path.exists():
+            # Get Z position once (same for all tiles in initial configuration)
+            z = core.get_position()
+
             with open(tile_config_path, "r") as f:
                 for line in f:
                     pattern = r"^([\w\-\.]+); ; \(\s*([\-\d.]+),\s*([\-\d.]+)"
@@ -51,7 +54,7 @@ class TileConfigUtils:
                         filename = m.group(1)
                         x = float(m.group(2))
                         y = float(m.group(3))
-                        z = core.get_position()
+                        # Use same Z for all tiles (avoids 100+ hardware calls)
                         positions.append((Position(x, y, z), filename))
         else:
             logger.warning(f"Tile config file not found: {tile_config_path}")
