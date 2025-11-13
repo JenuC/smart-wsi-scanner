@@ -24,6 +24,22 @@ import skimage.filters
 logger = logging.getLogger(__name__)
 
 
+def log_timing(logger, operation_name, start_time):
+    """Log elapsed time for an operation in milliseconds.
+
+    Args:
+        logger: Logger instance
+        operation_name: Description of the operation
+        start_time: Start time from time.perf_counter()
+
+    Returns:
+        Current time for use as next start_time
+    """
+    elapsed_ms = (time.perf_counter() - start_time) * 1000
+    logger.info(f"  [TIMING] {operation_name}: {elapsed_ms:.1f}ms")
+    return time.perf_counter()
+
+
 def calculate_luminance_gain(r, g, b):
     """Calculate luminance-based gain from RGB values."""
     return 0.299 * r + 0.587 * g + 0.114 * b
@@ -521,12 +537,17 @@ def _acquisition_workflow(
 
             logger.info(f"Position {pos_idx + 1}/{len(positions)}: {filename}")
 
+            # Start timing for this tile
+            tile_start = time.perf_counter()
+
             # Ensure Z is current autofocus value
             pos.z = hardware.get_current_position().z
 
             # Move to position
             logger.info(f"Moving to position: X={pos.x}, Y={pos.y}, Z={pos.z}")
+            t0 = time.perf_counter()
             hardware.move_to_position(pos)
+            t0 = log_timing(logger, "Stage XY movement command", t0)
 
             # Perform autofocus if needed (with tissue detection)
             if pos_idx in dynamic_af_positions:
@@ -537,7 +558,9 @@ def _acquisition_workflow(
                 # For PPM, always autofocus at 90° (uncrossed polarizers - brightest, fastest)
                 # This ensures consistent, fast autofocus regardless of angle sequence
                 if "ppm" in modality.lower():
+                    t_rot = time.perf_counter()
                     hardware.set_psg_ticks(90.0)
+                    t_rot = log_timing(logger, "Rotation to 90deg for autofocus", t_rot)
                     logger.info("Set rotation to 90° (uncrossed) for PPM autofocus")
                     # CRITICAL: Set appropriate exposure for 90° before tissue detection
                     # Find the 90° exposure from acquisition parameters
@@ -548,10 +571,14 @@ def _acquisition_workflow(
                         if angle_idx < len(params["exposures"]):
                             exposure_90 = params["exposures"][angle_idx]
 
+                    t_exp = time.perf_counter()
                     hardware.set_exposure(exposure_90)
+                    t_exp = log_timing(logger, "Set exposure for tissue detection", t_exp)
                     logger.info(f"Set exposure to {exposure_90}ms for 90° tissue detection")
                 # Take a quick image to assess tissue content
+                t_snap = time.perf_counter()
                 test_img, _ = hardware.snap_image()
+                t_snap = log_timing(logger, "Snap test image for tissue detection", t_snap)
 
                 # Ensure consistent format for tissue detection
                 if test_img.dtype in [np.float32, np.float64]:
@@ -593,6 +620,7 @@ def _acquisition_workflow(
                     # Then use ADAPTIVE autofocus on subsequent positions for speed
                     if not first_tissue_autofocus_done:
                         logger.info(f"  First tissue position - using STANDARD autofocus for accuracy")
+                        t_af = time.perf_counter()
                         new_z = hardware.autofocus(
                             move_stage_to_estimate=True,
                             n_steps=af_n_steps,
@@ -601,6 +629,7 @@ def _acquisition_workflow(
                             interp_kind=af_interp_kind,
                             score_metric=af_score_metric,
                         )
+                        t_af = log_timing(logger, "STANDARD autofocus", t_af)
                         first_tissue_autofocus_done = True
                         logger.info(f"  Standard autofocus :: New Z {new_z}")
                     else:
@@ -608,6 +637,7 @@ def _acquisition_workflow(
                         z_before_adaptive = hardware.get_current_position().z
 
                         logger.info(f"  Subsequent tissue position - using ADAPTIVE autofocus for speed")
+                        t_af = time.perf_counter()
                         new_z = hardware.autofocus_adaptive_search(
                             initial_step_size=af_adaptive_initial_step,
                             min_step_size=af_adaptive_min_step,
@@ -617,6 +647,7 @@ def _acquisition_workflow(
                             pop_a_plot=False,
                             move_stage_to_estimate=True,
                         )
+                        t_af = log_timing(logger, "ADAPTIVE autofocus", t_af)
 
                         # Check for large drift and fall back to STANDARD autofocus if needed
                         drift = abs(new_z - z_before_adaptive)
@@ -628,6 +659,7 @@ def _acquisition_workflow(
                             )
                             logger.warning(f"  Falling back to STANDARD autofocus to re-establish baseline...")
 
+                            t_af_recovery = time.perf_counter()
                             new_z = hardware.autofocus(
                                 move_stage_to_estimate=True,
                                 n_steps=af_n_steps,
@@ -636,6 +668,7 @@ def _acquisition_workflow(
                                 interp_kind=af_interp_kind,
                                 score_metric=af_score_metric,
                             )
+                            t_af_recovery = log_timing(logger, "STANDARD autofocus (drift recovery)", t_af_recovery)
                             logger.info(f"  STANDARD autofocus (drift recovery) :: New Z {new_z}")
                 else:
                     reason = "blank tile (RGB)" if tissue_stats.get('brightness_rejected') else "insufficient texture/area"
@@ -682,10 +715,15 @@ def _acquisition_workflow(
                         set_state("CANCELLED")
                         return
 
+                    # Start timing for this angle
+                    angle_start = time.perf_counter()
+
                     # Set rotation angle
                     # First angle of each position should reset to "a" polarization state
                     # is_sequence_start = angle_idx == 0
+                    t_rot = time.perf_counter()
                     hardware.set_psg_ticks(angle)  # , is_sequence_start=is_sequence_start)
+                    t_rot = log_timing(logger, f"Rotation to {angle}deg", t_rot)
 
                     # Backup check of angle - seem to be having hardware issues sometimes
                     # actual_angle = hardware.get_psg_ticks()
@@ -700,11 +738,15 @@ def _acquisition_workflow(
                     # Set exposure time if specified
                     if angle_idx < len(params["exposures"]):
                         exposure_ms = params["exposures"][angle_idx]
+                        t_exp = time.perf_counter()
                         hardware.set_exposure(exposure_ms)
+                        t_exp = log_timing(logger, f"Set exposure to {exposure_ms}ms", t_exp)
                     logger.info(f"  Exposure set to {hardware.core.get_exposure()}")
 
                     # Acquire image
+                    t_snap = time.perf_counter()
                     image, metadata = hardware.snap_image(debayering=False)
+                    t_snap = log_timing(logger, f"Snap image at {angle}deg", t_snap)
 
                     if image is None:
                         logger.error(f"Failed to acquire image at angle {angle}")
@@ -719,11 +761,13 @@ def _acquisition_workflow(
                         raw_image_path.parent.mkdir(parents=True, exist_ok=True)
 
                     try:
+                        t_save_raw = time.perf_counter()
                         TifWriterUtils.ome_writer(  # raw
                             filename=str(raw_image_path),
                             pixel_size_um=hardware.core.get_pixel_size_um(),
                             data=image,
                         )
+                        t_save_raw = log_timing(logger, f"Save raw image at {angle}deg", t_save_raw)
                         logger.info(f"  Saved raw image: {raw_image_path}")
                         write_position_metadata(
                             metadata_txt_for_positions, raw_image_path, hardware, modality
@@ -744,12 +788,14 @@ def _acquisition_workflow(
                             f"    Background stats: mean={bg_img.mean():.1f}, std={bg_img.std():.1f}"
                         )
 
+                        t_bg = time.perf_counter()
                         image = BackgroundCorrectionUtils.apply_flat_field_correction(
                             image,
                             background_images[angle],
                             background_scaling_factors[angle],
                             method=background_correction_method,
                         )
+                        t_bg = log_timing(logger, f"Background correction at {angle}deg", t_bg)
                         logger.info(
                             f"    Correction applied with method: {background_correction_method}"
                         )
@@ -775,10 +821,12 @@ def _acquisition_workflow(
                                 f"    No white balance profile for {angle}°, using neutral"
                             )
 
+                        t_wb = time.perf_counter()
                         gain = calculate_luminance_gain(*wb_profile)
                         image = hardware.white_balance(
                             image, white_balance_profile=wb_profile, gain=gain
                         )
+                        t_wb = log_timing(logger, f"White balance at {angle}deg", t_wb)
                         logger.info(
                             f"  Applied white balance: R={wb_profile[0]:.2f}, G={wb_profile[1]:.2f}, B={wb_profile[2]:.2f}"
                         )
@@ -787,16 +835,22 @@ def _acquisition_workflow(
                     image_path = output_path / str(angle) / filename
 
                     if image_path.parent.exists():
+                        t_save_proc = time.perf_counter()
                         TifWriterUtils.ome_writer(  # processed
                             filename=str(image_path),
                             pixel_size_um=hardware.core.get_pixel_size_um(),
                             data=image,
                         )
+                        t_save_proc = log_timing(logger, f"Save processed image at {angle}deg", t_save_proc)
                         image_count += 1
                         update_progress(image_count, total_images)
 
                         # Store image for birefringence calculation
                         angle_images[angle] = image
+
+                        # Log total time for this angle
+                        angle_elapsed_ms = (time.perf_counter() - angle_start) * 1000
+                        logger.info(f"  [TIMING] Total for angle {angle}deg: {angle_elapsed_ms:.1f}ms")
                     else:
                         logger.error(f"Failed to save {image_path} - parent directory missing")
 
@@ -857,6 +911,10 @@ def _acquisition_workflow(
                     logger.warning(
                         f"  Failed to write position text {metadata_txt_for_positions}: {e}"
                     )
+
+            # Log total time for this tile/position
+            tile_elapsed_ms = (time.perf_counter() - tile_start) * 1000
+            logger.info(f"[TIMING] === TOTAL TILE TIME: {tile_elapsed_ms:.1f}ms ({tile_elapsed_ms/1000:.2f}s) ===")
 
         # Save device properties
         current_props = hardware.get_device_properties()
