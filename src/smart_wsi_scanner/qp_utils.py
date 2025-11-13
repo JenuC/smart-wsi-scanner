@@ -271,6 +271,7 @@ class AutofocusUtils:
         modality: Optional[str] = None,
         logger=None,
         return_stats: bool = False,
+        rgb_brightness_threshold: float = 225.0,
     ):
         """
         Determine if image has sufficient tissue texture for reliable autofocus.
@@ -282,11 +283,48 @@ class AutofocusUtils:
             modality: Imaging modality for modality-specific adjustments
             logger: Optional logger instance
             return_stats: If True, return (bool, dict) with detection statistics
+            rgb_brightness_threshold: Maximum average RGB brightness for tissue (default 225).
+                Images brighter than this are considered blank/background. Set to None to disable.
 
         Returns:
             If return_stats=False: True if sufficient tissue is present for autofocus
             If return_stats=True: (bool, dict) where dict contains detection statistics
         """
+        # EARLY REJECTION: Check RGB brightness to filter out blank tiles
+        # Blank glass/background is very bright (RGB ~230-240)
+        # Tissue is darker (RGB ~190-224)
+        rgb_mean = None
+        brightness_rejected = False
+
+        if rgb_brightness_threshold is not None and len(image.shape) == 3:
+            # Calculate mean RGB across entire image
+            rgb_mean = np.mean(image, axis=(0, 1))
+            avg_brightness = np.mean(rgb_mean)
+
+            if avg_brightness > rgb_brightness_threshold:
+                brightness_rejected = True
+                if logger:
+                    logger.info(
+                        f"Blank tile detected: avg RGB brightness {avg_brightness:.1f} > {rgb_brightness_threshold:.1f} "
+                        f"(RGB: [{rgb_mean[0]:.1f}, {rgb_mean[1]:.1f}, {rgb_mean[2]:.1f}])"
+                    )
+
+                if return_stats:
+                    stats = {
+                        "texture": 0.0,
+                        "texture_threshold": texture_threshold,
+                        "area": 0.0,
+                        "area_threshold": tissue_area_threshold,
+                        "sufficient_texture": False,
+                        "sufficient_area": False,
+                        "rgb_mean": rgb_mean.tolist() if rgb_mean is not None else None,
+                        "avg_brightness": float(avg_brightness),
+                        "brightness_threshold": rgb_brightness_threshold,
+                        "brightness_rejected": True,
+                    }
+                    return False, stats
+                else:
+                    return False
         # Modality-specific parameter adjustments
         if modality:
             modality_lower = modality.lower()
@@ -393,6 +431,10 @@ class AutofocusUtils:
                 "area_threshold": tissue_area_threshold,
                 "sufficient_texture": sufficient_texture,
                 "sufficient_area": sufficient_area,
+                "rgb_mean": rgb_mean.tolist() if rgb_mean is not None else None,
+                "avg_brightness": float(np.mean(rgb_mean)) if rgb_mean is not None else None,
+                "brightness_threshold": rgb_brightness_threshold,
+                "brightness_rejected": brightness_rejected,
             }
             return has_tissue, stats
         else:

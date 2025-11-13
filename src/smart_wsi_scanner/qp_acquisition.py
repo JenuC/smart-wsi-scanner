@@ -423,11 +423,13 @@ def _acquisition_workflow(
         af_score_metric_name = "laplacian_variance"  # default
         af_texture_threshold = 0.005  # default - tissue detection sensitivity
         af_tissue_area_threshold = 0.2  # default - minimum tissue coverage
+        af_rgb_brightness_threshold = 225.0  # default - maximum RGB brightness for tissue (blank rejection)
         # Adaptive autofocus parameters
         af_adaptive_initial_step = 10.0  # default
         af_adaptive_min_step = 2.0  # default
         af_adaptive_max_steps = 25  # default
         af_adaptive_focus_threshold = 0.95  # default
+        af_large_drift_threshold = 4.0  # default - um drift that triggers STANDARD autofocus fallback
 
         # Try to get current objective from hardware
         microscope = ppm_settings.get("microscope", {})
@@ -457,16 +459,19 @@ def _acquisition_workflow(
                         af_score_metric_name = af_setting.get("score_metric", af_score_metric_name)
                         af_texture_threshold = af_setting.get("texture_threshold", af_texture_threshold)
                         af_tissue_area_threshold = af_setting.get("tissue_area_threshold", af_tissue_area_threshold)
+                        af_rgb_brightness_threshold = af_setting.get("rgb_brightness_threshold", af_rgb_brightness_threshold)
                         af_adaptive_initial_step = af_setting.get("adaptive_initial_step_um", af_adaptive_initial_step)
                         af_adaptive_min_step = af_setting.get("adaptive_min_step_um", af_adaptive_min_step)
                         af_adaptive_max_steps = af_setting.get("adaptive_max_steps", af_adaptive_max_steps)
                         af_adaptive_focus_threshold = af_setting.get("adaptive_focus_threshold", af_adaptive_focus_threshold)
+                        af_large_drift_threshold = af_setting.get("large_drift_threshold_um", af_large_drift_threshold)
                         logger.info(
                             f"Loaded autofocus settings for {current_objective}: "
                             f"n_steps={af_n_steps}, search_range={af_search_range}um, n_tiles={af_n_tiles}, "
                             f"interp_strength={af_interp_strength}, interp_kind={af_interp_kind}, "
                             f"score_metric={af_score_metric_name}, "
                             f"texture_threshold={af_texture_threshold}, tissue_area_threshold={af_tissue_area_threshold}, "
+                            f"rgb_brightness_threshold={af_rgb_brightness_threshold}, "
                             f"adaptive: initial_step={af_adaptive_initial_step}um, min_step={af_adaptive_min_step}um, "
                             f"max_steps={af_adaptive_max_steps}, focus_threshold={af_adaptive_focus_threshold}"
                         )
@@ -571,13 +576,17 @@ def _acquisition_workflow(
                     modality=modality,
                     logger=logger,
                     return_stats=True,
+                    rgb_brightness_threshold=af_rgb_brightness_threshold,
                 )
 
                 if has_tissue:
                     logger.info(f"Sufficient tissue detected - performing autofocus")
+                    rgb_info = ""
+                    if tissue_stats.get('rgb_mean') is not None:
+                        rgb_info = f", RGB brightness={tissue_stats['avg_brightness']:.1f} (threshold<{tissue_stats['brightness_threshold']:.1f})"
                     logger.info(
                         f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
-                        f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})"
+                        f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f}){rgb_info}"
                     )
 
                     # Use STANDARD autofocus on first tissue position for accuracy
@@ -595,6 +604,9 @@ def _acquisition_workflow(
                         first_tissue_autofocus_done = True
                         logger.info(f"  Standard autofocus :: New Z {new_z}")
                     else:
+                        # Get Z position before adaptive autofocus for drift detection
+                        z_before_adaptive = hardware.get_z()
+
                         logger.info(f"  Subsequent tissue position - using ADAPTIVE autofocus for speed")
                         new_z = hardware.autofocus_adaptive_search(
                             initial_step_size=af_adaptive_initial_step,
@@ -605,14 +617,37 @@ def _acquisition_workflow(
                             pop_a_plot=False,
                             move_stage_to_estimate=True,
                         )
-                        logger.info(f"  Adaptive autofocus :: New Z {new_z}")
+
+                        # Check for large drift and fall back to STANDARD autofocus if needed
+                        drift = abs(new_z - z_before_adaptive)
+                        logger.info(f"  Adaptive autofocus :: New Z {new_z} (drift: {new_z - z_before_adaptive:+.2f} um)")
+
+                        if drift > af_large_drift_threshold:
+                            logger.warning(
+                                f"  Large drift detected ({drift:.2f} um > {af_large_drift_threshold:.2f} um threshold)!"
+                            )
+                            logger.warning(f"  Falling back to STANDARD autofocus to re-establish baseline...")
+
+                            new_z = hardware.autofocus(
+                                move_stage_to_estimate=True,
+                                n_steps=af_n_steps,
+                                search_range=af_search_range,
+                                interp_strength=af_interp_strength,
+                                interp_kind=af_interp_kind,
+                                score_metric=af_score_metric,
+                            )
+                            logger.info(f"  STANDARD autofocus (drift recovery) :: New Z {new_z}")
                 else:
+                    reason = "blank tile (RGB)" if tissue_stats.get('brightness_rejected') else "insufficient texture/area"
                     logger.warning(
-                        f"Insufficient tissue at position {pos_idx} - deferring autofocus"
+                        f"Insufficient tissue at position {pos_idx} ({reason}) - deferring autofocus"
                     )
+                    rgb_info = ""
+                    if tissue_stats.get('rgb_mean') is not None:
+                        rgb_info = f", RGB brightness={tissue_stats['avg_brightness']:.1f} (threshold<{tissue_stats['brightness_threshold']:.1f})"
                     logger.warning(
                         f"  Tissue stats: texture={tissue_stats['texture']:.4f} (threshold={tissue_stats['texture_threshold']:.4f}), "
-                        f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f})"
+                        f"area={tissue_stats['area']:.3f} (threshold={tissue_stats['area_threshold']:.3f}){rgb_info}"
                     )
 
                     # Remove this position from autofocus list
