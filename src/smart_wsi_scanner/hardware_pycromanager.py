@@ -189,10 +189,17 @@ class PycromanagerHardware(MicroscopeHardware):
         Returns:
             Tuple of (image_array, metadata_tags)
         """
+        import time
+        t_snap_start = time.perf_counter()
+
         if self.core.is_sequence_running() and self.studio is not None:
             self.studio.live().set_live_mode(False)
+        t_live_check = time.perf_counter()
+        logger.debug(f"    [TIMING-INTERNAL] Check/stop live mode: {(t_live_check - t_snap_start)*1000:.1f}ms")
 
         camera = self.get_device_properties()["Core"]["Camera"]
+        t_get_props = time.perf_counter()
+        logger.debug(f"    [TIMING-INTERNAL] Get device properties: {(t_get_props - t_live_check)*1000:.1f}ms")
 
         # Handle debayering for MicroPublisher6
         if debayering and (camera == "MicroPublisher6"):
@@ -200,11 +207,14 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Handle white balance for JAI
         if camera == "JAICamera":
+            t_wb_start = time.perf_counter()
             self.core.set_property("JAICamera", "WhiteBalance", "Off")
+            t_wb_end = time.perf_counter()
+            logger.debug(f"    [TIMING-INTERNAL] Set WhiteBalance property: {(t_wb_end - t_wb_start)*1000:.1f}ms")
 
         # Capture image
-        import time
         t_cam_start = time.perf_counter()
+        logger.debug(f"    [TIMING-INTERNAL] Pre-snap overhead (setup to snap): {(t_cam_start - t_snap_start)*1000:.1f}ms")
         self.core.snap_image()
         t_cam_snap = time.perf_counter()
         logger.debug(f"    [TIMING-INTERNAL] Camera snap (exposure+readout): {(t_cam_snap - t_cam_start)*1000:.1f}ms")
