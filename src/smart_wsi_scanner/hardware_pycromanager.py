@@ -67,6 +67,10 @@ class PycromanagerHardware(MicroscopeHardware):
         self.psg_angle = None
         self.rotation_device = None
 
+        # Cache camera name to avoid expensive get_device_properties() calls
+        # This was taking ~800ms per snap_image() call!
+        self._camera_name = None
+
         # Log microscope info
         microscope_info = settings.get("microscope", {})
         logger.info(
@@ -75,6 +79,10 @@ class PycromanagerHardware(MicroscopeHardware):
 
         # Set up microscope-specific methods based on name
         self._initialize_microscope_methods()
+
+        # Cache the camera name immediately after initialization
+        self._camera_name = self.get_device_properties()["Core"]["Camera"]
+        logger.info(f"Cached camera name: {self._camera_name}")
 
     def _initialize_microscope_methods(self):
         """Initialize microscope-specific methods based on settings.
@@ -197,9 +205,11 @@ class PycromanagerHardware(MicroscopeHardware):
         t_live_check = time.perf_counter()
         logger.debug(f"    [TIMING-INTERNAL] Check/stop live mode: {(t_live_check - t_snap_start)*1000:.1f}ms")
 
-        camera = self.get_device_properties()["Core"]["Camera"]
+        # Use cached camera name instead of expensive get_device_properties() call
+        # This optimization saves ~800ms per snap!
+        camera = self._camera_name
         t_get_props = time.perf_counter()
-        logger.debug(f"    [TIMING-INTERNAL] Get device properties: {(t_get_props - t_live_check)*1000:.1f}ms")
+        logger.debug(f"    [TIMING-INTERNAL] Get camera name (cached): {(t_get_props - t_live_check)*1000:.1f}ms")
 
         # Handle debayering for MicroPublisher6
         if debayering and (camera == "MicroPublisher6"):
