@@ -387,6 +387,33 @@ class PycromanagerHardware(MicroscopeHardware):
                     score = np.mean(score)
                 scores.append(score)
 
+            # VALIDATE FOCUS PEAK QUALITY
+            scores_array = np.array(scores)
+            from smart_wsi_scanner.qp_utils import AutofocusUtils
+            validation = AutofocusUtils.validate_focus_peak(z_steps, scores_array)
+
+            if not validation['is_valid']:
+                logger.error("*** AUTOFOCUS FAILED: Invalid focus peak detected ***")
+                logger.error(f"  {validation['message']}")
+                for warning in validation['warnings']:
+                    logger.error(f"    - {warning}")
+                logger.error("  RECOMMENDATION: Check focus manually or increase autofocus search range")
+                logger.error(f"  Quality metrics: prominence={validation['peak_prominence']:.2f}, "
+                           f"quality={validation['quality_score']:.2f}")
+
+                # Move back to original position
+                self.move_to_position(current_pos)
+
+                # Raise exception to stop acquisition
+                raise RuntimeError(
+                    f"Autofocus failed: {validation['message']}. "
+                    "Check focus manually or increase autofocus search range."
+                )
+            else:
+                logger.info(f"Autofocus peak validation: {validation['message']}")
+                logger.debug(f"  Quality score: {validation['quality_score']:.2f}, "
+                           f"prominence: {validation['peak_prominence']:.2f}")
+
             # Interpolate to find best focus
             interp_x = np.linspace(z_steps[0], z_steps[-1], n_steps * interp_strength)
             interp_y = scipy.interpolate.interp1d(z_steps, scores, kind=interp_kind)(interp_x)
