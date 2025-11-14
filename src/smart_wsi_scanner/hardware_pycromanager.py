@@ -343,6 +343,7 @@ class PycromanagerHardware(MicroscopeHardware):
         score_metric=skimage.filters.sobel,
         pop_a_plot=False,
         move_stage_to_estimate=True,
+        raise_on_invalid_peak=True,
     ) -> float:
         """
         Perform autofocus using specified score metric.
@@ -355,6 +356,9 @@ class PycromanagerHardware(MicroscopeHardware):
             score_metric: Function to score image focus
             pop_a_plot: Whether to show a focus score plot
             move_stage_to_estimate: Whether to move to best focus position
+            raise_on_invalid_peak: If True (default), raises RuntimeError when peak validation fails,
+                                  stopping acquisitions. If False, logs warning and continues
+                                  (use for diagnostic tests where plots must always be generated).
 
         Returns:
             Best focus Z position
@@ -393,22 +397,27 @@ class PycromanagerHardware(MicroscopeHardware):
             validation = AutofocusUtils.validate_focus_peak(z_steps, scores_array)
 
             if not validation['is_valid']:
-                logger.error("*** AUTOFOCUS FAILED: Invalid focus peak detected ***")
-                logger.error(f"  {validation['message']}")
+                logger.warning("*** AUTOFOCUS PEAK QUALITY WARNING ***")
+                logger.warning(f"  {validation['message']}")
                 for warning in validation['warnings']:
-                    logger.error(f"    - {warning}")
-                logger.error("  RECOMMENDATION: Check focus manually or increase autofocus search range")
-                logger.error(f"  Quality metrics: prominence={validation['peak_prominence']:.2f}, "
-                           f"quality={validation['quality_score']:.2f}")
+                    logger.warning(f"    - {warning}")
+                logger.warning(f"  Quality metrics: prominence={validation['peak_prominence']:.2f}, "
+                             f"quality={validation['quality_score']:.2f}")
 
-                # Move back to original position
-                self.move_to_position(current_pos)
-
-                # Raise exception to stop acquisition
-                raise RuntimeError(
-                    f"Autofocus failed: {validation['message']}. "
-                    "Check focus manually or increase autofocus search range."
-                )
+                if raise_on_invalid_peak:
+                    # Move back to original position before raising error
+                    logger.warning("  Moving back to original Z position...")
+                    self.move_to_position(current_pos)
+                    # Raise exception to stop acquisition workflow
+                    raise RuntimeError(
+                        f"Autofocus failed: {validation['message']}. "
+                        f"Check focus manually or adjust autofocus settings. "
+                        f"Quality score: {validation['quality_score']:.2f}, "
+                        f"Prominence: {validation['peak_prominence']:.2f}"
+                    )
+                else:
+                    # Just log warning, continue for diagnostic purposes (test mode)
+                    logger.warning("  Proceeding with autofocus result for diagnostic analysis")
             else:
                 logger.info(f"Autofocus peak validation: {validation['message']}")
                 logger.debug(f"  Quality score: {validation['quality_score']:.2f}, "

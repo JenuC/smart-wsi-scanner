@@ -710,8 +710,9 @@ class AutofocusUtils:
 
         # CRITICAL: Check for minimum absolute variation
         # If score range is too small, it's just noise with no real focus gradient
-        MIN_ABSOLUTE_RANGE = 2.0  # Minimum score range (adjust based on metric)
-        MIN_RELATIVE_RANGE = 0.05  # Minimum 5% variation relative to mean
+        # Note: These are conservative thresholds - adjust based on your microscope/metric
+        MIN_ABSOLUTE_RANGE = 0.5   # Minimum score range (was 2.0, too strict)
+        MIN_RELATIVE_RANGE = 0.005 # Minimum 0.5% variation (was 5%, too strict)
 
         if score_range < MIN_ABSOLUTE_RANGE:
             result["warnings"].append(

@@ -108,6 +108,7 @@ def test_standard_autofocus_at_current_position(
             score_metric=af_settings['score_metric'],
             pop_a_plot=False,
             move_stage_to_estimate=True,
+            raise_on_invalid_peak=False,  # Always generate diagnostics for test
         )
 
         result["final_z"] = final_z
@@ -352,10 +353,50 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
     focused_pos = Position(hardware.get_current_position().x, hardware.get_current_position().y, peak_z)
     hardware.move_to_position(focused_pos)
 
-    # Generate plot
+    # Generate plot and CSV with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     plot_filename = f"autofocus_test_{test_type}_{timestamp}.png"
+    csv_filename = f"autofocus_test_{test_type}_{timestamp}.csv"
     plot_path = output_path / plot_filename
+    csv_path = output_path / csv_filename
+
+    # Save CSV with all diagnostic data
+    try:
+        import csv
+        with open(csv_path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+
+            # Write header with validation results
+            writer.writerow(['# Autofocus Diagnostic Data'])
+            writer.writerow(['# Timestamp', timestamp])
+            writer.writerow(['# Test Type', test_type])
+            writer.writerow(['# Metric', af_settings['score_metric_name']])
+            writer.writerow(['# Autofocus Result Z', f'{center_z:.2f}'])
+            writer.writerow(['# Scan Peak Z', f'{peak_z:.2f}'])
+            writer.writerow(['#'])
+            writer.writerow(['# VALIDATION RESULTS'])
+            writer.writerow(['# Status', 'VALID' if validation['is_valid'] else 'INVALID'])
+            writer.writerow(['# Quality Score', f"{validation['quality_score']:.3f}"])
+            writer.writerow(['# Peak Prominence', f"{validation['peak_prominence']:.3f}"])
+            writer.writerow(['# Has Ascending', validation['has_ascending']])
+            writer.writerow(['# Has Descending', validation['has_descending']])
+            writer.writerow(['# Symmetry Score', f"{validation['symmetry_score']:.3f}"])
+            writer.writerow(['# Message', validation['message']])
+            if validation['warnings']:
+                for warning in validation['warnings']:
+                    writer.writerow(['# Warning', warning])
+            writer.writerow(['#'])
+
+            # Write data header
+            writer.writerow(['Z_Position_um', 'Focus_Score'])
+
+            # Write data
+            for z, score in zip(z_positions, scores):
+                writer.writerow([f'{z:.2f}', f'{score:.4f}'])
+
+        logger.info(f"  CSV data saved: {csv_path}")
+    except Exception as e:
+        logger.warning(f"Failed to save CSV: {e}")
 
     try:
         fig, ax = plt.subplots(1, 1, figsize=(10, 6))
