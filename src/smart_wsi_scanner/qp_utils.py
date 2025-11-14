@@ -699,20 +699,39 @@ class AutofocusUtils:
         peak_idx = np.argmax(scores)
         peak_score = scores[peak_idx]
         mean_score = np.mean(scores)
-        score_range = np.max(scores) - np.min(scores)
+        min_score = np.min(scores)
+        max_score = np.max(scores)
+        score_range = max_score - min_score
+        score_std = np.std(scores)
 
-        # 1. Check peak prominence (how much it stands out)
-        if score_range > 0:
-            result["peak_prominence"] = (peak_score - mean_score) / score_range
-        else:
-            result["warnings"].append("All focus scores are identical - no peak detected")
-            result["message"] = "No variation in focus scores"
+        # 1. Check absolute score variation (detect flat/noisy curves)
+        # A proper focus curve should have significant variation
+        relative_range = score_range / mean_score if mean_score > 0 else 0
+
+        # CRITICAL: Check for minimum absolute variation
+        # If score range is too small, it's just noise with no real focus gradient
+        MIN_ABSOLUTE_RANGE = 2.0  # Minimum score range (adjust based on metric)
+        MIN_RELATIVE_RANGE = 0.05  # Minimum 5% variation relative to mean
+
+        if score_range < MIN_ABSOLUTE_RANGE:
+            result["warnings"].append(
+                f"Insufficient absolute score variation ({score_range:.2f} < {MIN_ABSOLUTE_RANGE})")
+            result["message"] = f"No focus gradient detected - score range too small ({score_range:.2f})"
             return result
+
+        if relative_range < MIN_RELATIVE_RANGE:
+            result["warnings"].append(
+                f"Insufficient relative score variation ({relative_range:.2%} < {MIN_RELATIVE_RANGE:.0%})")
+            result["message"] = f"No focus gradient detected - scores too flat ({relative_range:.2%} variation)"
+            return result
+
+        # 2. Check peak prominence (how much it stands out within the range)
+        result["peak_prominence"] = (peak_score - mean_score) / score_range
 
         if result["peak_prominence"] < 0.2:
             result["warnings"].append(f"Peak prominence too low ({result['peak_prominence']:.2f})")
 
-        # 2. Check for ascending trend before peak
+        # 3. Check for ascending trend before peak
         if peak_idx >= 2:
             # Count how many points before peak show increasing trend
             ascending_count = 0
@@ -724,7 +743,7 @@ class AutofocusUtils:
             result["warnings"].append("Peak too close to start - cannot verify ascending trend")
             result["has_ascending"] = False
 
-        # 3. Check for descending trend after peak
+        # 4. Check for descending trend after peak
         if peak_idx < len(scores) - 2:
             # Count how many points after peak show decreasing trend
             descending_count = 0
@@ -737,7 +756,7 @@ class AutofocusUtils:
             result["warnings"].append("Peak too close to end - cannot verify descending trend")
             result["has_descending"] = False
 
-        # 4. Check symmetry around peak
+        # 5. Check symmetry around peak
         # Compare left and right side score ranges
         left_scores = scores[:peak_idx] if peak_idx > 0 else np.array([])
         right_scores = scores[peak_idx+1:] if peak_idx < len(scores)-1 else np.array([])
@@ -754,7 +773,7 @@ class AutofocusUtils:
             result["warnings"].append("Peak at edge - cannot assess symmetry")
             result["symmetry_score"] = 0.0
 
-        # 5. Calculate overall quality score
+        # 6. Calculate overall quality score
         weights = {
             "prominence": 0.4,
             "ascending": 0.2,
@@ -769,7 +788,7 @@ class AutofocusUtils:
             weights["symmetry"] * result["symmetry_score"]
         )
 
-        # 6. Determine if peak is valid (passes minimum quality threshold)
+        # 7. Determine if peak is valid (passes minimum quality threshold)
         MIN_QUALITY_THRESHOLD = 0.5
         MIN_PROMINENCE = 0.15
 
@@ -779,7 +798,7 @@ class AutofocusUtils:
             (result["has_ascending"] or result["has_descending"])  # At least one side must show trend
         )
 
-        # 7. Generate human-readable message
+        # 8. Generate human-readable message
         if result["is_valid"]:
             result["message"] = f"Valid focus peak detected (quality: {result['quality_score']:.2f})"
         else:
