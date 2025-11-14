@@ -653,6 +653,147 @@ class AutofocusUtils:
 
         return analysis_summary
 
+    @staticmethod
+    def validate_focus_peak(z_positions: np.ndarray, scores: np.ndarray) -> Dict[str, Any]:
+        """
+        Validate that the focus curve has a proper peak suitable for autofocus.
+
+        A good focus peak should have:
+        1. A clear maximum that stands out from neighboring values
+        2. Gradual increase leading up to the peak
+        3. Gradual decrease after the peak
+        4. Reasonable symmetry around the peak
+
+        Args:
+            z_positions: Array of Z positions sampled
+            scores: Array of focus scores at each position
+
+        Returns:
+            Dict containing:
+                - is_valid: bool - Whether peak passes quality checks
+                - peak_prominence: float - How much peak stands out (0-1 normalized)
+                - has_ascending: bool - Has increasing trend before peak
+                - has_descending: bool - Has decreasing trend after peak
+                - symmetry_score: float - Measure of left/right symmetry (0-1, 1=perfect)
+                - quality_score: float - Overall quality score (0-1)
+                - warnings: List[str] - List of quality issues found
+                - message: str - Human-readable summary
+        """
+        result = {
+            "is_valid": False,
+            "peak_prominence": 0.0,
+            "has_ascending": False,
+            "has_descending": False,
+            "symmetry_score": 0.0,
+            "quality_score": 0.0,
+            "warnings": [],
+            "message": ""
+        }
+
+        if len(scores) < 5:
+            result["warnings"].append("Too few samples for reliable peak detection")
+            result["message"] = "Insufficient data points for peak validation"
+            return result
+
+        # Find peak position
+        peak_idx = np.argmax(scores)
+        peak_score = scores[peak_idx]
+        mean_score = np.mean(scores)
+        score_range = np.max(scores) - np.min(scores)
+
+        # 1. Check peak prominence (how much it stands out)
+        if score_range > 0:
+            result["peak_prominence"] = (peak_score - mean_score) / score_range
+        else:
+            result["warnings"].append("All focus scores are identical - no peak detected")
+            result["message"] = "No variation in focus scores"
+            return result
+
+        if result["peak_prominence"] < 0.2:
+            result["warnings"].append(f"Peak prominence too low ({result['peak_prominence']:.2f})")
+
+        # 2. Check for ascending trend before peak
+        if peak_idx >= 2:
+            # Count how many points before peak show increasing trend
+            ascending_count = 0
+            for i in range(peak_idx):
+                if i == 0 or scores[i] >= scores[i-1]:
+                    ascending_count += 1
+            result["has_ascending"] = (ascending_count / peak_idx) >= 0.5
+        else:
+            result["warnings"].append("Peak too close to start - cannot verify ascending trend")
+            result["has_ascending"] = False
+
+        # 3. Check for descending trend after peak
+        if peak_idx < len(scores) - 2:
+            # Count how many points after peak show decreasing trend
+            descending_count = 0
+            for i in range(peak_idx + 1, len(scores)):
+                if scores[i] <= scores[i-1]:
+                    descending_count += 1
+            points_after = len(scores) - peak_idx - 1
+            result["has_descending"] = (descending_count / points_after) >= 0.5
+        else:
+            result["warnings"].append("Peak too close to end - cannot verify descending trend")
+            result["has_descending"] = False
+
+        # 4. Check symmetry around peak
+        # Compare left and right side score ranges
+        left_scores = scores[:peak_idx] if peak_idx > 0 else np.array([])
+        right_scores = scores[peak_idx+1:] if peak_idx < len(scores)-1 else np.array([])
+
+        if len(left_scores) > 0 and len(right_scores) > 0:
+            left_range = np.max(left_scores) - np.min(left_scores) if len(left_scores) > 1 else 0
+            right_range = np.max(right_scores) - np.min(right_scores) if len(right_scores) > 1 else 0
+
+            if left_range + right_range > 0:
+                result["symmetry_score"] = 1.0 - abs(left_range - right_range) / (left_range + right_range)
+            else:
+                result["symmetry_score"] = 1.0  # Both sides flat = perfect symmetry
+        else:
+            result["warnings"].append("Peak at edge - cannot assess symmetry")
+            result["symmetry_score"] = 0.0
+
+        # 5. Calculate overall quality score
+        weights = {
+            "prominence": 0.4,
+            "ascending": 0.2,
+            "descending": 0.2,
+            "symmetry": 0.2
+        }
+
+        result["quality_score"] = (
+            weights["prominence"] * result["peak_prominence"] +
+            weights["ascending"] * (1.0 if result["has_ascending"] else 0.0) +
+            weights["descending"] * (1.0 if result["has_descending"] else 0.0) +
+            weights["symmetry"] * result["symmetry_score"]
+        )
+
+        # 6. Determine if peak is valid (passes minimum quality threshold)
+        MIN_QUALITY_THRESHOLD = 0.5
+        MIN_PROMINENCE = 0.15
+
+        result["is_valid"] = (
+            result["quality_score"] >= MIN_QUALITY_THRESHOLD and
+            result["peak_prominence"] >= MIN_PROMINENCE and
+            (result["has_ascending"] or result["has_descending"])  # At least one side must show trend
+        )
+
+        # 7. Generate human-readable message
+        if result["is_valid"]:
+            result["message"] = f"Valid focus peak detected (quality: {result['quality_score']:.2f})"
+        else:
+            issues = []
+            if result["quality_score"] < MIN_QUALITY_THRESHOLD:
+                issues.append(f"low quality score ({result['quality_score']:.2f})")
+            if result["peak_prominence"] < MIN_PROMINENCE:
+                issues.append(f"weak peak ({result['peak_prominence']:.2f})")
+            if not result["has_ascending"] and not result["has_descending"]:
+                issues.append("no clear focus trend")
+            result["message"] = "Invalid focus peak: " + ", ".join(issues)
+
+        return result
+
 
 class TifWriterUtils:
     """Utilities for writing TIFF files and image processing."""

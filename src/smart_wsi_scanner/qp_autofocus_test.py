@@ -27,6 +27,9 @@ import logging
 from smart_wsi_scanner.qp_utils import AutofocusUtils
 from smart_wsi_scanner.hardware import Position
 
+# Use validate_focus_peak from AutofocusUtils
+validate_focus_peak = AutofocusUtils.validate_focus_peak
+
 
 def test_standard_autofocus_at_current_position(
     hardware,
@@ -75,6 +78,7 @@ def test_standard_autofocus_at_current_position(
         "plot_path": None,
         "message": "",
         "test_type": "standard",
+        "peak_validation": None,  # Will contain validation results
     }
 
     try:
@@ -117,17 +121,30 @@ def test_standard_autofocus_at_current_position(
         # This shows what the focus curve looks like with current settings
         logger.info("  Generating diagnostic plot...")
         try:
-            plot_path = _generate_diagnostic_scan_plot(
+            plot_path, validation = _generate_diagnostic_scan_plot(
                 hardware, final_z, af_settings, output_path, logger
             )
             result["plot_path"] = str(plot_path)
+            result["peak_validation"] = validation
             logger.info(f"  Diagnostic plot saved: {plot_path}")
+
+            # Check if autofocus found a valid peak
+            if not validation["is_valid"]:
+                logger.error("  *** AUTOFOCUS FAILED: Invalid focus peak detected ***")
+                logger.error(f"  {validation['message']}")
+                logger.error("  RECOMMENDATION: Check focus manually or increase autofocus search range")
+                result["success"] = False
+                result["message"] = f"Autofocus failed: {validation['message']}. Check focus manually or increase search range."
+            else:
+                result["message"] = f"Standard autofocus completed. Z shift: {result['z_shift']:.2f} um."
+                result["success"] = True
+
         except Exception as e:
             logger.warning(f"Failed to generate diagnostic plot: {e}")
             result["plot_path"] = "None"
-
-        result["message"] = f"Standard autofocus completed. Z shift: {result['z_shift']:.2f} um."
-        result["success"] = True
+            # Still mark as success if autofocus itself worked, just plotting failed
+            result["message"] = f"Standard autofocus completed. Z shift: {result['z_shift']:.2f} um."
+            result["success"] = True
 
         logger.info("=== STANDARD AUTOFOCUS TEST COMPLETED ===")
 
@@ -271,7 +288,9 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
         test_type: "standard" or "adaptive" for plot labeling
 
     Returns:
-        Path to generated plot file
+        Tuple of (plot_path, validation_dict):
+            - plot_path: Path to generated plot file
+            - validation_dict: Peak quality validation results
     """
     from datetime import datetime
 
@@ -309,6 +328,20 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
 
     scores = np.array(scores)
 
+    # VALIDATE FOCUS PEAK QUALITY
+    validation = validate_focus_peak(z_positions, scores)
+    logger.info(f"  Focus peak validation: {validation['message']}")
+    logger.info(f"    Quality score: {validation['quality_score']:.2f}")
+    logger.info(f"    Peak prominence: {validation['peak_prominence']:.2f}")
+    logger.info(f"    Has ascending trend: {validation['has_ascending']}")
+    logger.info(f"    Has descending trend: {validation['has_descending']}")
+    logger.info(f"    Symmetry score: {validation['symmetry_score']:.2f}")
+
+    if not validation['is_valid']:
+        logger.warning("  *** AUTOFOCUS PEAK QUALITY CHECK FAILED ***")
+        for warning in validation['warnings']:
+            logger.warning(f"    - {warning}")
+
     # Find peak in the diagnostic scan
     peak_idx = np.argmax(scores)
     peak_z = z_positions[peak_idx]
@@ -336,19 +369,32 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
 
         ax.set_xlabel('Z Position (um)', fontsize=11)
         ax.set_ylabel('Focus Score', fontsize=11)
+
+        # Add validation status to title
+        validation_status = "VALID" if validation['is_valid'] else "INVALID"
+        title_color = 'green' if validation['is_valid'] else 'red'
         ax.set_title(f'{test_type.capitalize()} Autofocus Test - Diagnostic Scan\n' +
-                    f'Metric: {af_settings["score_metric_name"]}', fontsize=12, fontweight='bold')
+                    f'Metric: {af_settings["score_metric_name"]} | Peak: {validation_status}',
+                    fontsize=12, fontweight='bold', color=title_color)
         ax.legend(fontsize=9)
         ax.grid(True, alpha=0.3)
 
-        # Add text summary
+        # Add text summary with validation info
         textstr = f'Autofocus result: {center_z:.2f} um\n'
         textstr += f'Scan peak: {peak_z:.2f} um\n'
         textstr += f'Difference: {abs(center_z - peak_z):.2f} um\n'
         textstr += f'Score at result: {scores[np.argmin(np.abs(z_positions - center_z))]:.2f}\n'
-        textstr += f'Score at peak: {scores[peak_idx]:.2f}'
+        textstr += f'Score at peak: {scores[peak_idx]:.2f}\n\n'
+        textstr += f'PEAK VALIDATION:\n'
+        textstr += f'  Status: {validation_status}\n'
+        textstr += f'  Quality: {validation["quality_score"]:.2f}\n'
+        textstr += f'  Prominence: {validation["peak_prominence"]:.2f}\n'
+        textstr += f'  Ascending: {validation["has_ascending"]}\n'
+        textstr += f'  Descending: {validation["has_descending"]}\n'
+        textstr += f'  Symmetry: {validation["symmetry_score"]:.2f}'
 
-        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        box_color = 'lightgreen' if validation['is_valid'] else 'lightcoral'
+        props = dict(boxstyle='round', facecolor=box_color, alpha=0.5)
         ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=9,
                 verticalalignment='top', bbox=props)
 
@@ -362,7 +408,7 @@ def _generate_diagnostic_scan_plot(hardware, center_z, af_settings, output_path,
         logger.error(f"Failed to generate plot: {e}", exc_info=True)
         raise
 
-    return plot_path
+    return plot_path, validation
 
 
 def test_autofocus_at_current_position(
