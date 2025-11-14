@@ -68,6 +68,7 @@ acquisition_states = {}  # addr -> AcquisitionState
 acquisition_progress = {}  # addr -> (current, total)
 acquisition_locks = {}  # addr -> Lock
 acquisition_cancel_events = {}  # addr -> Event
+acquisition_failure_messages = {}  # addr -> str (error message when FAILED)
 
 
 def init_pycromanager_with_logger():
@@ -113,12 +114,18 @@ def acquisitionWorkflow(message, client_addr):
         with acquisition_locks[client_addr]:
             acquisition_progress[client_addr] = (current, total)
 
-    def _set_state(state_str: str):
+    def _set_state(state_str: str, error_message: str = None):
         with acquisition_locks[client_addr]:
             try:
-                acquisition_states[client_addr] = AcquisitionState[state_str]
+                new_state = AcquisitionState[state_str]
+                acquisition_states[client_addr] = new_state
+                # Store error message if state is FAILED
+                if new_state == AcquisitionState.FAILED and error_message:
+                    acquisition_failure_messages[client_addr] = error_message
             except KeyError:
                 acquisition_states[client_addr] = AcquisitionState.FAILED
+                if error_message:
+                    acquisition_failure_messages[client_addr] = error_message
 
     def _is_cancelled() -> bool:
         return acquisition_cancel_events[client_addr].is_set()
@@ -146,6 +153,7 @@ def handle_client(conn, addr):
     acquisition_states[addr] = AcquisitionState.IDLE
     acquisition_progress[addr] = (0, 0)
     acquisition_cancel_events[addr] = threading.Event()
+    acquisition_failure_messages[addr] = None
 
     acquisition_thread = None
 
@@ -274,10 +282,21 @@ def handle_client(conn, addr):
             if data == ExtendedCommand.STATUS:
                 with acquisition_locks[addr]:
                     state = acquisition_states[addr]
-                # Send state as 16-byte string (padded)
-                state_str = state.value.ljust(16)[:16]
-                conn.sendall(state_str.encode())
-                logger.debug(f"Sent acquisition status to {addr}: {state.value}")
+                    # If state is FAILED and we have an error message, send it
+                    if state == AcquisitionState.FAILED and addr in acquisition_failure_messages:
+                        # Send "FAILED: <message>" format (truncated to fit in response)
+                        error_msg = acquisition_failure_messages[addr]
+                        # Java client expects to parse this format
+                        state_str = f"FAILED: {error_msg}"[:250]  # Reasonable limit for error message
+                        # Pad to 16 bytes minimum for compatibility, but can be longer
+                        response = state_str.encode('utf-8')
+                        conn.sendall(response)
+                        logger.debug(f"Sent FAILED status with message to {addr}: {error_msg[:50]}...")
+                    else:
+                        # Send state as 16-byte string (padded)
+                        state_str = state.value.ljust(16)[:16]
+                        conn.sendall(state_str.encode())
+                        logger.debug(f"Sent acquisition status to {addr}: {state.value}")
                 continue
 
             # Progress query command
@@ -998,6 +1017,8 @@ def handle_client(conn, addr):
             del acquisition_progress[addr]
         if addr in acquisition_cancel_events:
             del acquisition_cancel_events[addr]
+        if addr in acquisition_failure_messages:
+            del acquisition_failure_messages[addr]
 
         conn.close()
         logger.info(f"<<< Client {addr} disconnected and cleaned up")

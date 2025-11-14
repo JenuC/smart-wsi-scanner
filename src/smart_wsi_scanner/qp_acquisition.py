@@ -950,7 +950,7 @@ def _acquisition_workflow(
     except Exception as e:
         logger.error("=== ACQUISITION FAILED ===")
         logger.error(f"Error: {str(e)}", exc_info=True)
-        set_state("FAILED")
+        set_state("FAILED", str(e))
     finally:
         # Return to starting position
         logger.info("Returning to starting position")
