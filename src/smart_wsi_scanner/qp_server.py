@@ -38,7 +38,7 @@ log_dir = base_dir / "server_logfiles"
 log_dir.mkdir(parents=True, exist_ok=True)  # Create it if it doesn't exist
 filename = log_dir / f'qp_server_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'
 logging.basicConfig(
-    level=logging.DEBUG,  # Changed from INFO to DEBUG to see [TIMING-INTERNAL] logs
+    level=logging.INFO,  # Changed from INFO to DEBUG to see [TIMING-INTERNAL] logs
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler(filename), logging.StreamHandler()],
 )
@@ -183,7 +183,7 @@ def handle_client(conn, addr):
                     logger.error(f"Failed to get XY position: {e}", exc_info=True)
                     # Send error message (8 bytes to match expected response size)
                     error_msg = f"HW_ERROR".ljust(8)[:8]
-                    conn.sendall(error_msg.encode('utf-8'))
+                    conn.sendall(error_msg.encode("utf-8"))
                 continue
 
             if data == ExtendedCommand.GETZ:
@@ -197,7 +197,7 @@ def handle_client(conn, addr):
                     logger.error(f"Failed to get Z position: {e}", exc_info=True)
                     # Send error message (4 bytes to match expected response size)
                     error_msg = "HWERR"[:4]
-                    conn.sendall(error_msg.encode('utf-8'))
+                    conn.sendall(error_msg.encode("utf-8"))
                 continue
 
             if data == ExtendedCommand.GETFOV:
@@ -225,7 +225,7 @@ def handle_client(conn, addr):
                     logger.error(f"Failed to get rotation angle: {e}", exc_info=True)
                     # Send error message (4 bytes to match expected response size)
                     error_msg = "HWERR"[:4]
-                    conn.sendall(error_msg.encode('utf-8'))
+                    conn.sendall(error_msg.encode("utf-8"))
                 continue
 
             # Movement commands
@@ -260,7 +260,9 @@ def handle_client(conn, addr):
                 angle = struct.unpack("!f", coords)[0]
                 logger.info(f"Client {addr} requested rotation to {angle}°")
                 try:
-                    hardware.set_psg_ticks(angle)  # , is_sequence_start=True)  # Single rotation command
+                    hardware.set_psg_ticks(
+                        angle
+                    )  # , is_sequence_start=True)  # Single rotation command
                     logger.info(f"Rotation completed to {angle}°")
                 except Exception as e:
                     logger.error(f"Failed to rotate stage: {e}", exc_info=True)
@@ -506,7 +508,9 @@ def handle_client(conn, addr):
                                 # Send success response with output path and final exposures
                                 response = f"SUCCESS:{params['output_folder_path']}|{exposures_formatted}".encode()
                                 conn.sendall(response)
-                                logger.info(f"Background acquisition completed successfully with exposures: {exposures_formatted}")
+                                logger.info(
+                                    f"Background acquisition completed successfully with exposures: {exposures_formatted}"
+                                )
 
                             except Exception as e:
                                 logger.error(
@@ -581,7 +585,7 @@ def handle_client(conn, addr):
 
                                     # Find where the next flag starts (or use end of string)
                                     end_idx = len(message)
-                                    for next_flag in flags[i + 1:]:
+                                    for next_flag in flags[i + 1 :]:
                                         if next_flag in message[start_idx:]:
                                             next_pos = message.index(next_flag, start_idx)
                                             if next_pos < end_idx:
@@ -612,10 +616,14 @@ def handle_client(conn, addr):
                             try:
                                 ack_response = f"STARTED:{params['output_folder_path']}".encode()
                                 conn.sendall(ack_response)
-                                logger.info("Sent STARTED acknowledgment for standard autofocus test")
+                                logger.info(
+                                    "Sent STARTED acknowledgment for standard autofocus test"
+                                )
 
                                 # Execute STANDARD autofocus test
-                                from smart_wsi_scanner.qp_autofocus_test import test_standard_autofocus_at_current_position
+                                from smart_wsi_scanner.qp_autofocus_test import (
+                                    test_standard_autofocus_at_current_position,
+                                )
 
                                 result = test_standard_autofocus_at_current_position(
                                     hardware=hardware,
@@ -629,7 +637,9 @@ def handle_client(conn, addr):
                                 if result["success"]:
                                     # Format result as: SUCCESS:plot_path|initial_z:final_z:z_shift
                                     result_data = f"{result['initial_z']:.2f}:{result['final_z']:.2f}:{result['z_shift']:.2f}"
-                                    response = f"SUCCESS:{result['plot_path']}|{result_data}".encode()
+                                    response = (
+                                        f"SUCCESS:{result['plot_path']}|{result_data}".encode()
+                                    )
                                     conn.sendall(response)
                                     logger.info(f"Autofocus test completed: {result['message']}")
                                 else:
@@ -681,7 +691,9 @@ def handle_client(conn, addr):
                     while True:
                         chunk = conn.recv(1024)
                         if not chunk:
-                            logger.error("Connection closed while reading adaptive autofocus test message")
+                            logger.error(
+                                "Connection closed while reading adaptive autofocus test message"
+                            )
                             conn.sendall(b"FAILED:Connection closed")
                             break
 
@@ -706,7 +718,7 @@ def handle_client(conn, addr):
 
                                     # Find where the next flag starts (or use end of string)
                                     end_idx = len(message)
-                                    for next_flag in flags[i + 1:]:
+                                    for next_flag in flags[i + 1 :]:
                                         if next_flag in message[start_idx:]:
                                             next_pos = message.index(next_flag, start_idx)
                                             if next_pos < end_idx:
@@ -737,10 +749,14 @@ def handle_client(conn, addr):
                             try:
                                 ack_response = f"STARTED:{params['output_folder_path']}".encode()
                                 conn.sendall(ack_response)
-                                logger.info("Sent STARTED acknowledgment for adaptive autofocus test")
+                                logger.info(
+                                    "Sent STARTED acknowledgment for adaptive autofocus test"
+                                )
 
                                 # Execute ADAPTIVE autofocus test
-                                from smart_wsi_scanner.qp_autofocus_test import test_adaptive_autofocus_at_current_position
+                                from smart_wsi_scanner.qp_autofocus_test import (
+                                    test_adaptive_autofocus_at_current_position,
+                                )
 
                                 result = test_adaptive_autofocus_at_current_position(
                                     hardware=hardware,
@@ -756,14 +772,20 @@ def handle_client(conn, addr):
                                     result_data = f"{result['initial_z']:.2f}:{result['final_z']:.2f}:{result['z_shift']:.2f}"
                                     response = f"SUCCESS:{result['message']}|{result_data}".encode()
                                     conn.sendall(response)
-                                    logger.info(f"Adaptive autofocus test completed: {result['message']}")
+                                    logger.info(
+                                        f"Adaptive autofocus test completed: {result['message']}"
+                                    )
                                 else:
                                     response = f"FAILED:{result['message']}".encode()
                                     conn.sendall(response)
-                                    logger.error(f"Adaptive autofocus test failed: {result['message']}")
+                                    logger.error(
+                                        f"Adaptive autofocus test failed: {result['message']}"
+                                    )
 
                             except Exception as e:
-                                logger.error(f"Adaptive autofocus test failed: {str(e)}", exc_info=True)
+                                logger.error(
+                                    f"Adaptive autofocus test failed: {str(e)}", exc_info=True
+                                )
                                 response = f"FAILED:{str(e)}".encode()
                                 conn.sendall(response)
 
@@ -772,7 +794,9 @@ def handle_client(conn, addr):
 
                         # Safety checks for the while loop
                         if total_bytes > 10000:  # 10KB max
-                            logger.error(f"Adaptive autofocus test message too large: {total_bytes} bytes")
+                            logger.error(
+                                f"Adaptive autofocus test message too large: {total_bytes} bytes"
+                            )
                             conn.sendall(b"FAILED:Message too large")
                             break
 
@@ -806,7 +830,9 @@ def handle_client(conn, addr):
                     while True:
                         chunk = conn.recv(1024)
                         if not chunk:
-                            logger.error("Connection closed while reading polarizer calibration message")
+                            logger.error(
+                                "Connection closed while reading polarizer calibration message"
+                            )
                             conn.sendall(b"FAILED:Connection closed")
                             break
 
@@ -822,7 +848,14 @@ def handle_client(conn, addr):
                             params = {}
 
                             # Split by known flags
-                            flags = ["--yaml", "--output", "--start", "--end", "--step", "--exposure"]
+                            flags = [
+                                "--yaml",
+                                "--output",
+                                "--start",
+                                "--end",
+                                "--step",
+                                "--exposure",
+                            ]
 
                             for i, flag in enumerate(flags):
                                 if flag in message:
@@ -897,10 +930,14 @@ def handle_client(conn, addr):
                                 response = f"SUCCESS:{report_path}".encode()
                                 conn.sendall(response)
 
-                                logger.info(f"Polarizer calibration completed. Report: {report_path}")
+                                logger.info(
+                                    f"Polarizer calibration completed. Report: {report_path}"
+                                )
 
                             except Exception as e:
-                                logger.error(f"Polarizer calibration failed: {str(e)}", exc_info=True)
+                                logger.error(
+                                    f"Polarizer calibration failed: {str(e)}", exc_info=True
+                                )
                                 response = f"FAILED:{str(e)}".encode()
                                 conn.sendall(response)
 
@@ -909,7 +946,9 @@ def handle_client(conn, addr):
 
                         # Safety checks for the while loop
                         if total_bytes > 10000:  # 10KB max
-                            logger.error(f"Polarizer calibration message too large: {total_bytes} bytes")
+                            logger.error(
+                                f"Polarizer calibration message too large: {total_bytes} bytes"
+                            )
                             conn.sendall(b"FAILED:Message too large")
                             break
 
