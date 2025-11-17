@@ -447,9 +447,8 @@ def _acquisition_workflow(
         af_adaptive_focus_threshold = 0.95  # default
         af_large_drift_threshold = 4.0  # default - um drift that triggers STANDARD autofocus fallback
 
-        # Try to get current objective from hardware
-        microscope = ppm_settings.get("microscope", {})
-        current_objective = microscope.get("objective_in_use", "")
+        # Get objective from acquisition parameters (passed via command line)
+        current_objective = params.get("objective", "")
 
         # Track whether autofocus settings were found for the objective
         af_settings_found = False
