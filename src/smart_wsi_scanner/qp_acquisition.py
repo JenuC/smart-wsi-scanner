@@ -43,7 +43,7 @@ def log_timing(logger, operation_name, start_time):
 def autofocus_with_manual_fallback(
     hardware: PycromanagerHardware,
     logger,
-    request_manual_focus: Optional[Callable[[], None]] = None,
+    request_manual_focus: Optional[Callable[[int], str]] = None,
     max_retries: int = 3,
     **autofocus_kwargs
 ):
@@ -51,12 +51,14 @@ def autofocus_with_manual_fallback(
     Perform autofocus with manual focus fallback on failure.
 
     If autofocus fails (returns failure dict), prompts user for manual focus
-    and retries. Retries up to max_retries times before giving up.
+    and retries. Shows dialog even on last attempt with retry button disabled.
 
     Args:
         hardware: PycromanagerHardware instance
         logger: Logger instance
         request_manual_focus: Optional callback to request manual focus from user.
+                             Callback receives retries_remaining (int) and returns
+                             user choice: "retry", "skip", or "cancel".
                              If None, will raise exception on autofocus failure.
         max_retries: Maximum number of retry attempts after manual focus
         **autofocus_kwargs: Arguments to pass to hardware.autofocus()
@@ -65,7 +67,7 @@ def autofocus_with_manual_fallback(
         float: Best focus Z position on success
 
     Raises:
-        RuntimeError: If autofocus fails after max_retries attempts
+        RuntimeError: If user cancels acquisition or no callback provided
     """
     for attempt in range(max_retries):
         result = hardware.autofocus(**autofocus_kwargs)
@@ -80,34 +82,37 @@ def autofocus_with_manual_fallback(
             logger.warning(f"  Quality score: {result['quality_score']:.2f}, "
                           f"Prominence: {result['peak_prominence']:.2f}")
 
-            if attempt < max_retries - 1:  # Not the last attempt
-                if request_manual_focus is not None:
-                    # Request user to manually focus
-                    logger.info("Requesting manual focus from user...")
-                    user_choice = request_manual_focus()  # This blocks until user responds
+            if request_manual_focus is not None:
+                # Always show dialog, even on last attempt
+                retries_remaining = max_retries - attempt - 1
+                logger.info(f"Requesting manual focus from user (retries remaining: {retries_remaining})...")
+                user_choice = request_manual_focus(retries_remaining)  # Pass retries info
 
-                    if user_choice == "skip":
-                        # User chose to use current focus - return attempted Z position
-                        logger.info("User chose to use current focus position")
-                        return result['attempted_z']
-                    elif user_choice == "cancel":
-                        # User chose to cancel acquisition
-                        logger.warning("User cancelled acquisition during manual focus")
-                        raise RuntimeError("Acquisition cancelled by user during manual focus")
-                    else:  # "retry" or anything else
+                if user_choice == "skip":
+                    # User chose to use current focus - return attempted Z position
+                    logger.info("User chose to use current focus position")
+                    return result['attempted_z']
+                elif user_choice == "cancel":
+                    # User chose to cancel acquisition
+                    logger.warning("User cancelled acquisition during manual focus")
+                    raise RuntimeError("Acquisition cancelled by user during manual focus")
+                elif user_choice == "retry":
+                    if retries_remaining > 0:
                         # Continue to retry autofocus
-                        logger.info("Manual focus completed, retrying standard autofocus...")
+                        logger.info(f"Manual focus completed, retrying standard autofocus (attempt {attempt + 2}/{max_retries})...")
+                        continue
+                    else:
+                        # No retries left - shouldn't happen since button should be disabled
+                        logger.warning("User chose retry but no retries remaining - using current focus")
+                        return result['attempted_z']
                 else:
-                    # No callback provided, raise exception
-                    raise RuntimeError(
-                        f"Autofocus failed: {result['message']}. "
-                        f"Quality score: {result['quality_score']:.2f}, "
-                        f"Prominence: {result['peak_prominence']:.2f}"
-                    )
+                    # Unknown choice - default to skip
+                    logger.warning(f"Unknown user choice '{user_choice}' - using current focus")
+                    return result['attempted_z']
             else:
-                # Last attempt failed
+                # No callback provided, raise exception
                 raise RuntimeError(
-                    f"Autofocus failed after {max_retries} attempts. Last failure: {result['message']}. "
+                    f"Autofocus failed: {result['message']}. "
                     f"Quality score: {result['quality_score']:.2f}, "
                     f"Prominence: {result['peak_prominence']:.2f}"
                 )

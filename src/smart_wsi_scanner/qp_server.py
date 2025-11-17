@@ -72,6 +72,7 @@ acquisition_failure_messages = {}  # addr -> str (error message when FAILED)
 manual_focus_request_events = {}  # addr -> Event (set when manual focus needed)
 manual_focus_complete_events = {}  # addr -> Event (set when user acknowledges)
 manual_focus_user_choice = {}  # addr -> str ("retry", "skip", "cancel")
+manual_focus_retries_remaining = {}  # addr -> int (number of retries remaining)
 
 
 def init_pycromanager_with_logger():
@@ -133,13 +134,18 @@ def acquisitionWorkflow(message, client_addr):
     def _is_cancelled() -> bool:
         return acquisition_cancel_events[client_addr].is_set()
 
-    def _request_manual_focus():
+    def _request_manual_focus(retries_remaining: int):
         """Signal manual focus needed and wait for user acknowledgment.
+
+        Args:
+            retries_remaining: Number of autofocus retries remaining after this
 
         Returns:
             str: User's choice - "retry", "skip", or "cancel"
         """
-        logger.info(f"Manual focus requested for client {client_addr}")
+        logger.info(f"Manual focus requested for client {client_addr} (retries remaining: {retries_remaining})")
+        # Store retries remaining so REQMANF can return it
+        manual_focus_retries_remaining[client_addr] = retries_remaining
         # Set request event to signal client
         manual_focus_request_events[client_addr].set()
         # Clear previous choice
@@ -153,6 +159,7 @@ def acquisitionWorkflow(message, client_addr):
         manual_focus_request_events[client_addr].clear()
         manual_focus_complete_events[client_addr].clear()
         manual_focus_user_choice[client_addr] = None
+        manual_focus_retries_remaining[client_addr] = 0
         logger.info(f"Manual focus acknowledged, user chose: {user_choice}")
         return user_choice
 
@@ -184,6 +191,7 @@ def handle_client(conn, addr):
     manual_focus_request_events[addr] = threading.Event()
     manual_focus_complete_events[addr] = threading.Event()
     manual_focus_user_choice[addr] = None
+    manual_focus_retries_remaining[addr] = 0
 
     acquisition_thread = None
 
@@ -356,9 +364,12 @@ def handle_client(conn, addr):
             if data == ExtendedCommand.REQMANF:
                 # Check if manual focus is requested
                 if manual_focus_request_events[addr].is_set():
-                    # Manual focus needed - send request status (8 bytes exactly)
-                    conn.sendall(b"NEEDED__")
-                    logger.debug(f"Sent manual focus request status to {addr}")
+                    # Manual focus needed - send request status with retries remaining (8 bytes exactly)
+                    retries = manual_focus_retries_remaining.get(addr, 0)
+                    # Format: "NEEDEDnn" where nn is 00-99
+                    response = f"NEEDED{retries:02d}".encode('utf-8')
+                    conn.sendall(response)
+                    logger.debug(f"Sent manual focus request to {addr} (retries remaining: {retries})")
                 else:
                     # No manual focus needed (8 bytes exactly)
                     conn.sendall(b"IDLE____")
