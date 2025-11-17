@@ -69,6 +69,8 @@ acquisition_progress = {}  # addr -> (current, total)
 acquisition_locks = {}  # addr -> Lock
 acquisition_cancel_events = {}  # addr -> Event
 acquisition_failure_messages = {}  # addr -> str (error message when FAILED)
+manual_focus_request_events = {}  # addr -> Event (set when manual focus needed)
+manual_focus_complete_events = {}  # addr -> Event (set when user acknowledges)
 
 
 def init_pycromanager_with_logger():
@@ -130,6 +132,19 @@ def acquisitionWorkflow(message, client_addr):
     def _is_cancelled() -> bool:
         return acquisition_cancel_events[client_addr].is_set()
 
+    def _request_manual_focus():
+        """Signal manual focus needed and wait for user acknowledgment."""
+        logger.info(f"Manual focus requested for client {client_addr}")
+        # Set request event to signal client
+        manual_focus_request_events[client_addr].set()
+        # Wait for user to acknowledge (blocks acquisition thread)
+        logger.info("Waiting for manual focus acknowledgment from user...")
+        manual_focus_complete_events[client_addr].wait()
+        # Clear events for next potential use
+        manual_focus_request_events[client_addr].clear()
+        manual_focus_complete_events[client_addr].clear()
+        logger.info("Manual focus acknowledged, resuming acquisition")
+
     return _acquisition_workflow(
         message=message,
         client_addr=client_addr,
@@ -139,6 +154,7 @@ def acquisitionWorkflow(message, client_addr):
         update_progress=_update_progress,
         set_state=_set_state,
         is_cancelled=_is_cancelled,
+        request_manual_focus=_request_manual_focus,
     )
 
 
@@ -154,6 +170,8 @@ def handle_client(conn, addr):
     acquisition_progress[addr] = (0, 0)
     acquisition_cancel_events[addr] = threading.Event()
     acquisition_failure_messages[addr] = None
+    manual_focus_request_events[addr] = threading.Event()
+    manual_focus_complete_events[addr] = threading.Event()
 
     acquisition_thread = None
 
@@ -319,6 +337,27 @@ def handle_client(conn, addr):
                         logger.info(f"Cancellation initiated for {addr}")
                 # Send acknowledgment
                 conn.sendall(b"ACK")
+                continue
+
+            # ============ MANUAL FOCUS REQUEST/ACKNOWLEDGMENT ============
+
+            if data == ExtendedCommand.REQMANF:
+                # Check if manual focus is requested
+                if manual_focus_request_events[addr].is_set():
+                    # Manual focus needed - send request status
+                    conn.sendall(b"REQUESTED")
+                    logger.debug(f"Sent manual focus request status to {addr}")
+                else:
+                    # No manual focus needed - this might be an acknowledgment
+                    # Client sends REQMANF again after showing dialog to acknowledge
+                    if manual_focus_complete_events[addr].is_set():
+                        # Already acknowledged, just confirm
+                        conn.sendall(b"ACK_OK")
+                    else:
+                        # First time acknowledgment - signal completion
+                        manual_focus_complete_events[addr].set()
+                        conn.sendall(b"ACK_OK")
+                        logger.info(f"Manual focus acknowledged by client {addr}")
                 continue
 
             # ============ ACQUISITION COMMAND ============
