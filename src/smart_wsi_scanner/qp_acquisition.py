@@ -40,6 +40,74 @@ def log_timing(logger, operation_name, start_time):
     return time.perf_counter()
 
 
+def autofocus_with_manual_fallback(
+    hardware: PycromanagerHardware,
+    logger,
+    request_manual_focus: Optional[Callable[[], None]] = None,
+    max_retries: int = 3,
+    **autofocus_kwargs
+):
+    """
+    Perform autofocus with manual focus fallback on failure.
+
+    If autofocus fails (returns failure dict), prompts user for manual focus
+    and retries. Retries up to max_retries times before giving up.
+
+    Args:
+        hardware: PycromanagerHardware instance
+        logger: Logger instance
+        request_manual_focus: Optional callback to request manual focus from user.
+                             If None, will raise exception on autofocus failure.
+        max_retries: Maximum number of retry attempts after manual focus
+        **autofocus_kwargs: Arguments to pass to hardware.autofocus()
+
+    Returns:
+        float: Best focus Z position on success
+
+    Raises:
+        RuntimeError: If autofocus fails after max_retries attempts
+    """
+    for attempt in range(max_retries):
+        result = hardware.autofocus(**autofocus_kwargs)
+
+        # Check if autofocus succeeded (returns float) or failed (returns dict)
+        if isinstance(result, float):
+            # Success!
+            return result
+        elif isinstance(result, dict) and result.get('success') == False:
+            # Autofocus failed
+            logger.warning(f"Autofocus failed (attempt {attempt + 1}/{max_retries}): {result['message']}")
+            logger.warning(f"  Quality score: {result['quality_score']:.2f}, "
+                          f"Prominence: {result['peak_prominence']:.2f}")
+
+            if attempt < max_retries - 1:  # Not the last attempt
+                if request_manual_focus is not None:
+                    # Request user to manually focus
+                    logger.info("Requesting manual focus from user...")
+                    request_manual_focus()  # This blocks until user responds
+                    logger.info("Manual focus completed, retrying standard autofocus...")
+                else:
+                    # No callback provided, raise exception
+                    raise RuntimeError(
+                        f"Autofocus failed: {result['message']}. "
+                        f"Quality score: {result['quality_score']:.2f}, "
+                        f"Prominence: {result['peak_prominence']:.2f}"
+                    )
+            else:
+                # Last attempt failed
+                raise RuntimeError(
+                    f"Autofocus failed after {max_retries} attempts. Last failure: {result['message']}. "
+                    f"Quality score: {result['quality_score']:.2f}, "
+                    f"Prominence: {result['peak_prominence']:.2f}"
+                )
+        else:
+            # Unexpected return type
+            raise RuntimeError(f"Unexpected autofocus return value: {result}")
+
+    # Should never reach here
+    raise RuntimeError("Autofocus retry loop exited unexpectedly")
+
+
 def calculate_luminance_gain(r, g, b):
     """Calculate luminance-based gain from RGB values."""
     return 0.299 * r + 0.587 * g + 0.114 * b
@@ -251,8 +319,23 @@ def _acquisition_workflow(
     update_progress: Callable[[int, int], None],
     set_state: Callable[[str], None],
     is_cancelled: Callable[[], bool],
+    request_manual_focus: Optional[Callable[[], None]] = None,
 ):
-    """Execute the main image acquisition workflow with progress and cancellation."""
+    """Execute the main image acquisition workflow with progress and cancellation.
+
+    Args:
+        message: Acquisition command message
+        client_addr: Client address for logging
+        hardware: Hardware interface
+        config_manager: Configuration manager
+        logger: Logger instance
+        update_progress: Callback to update progress (current, total)
+        set_state: Callback to set acquisition state
+        is_cancelled: Callback to check if cancelled
+        request_manual_focus: Optional callback to request manual focus from user
+                             when autofocus fails. If None, autofocus failures will
+                             raise exceptions as before.
+    """
 
     logger.info(f"=== ACQUISITION WORKFLOW STARTED for client {client_addr} ===")
 
@@ -660,7 +743,11 @@ def _acquisition_workflow(
                     if not first_tissue_autofocus_done:
                         logger.info(f"  First tissue position - using STANDARD autofocus for accuracy")
                         t_af = time.perf_counter()
-                        new_z = hardware.autofocus(
+                        new_z = autofocus_with_manual_fallback(
+                            hardware=hardware,
+                            logger=logger,
+                            request_manual_focus=request_manual_focus,
+                            max_retries=3,
                             move_stage_to_estimate=True,
                             n_steps=af_n_steps,
                             search_range=af_search_range,
@@ -701,7 +788,11 @@ def _acquisition_workflow(
                             logger.warning(f"  Falling back to STANDARD autofocus to re-establish baseline...")
 
                             t_af_recovery = time.perf_counter()
-                            new_z = hardware.autofocus(
+                            new_z = autofocus_with_manual_fallback(
+                                hardware=hardware,
+                                logger=logger,
+                                request_manual_focus=request_manual_focus,
+                                max_retries=3,
                                 move_stage_to_estimate=True,
                                 n_steps=af_n_steps,
                                 search_range=af_search_range,
