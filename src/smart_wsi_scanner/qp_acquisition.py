@@ -619,11 +619,12 @@ def _acquisition_workflow(
             af_score_metric_name, AutofocusUtils.autofocus_profile_laplacian_variance
         )
 
-        # Calculate timing window size for progress estimation (5x autofocus n_tiles)
+        # Calculate timing window size for progress estimation (3x autofocus n_tiles)
         # Use n_tiles (number of AF positions) not n_steps (Z-positions per AF)
         # This ensures we collect enough tiles to see the AF timing pattern
-        timing_window_size = max(10, 5 * af_n_tiles)  # Minimum 10 tiles
-        logger.info(f"Timing window size for progress estimation: {timing_window_size} tiles (5 × {af_n_tiles} AF positions, min 10)")
+        # TODO: Move timing window multiplier (3) to settings/preferences instead of hardcoding
+        timing_window_size = max(10, 3 * af_n_tiles)  # Minimum 10 tiles
+        logger.info(f"Timing window size for progress estimation: {timing_window_size} tiles (3 × {af_n_tiles} AF positions, min 10)")
 
         # Write timing window to file for Java progress dialog
         timing_metadata_path = output_path / "acquisition_metadata.txt"
