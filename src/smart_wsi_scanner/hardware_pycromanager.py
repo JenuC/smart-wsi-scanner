@@ -400,6 +400,18 @@ class PycromanagerHardware(MicroscopeHardware):
             from smart_wsi_scanner.qp_utils import AutofocusUtils
             validation = AutofocusUtils.validate_focus_peak(z_steps, scores_array)
 
+            # Interpolate to find best focus (do this before validation check)
+            interp_x = np.linspace(z_steps[0], z_steps[-1], n_steps * interp_strength)
+            interp_y = scipy.interpolate.interp1d(z_steps, scores, kind=interp_kind)(interp_x)
+            new_z = interp_x[np.argmax(interp_y)]
+
+            # Save diagnostic CSV BEFORE validation check (so it saves even on failure)
+            if diagnostic_output_path is not None:
+                self._save_autofocus_diagnostic_csv(
+                    z_steps, scores_array, validation, new_z,
+                    diagnostic_output_path, position_index, current_pos
+                )
+
             if not validation['is_valid']:
                 logger.warning("*** AUTOFOCUS PEAK QUALITY WARNING ***")
                 logger.warning(f"  {validation['message']}")
@@ -426,18 +438,6 @@ class PycromanagerHardware(MicroscopeHardware):
                 logger.info(f"Autofocus peak validation: {validation['message']}")
                 logger.debug(f"  Quality score: {validation['quality_score']:.2f}, "
                            f"prominence: {validation['peak_prominence']:.2f}")
-
-            # Interpolate to find best focus
-            interp_x = np.linspace(z_steps[0], z_steps[-1], n_steps * interp_strength)
-            interp_y = scipy.interpolate.interp1d(z_steps, scores, kind=interp_kind)(interp_x)
-            new_z = interp_x[np.argmax(interp_y)]
-
-            # Save diagnostic CSV if output path provided (for acquisition diagnostics)
-            if diagnostic_output_path is not None:
-                self._save_autofocus_diagnostic_csv(
-                    z_steps, scores_array, validation, new_z,
-                    diagnostic_output_path, position_index, current_pos
-                )
 
             if pop_a_plot:
                 plt.figure()
