@@ -346,7 +346,7 @@ class PycromanagerHardware(MicroscopeHardware):
         raise_on_invalid_peak=True,
         diagnostic_output_path=None,
         position_index=None,
-    ) -> float:
+    ):
         """
         Perform autofocus using specified score metric.
 
@@ -365,7 +365,15 @@ class PycromanagerHardware(MicroscopeHardware):
             position_index: Optional position index to include in CSV filename
 
         Returns:
-            Best focus Z position
+            float: Best focus Z position (in micrometers) on success
+            dict: Failure information dict with keys:
+                - 'success': False
+                - 'message': Error message
+                - 'quality_score': Focus quality score
+                - 'peak_prominence': Peak prominence value
+                - 'attempted_z': Z position that was attempted
+                - 'original_z': Original Z position before autofocus
+                - 'validation': Full validation dict
         """
         steps = np.linspace(0, search_range, n_steps) - (search_range / 2)
 
@@ -421,16 +429,18 @@ class PycromanagerHardware(MicroscopeHardware):
                              f"quality={validation['quality_score']:.2f}")
 
                 if raise_on_invalid_peak:
-                    # Move back to original position before raising error
-                    logger.warning("  Moving back to original Z position...")
-                    self.move_to_position(current_pos)
-                    # Raise exception to stop acquisition workflow
-                    raise RuntimeError(
-                        f"Autofocus failed: {validation['message']}. "
-                        f"Check focus manually or adjust autofocus settings. "
-                        f"Quality score: {validation['quality_score']:.2f}, "
-                        f"Prominence: {validation['peak_prominence']:.2f}"
-                    )
+                    # Return failure dict for manual focus fallback loop
+                    # Stage is left at attempted focus position (new_z)
+                    logger.warning("  Autofocus failed - returning failure dict for retry")
+                    return {
+                        'success': False,
+                        'message': validation['message'],
+                        'quality_score': validation['quality_score'],
+                        'peak_prominence': validation['peak_prominence'],
+                        'attempted_z': new_z,
+                        'original_z': current_pos.z,
+                        'validation': validation
+                    }
                 else:
                     # Just log warning, continue for diagnostic purposes (test mode)
                     logger.warning("  Proceeding with autofocus result for diagnostic analysis")
