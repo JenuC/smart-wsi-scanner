@@ -55,4 +55,5 @@ class ExtendedCommand:
     POLCAL = b"polcal__"  # Calibrate polarizer rotation stage
     TESTAF = b"testaf__"  # Test standard autofocus at current position
     TESTADAF = b"testadaf"  # Test adaptive autofocus at current position
-    REQMANF = b"reqmanf_"  # Request manual focus from user (blocks until acknowledged)
+    REQMANF = b"reqmanf_"  # Check if manual focus is requested
+    ACKMF = b"ackmf___"  # Acknowledge manual focus completion

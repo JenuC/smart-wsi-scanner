@@ -348,16 +348,17 @@ def handle_client(conn, addr):
                     conn.sendall(b"REQUESTED")
                     logger.debug(f"Sent manual focus request status to {addr}")
                 else:
-                    # No manual focus needed - this might be an acknowledgment
-                    # Client sends REQMANF again after showing dialog to acknowledge
-                    if manual_focus_complete_events[addr].is_set():
-                        # Already acknowledged, just confirm
-                        conn.sendall(b"ACK_OK")
-                    else:
-                        # First time acknowledgment - signal completion
-                        manual_focus_complete_events[addr].set()
-                        conn.sendall(b"ACK_OK")
-                        logger.info(f"Manual focus acknowledged by client {addr}")
+                    # No manual focus needed
+                    conn.sendall(b"IDLE____")
+                    logger.debug(f"Manual focus not needed for {addr}")
+                continue
+
+            # Separate command for acknowledging manual focus completion
+            if data == ExtendedCommand.ACKMF:
+                # Client acknowledges they have manually focused
+                manual_focus_complete_events[addr].set()
+                conn.sendall(b"ACK")
+                logger.info(f"Manual focus acknowledged by client {addr}")
                 continue
 
             # ============ ACQUISITION COMMAND ============
