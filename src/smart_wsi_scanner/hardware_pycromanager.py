@@ -344,6 +344,8 @@ class PycromanagerHardware(MicroscopeHardware):
         pop_a_plot=False,
         move_stage_to_estimate=True,
         raise_on_invalid_peak=True,
+        diagnostic_output_path=None,
+        position_index=None,
     ) -> float:
         """
         Perform autofocus using specified score metric.
@@ -359,6 +361,8 @@ class PycromanagerHardware(MicroscopeHardware):
             raise_on_invalid_peak: If True (default), raises RuntimeError when peak validation fails,
                                   stopping acquisitions. If False, logs warning and continues
                                   (use for diagnostic tests where plots must always be generated).
+            diagnostic_output_path: Optional path to save autofocus diagnostic CSV (for standard autofocus during acquisition)
+            position_index: Optional position index to include in CSV filename
 
         Returns:
             Best focus Z position
@@ -428,6 +432,13 @@ class PycromanagerHardware(MicroscopeHardware):
             interp_y = scipy.interpolate.interp1d(z_steps, scores, kind=interp_kind)(interp_x)
             new_z = interp_x[np.argmax(interp_y)]
 
+            # Save diagnostic CSV if output path provided (for acquisition diagnostics)
+            if diagnostic_output_path is not None:
+                self._save_autofocus_diagnostic_csv(
+                    z_steps, scores_array, validation, new_z,
+                    diagnostic_output_path, position_index, current_pos
+                )
+
             if pop_a_plot:
                 plt.figure()
                 plt.bar(z_steps, scores)
@@ -447,6 +458,69 @@ class PycromanagerHardware(MicroscopeHardware):
             logger.error(f"Autofocus failed: {e}")
             self.move_to_position(current_pos)
             raise e
+
+    def _save_autofocus_diagnostic_csv(self, z_positions, scores, validation, result_z,
+                                       output_path, position_index, current_pos):
+        """
+        Save autofocus diagnostic data to CSV file in the acquisition folder.
+
+        Args:
+            z_positions: Array of Z positions sampled
+            scores: Array of focus scores
+            validation: Validation results dict
+            result_z: Resulting Z position from autofocus
+            output_path: Path to save the CSV file
+            position_index: Position index for filename
+            current_pos: Starting position for autofocus
+        """
+        try:
+            import csv
+            from datetime import datetime
+            from pathlib import Path
+
+            output_path = Path(output_path)
+            output_path.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            pos_str = f"_pos{position_index}" if position_index is not None else ""
+            csv_filename = f"autofocus_diagnostic{pos_str}_{timestamp}.csv"
+            csv_path = output_path / csv_filename
+
+            with open(csv_path, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+
+                # Write header with metadata
+                writer.writerow(['# Autofocus Diagnostic Data (Standard Autofocus)'])
+                writer.writerow(['# Timestamp', timestamp])
+                if position_index is not None:
+                    writer.writerow(['# Position Index', position_index])
+                writer.writerow(['# Starting Position', f'X={current_pos.x:.2f}, Y={current_pos.y:.2f}, Z={current_pos.z:.2f}'])
+                writer.writerow(['# Autofocus Result Z', f'{result_z:.2f}'])
+                writer.writerow(['# Z Shift', f'{result_z - current_pos.z:.2f}'])
+                writer.writerow(['#'])
+                writer.writerow(['# VALIDATION RESULTS'])
+                writer.writerow(['# Status', 'VALID' if validation['is_valid'] else 'INVALID'])
+                writer.writerow(['# Quality Score', f"{validation['quality_score']:.3f}"])
+                writer.writerow(['# Peak Prominence', f"{validation['peak_prominence']:.3f}"])
+                writer.writerow(['# Has Ascending', validation['has_ascending']])
+                writer.writerow(['# Has Descending', validation['has_descending']])
+                writer.writerow(['# Symmetry Score', f"{validation['symmetry_score']:.3f}"])
+                writer.writerow(['# Message', validation['message']])
+                if validation['warnings']:
+                    for warning in validation['warnings']:
+                        writer.writerow(['# Warning', warning])
+                writer.writerow(['#'])
+
+                # Write data header
+                writer.writerow(['Z_Position_um', 'Focus_Score'])
+
+                # Write data
+                for z, score in zip(z_positions, scores):
+                    writer.writerow([f'{z:.2f}', f'{score:.4f}'])
+
+            logger.info(f"Autofocus diagnostic CSV saved: {csv_path}")
+        except Exception as e:
+            logger.warning(f"Failed to save autofocus diagnostic CSV: {e}")
 
     def autofocus_adaptive_search(
         self,

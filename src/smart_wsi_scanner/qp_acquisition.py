@@ -451,6 +451,9 @@ def _acquisition_workflow(
         microscope = ppm_settings.get("microscope", {})
         current_objective = microscope.get("objective_in_use", "")
 
+        # Track whether autofocus settings were found for the objective
+        af_settings_found = False
+
         try:
             # Derive autofocus config path from main config path
             # e.g., "config_PPM.yml" -> "autofocus_PPM.yml"
@@ -459,45 +462,68 @@ def _acquisition_workflow(
             microscope_name = config_name.replace("config_", "")  # "PPM"
             autofocus_file = config_path.parent / f"autofocus_{microscope_name}.yml"
 
-            if autofocus_file.exists():
-                with open(autofocus_file, "r") as f:
-                    autofocus_config = yaml.safe_load(f)
-
-                # Find settings for current objective
-                af_settings_list = autofocus_config.get("autofocus_settings", [])
-                for af_setting in af_settings_list:
-                    if af_setting.get("objective") == current_objective:
-                        af_n_tiles = af_setting.get("n_tiles", af_n_tiles)
-                        af_search_range = af_setting.get("search_range_um", af_search_range)
-                        af_n_steps = af_setting.get("n_steps", af_n_steps)
-                        af_interp_strength = af_setting.get("interp_strength", af_interp_strength)
-                        af_interp_kind = af_setting.get("interp_kind", af_interp_kind)
-                        af_score_metric_name = af_setting.get("score_metric", af_score_metric_name)
-                        af_texture_threshold = af_setting.get("texture_threshold", af_texture_threshold)
-                        af_tissue_area_threshold = af_setting.get("tissue_area_threshold", af_tissue_area_threshold)
-                        af_rgb_brightness_threshold = af_setting.get("rgb_brightness_threshold", af_rgb_brightness_threshold)
-                        af_adaptive_initial_step = af_setting.get("adaptive_initial_step_um", af_adaptive_initial_step)
-                        af_adaptive_min_step = af_setting.get("adaptive_min_step_um", af_adaptive_min_step)
-                        af_adaptive_max_steps = af_setting.get("adaptive_max_steps", af_adaptive_max_steps)
-                        af_adaptive_focus_threshold = af_setting.get("adaptive_focus_threshold", af_adaptive_focus_threshold)
-                        af_large_drift_threshold = af_setting.get("large_drift_threshold_um", af_large_drift_threshold)
-                        logger.info(
-                            f"Loaded autofocus settings for {current_objective}: "
-                            f"n_steps={af_n_steps}, search_range={af_search_range}um, n_tiles={af_n_tiles}, "
-                            f"interp_strength={af_interp_strength}, interp_kind={af_interp_kind}, "
-                            f"score_metric={af_score_metric_name}, "
-                            f"texture_threshold={af_texture_threshold}, tissue_area_threshold={af_tissue_area_threshold}, "
-                            f"rgb_brightness_threshold={af_rgb_brightness_threshold}, "
-                            f"adaptive: initial_step={af_adaptive_initial_step}um, min_step={af_adaptive_min_step}um, "
-                            f"max_steps={af_adaptive_max_steps}, focus_threshold={af_adaptive_focus_threshold}"
-                        )
-                        break
-            else:
-                logger.warning(
-                    f"Autofocus config file not found: {autofocus_file}. Using defaults."
+            if not autofocus_file.exists():
+                error_msg = (
+                    f"Autofocus configuration file not found: {autofocus_file}\n"
+                    f"Cannot proceed with acquisition - autofocus settings are required for objective '{current_objective}'.\n"
+                    f"Please create the autofocus configuration file with settings for your objectives."
                 )
+                logger.error(error_msg)
+                set_state("FAILED", error_msg)
+                return
+
+            with open(autofocus_file, "r") as f:
+                autofocus_config = yaml.safe_load(f)
+
+            # Find settings for current objective
+            af_settings_list = autofocus_config.get("autofocus_settings", [])
+            for af_setting in af_settings_list:
+                if af_setting.get("objective") == current_objective:
+                    af_n_tiles = af_setting.get("n_tiles", af_n_tiles)
+                    af_search_range = af_setting.get("search_range_um", af_search_range)
+                    af_n_steps = af_setting.get("n_steps", af_n_steps)
+                    af_interp_strength = af_setting.get("interp_strength", af_interp_strength)
+                    af_interp_kind = af_setting.get("interp_kind", af_interp_kind)
+                    af_score_metric_name = af_setting.get("score_metric", af_score_metric_name)
+                    af_texture_threshold = af_setting.get("texture_threshold", af_texture_threshold)
+                    af_tissue_area_threshold = af_setting.get("tissue_area_threshold", af_tissue_area_threshold)
+                    af_rgb_brightness_threshold = af_setting.get("rgb_brightness_threshold", af_rgb_brightness_threshold)
+                    af_adaptive_initial_step = af_setting.get("adaptive_initial_step_um", af_adaptive_initial_step)
+                    af_adaptive_min_step = af_setting.get("adaptive_min_step_um", af_adaptive_min_step)
+                    af_adaptive_max_steps = af_setting.get("adaptive_max_steps", af_adaptive_max_steps)
+                    af_adaptive_focus_threshold = af_setting.get("adaptive_focus_threshold", af_adaptive_focus_threshold)
+                    af_large_drift_threshold = af_setting.get("large_drift_threshold_um", af_large_drift_threshold)
+                    logger.info(
+                        f"Loaded autofocus settings for {current_objective}: "
+                        f"n_steps={af_n_steps}, search_range={af_search_range}um, n_tiles={af_n_tiles}, "
+                        f"interp_strength={af_interp_strength}, interp_kind={af_interp_kind}, "
+                        f"score_metric={af_score_metric_name}, "
+                        f"texture_threshold={af_texture_threshold}, tissue_area_threshold={af_tissue_area_threshold}, "
+                        f"rgb_brightness_threshold={af_rgb_brightness_threshold}, "
+                        f"adaptive: initial_step={af_adaptive_initial_step}um, min_step={af_adaptive_min_step}um, "
+                        f"max_steps={af_adaptive_max_steps}, focus_threshold={af_adaptive_focus_threshold}"
+                    )
+                    af_settings_found = True
+                    break
+
+            # Validate that settings were found for the objective
+            if not af_settings_found:
+                available_objectives = [s.get("objective", "unknown") for s in af_settings_list]
+                error_msg = (
+                    f"No autofocus settings found for objective '{current_objective}' in {autofocus_file}\n"
+                    f"Available objectives in config: {available_objectives}\n"
+                    f"Cannot proceed with acquisition - please add autofocus settings for '{current_objective}' "
+                    f"or verify the objective name matches the configuration."
+                )
+                logger.error(error_msg)
+                set_state("FAILED", error_msg)
+                return
+
         except Exception as e:
-            logger.error(f"Error loading autofocus settings: {e}. Using defaults.")
+            error_msg = f"Error loading autofocus settings: {e}"
+            logger.error(error_msg, exc_info=True)
+            set_state("FAILED", error_msg)
+            return
 
         # Map score metric name to function
         score_metric_map = {
@@ -510,6 +536,18 @@ def _acquisition_workflow(
         af_score_metric = score_metric_map.get(
             af_score_metric_name, AutofocusUtils.autofocus_profile_laplacian_variance
         )
+
+        # Calculate timing window size for progress estimation (5x autofocus n_steps)
+        timing_window_size = 5 * af_n_steps
+        logger.info(f"Timing window size for progress estimation: {timing_window_size} tiles")
+
+        # Write timing window to file for Java progress dialog
+        timing_metadata_path = output_path / "acquisition_metadata.txt"
+        with open(timing_metadata_path, "w") as f:
+            f.write(f"timing_window_size={timing_window_size}\n")
+            f.write(f"af_n_steps={af_n_steps}\n")
+            f.write(f"objective={current_objective}\n")
+        logger.info(f"Wrote timing metadata to {timing_metadata_path}")
 
         af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
             fov, xy_positions, n_tiles=af_n_tiles
@@ -628,6 +666,8 @@ def _acquisition_workflow(
                             interp_strength=af_interp_strength,
                             interp_kind=af_interp_kind,
                             score_metric=af_score_metric,
+                            diagnostic_output_path=output_path,
+                            position_index=pos_idx,
                         )
                         t_af = log_timing(logger, "STANDARD autofocus", t_af)
                         first_tissue_autofocus_done = True
