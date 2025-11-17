@@ -344,11 +344,11 @@ def handle_client(conn, addr):
             if data == ExtendedCommand.REQMANF:
                 # Check if manual focus is requested
                 if manual_focus_request_events[addr].is_set():
-                    # Manual focus needed - send request status
-                    conn.sendall(b"REQUESTED")
+                    # Manual focus needed - send request status (8 bytes exactly)
+                    conn.sendall(b"NEEDED__")
                     logger.debug(f"Sent manual focus request status to {addr}")
                 else:
-                    # No manual focus needed
+                    # No manual focus needed (8 bytes exactly)
                     conn.sendall(b"IDLE____")
                     logger.debug(f"Manual focus not needed for {addr}")
                 continue
