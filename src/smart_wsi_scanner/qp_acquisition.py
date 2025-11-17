@@ -84,8 +84,19 @@ def autofocus_with_manual_fallback(
                 if request_manual_focus is not None:
                     # Request user to manually focus
                     logger.info("Requesting manual focus from user...")
-                    request_manual_focus()  # This blocks until user responds
-                    logger.info("Manual focus completed, retrying standard autofocus...")
+                    user_choice = request_manual_focus()  # This blocks until user responds
+
+                    if user_choice == "skip":
+                        # User chose to use current focus - return attempted Z position
+                        logger.info("User chose to use current focus position")
+                        return result['attempted_z']
+                    elif user_choice == "cancel":
+                        # User chose to cancel acquisition
+                        logger.warning("User cancelled acquisition during manual focus")
+                        raise RuntimeError("Acquisition cancelled by user during manual focus")
+                    else:  # "retry" or anything else
+                        # Continue to retry autofocus
+                        logger.info("Manual focus completed, retrying standard autofocus...")
                 else:
                     # No callback provided, raise exception
                     raise RuntimeError(

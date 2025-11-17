@@ -71,6 +71,7 @@ acquisition_cancel_events = {}  # addr -> Event
 acquisition_failure_messages = {}  # addr -> str (error message when FAILED)
 manual_focus_request_events = {}  # addr -> Event (set when manual focus needed)
 manual_focus_complete_events = {}  # addr -> Event (set when user acknowledges)
+manual_focus_user_choice = {}  # addr -> str ("retry", "skip", "cancel")
 
 
 def init_pycromanager_with_logger():
@@ -133,17 +134,27 @@ def acquisitionWorkflow(message, client_addr):
         return acquisition_cancel_events[client_addr].is_set()
 
     def _request_manual_focus():
-        """Signal manual focus needed and wait for user acknowledgment."""
+        """Signal manual focus needed and wait for user acknowledgment.
+
+        Returns:
+            str: User's choice - "retry", "skip", or "cancel"
+        """
         logger.info(f"Manual focus requested for client {client_addr}")
         # Set request event to signal client
         manual_focus_request_events[client_addr].set()
+        # Clear previous choice
+        manual_focus_user_choice[client_addr] = None
         # Wait for user to acknowledge (blocks acquisition thread)
         logger.info("Waiting for manual focus acknowledgment from user...")
         manual_focus_complete_events[client_addr].wait()
+        # Get user's choice
+        user_choice = manual_focus_user_choice[client_addr] or "cancel"
         # Clear events for next potential use
         manual_focus_request_events[client_addr].clear()
         manual_focus_complete_events[client_addr].clear()
-        logger.info("Manual focus acknowledged, resuming acquisition")
+        manual_focus_user_choice[client_addr] = None
+        logger.info(f"Manual focus acknowledged, user chose: {user_choice}")
+        return user_choice
 
     return _acquisition_workflow(
         message=message,
@@ -172,6 +183,7 @@ def handle_client(conn, addr):
     acquisition_failure_messages[addr] = None
     manual_focus_request_events[addr] = threading.Event()
     manual_focus_complete_events[addr] = threading.Event()
+    manual_focus_user_choice[addr] = None
 
     acquisition_thread = None
 
@@ -353,12 +365,22 @@ def handle_client(conn, addr):
                     logger.debug(f"Manual focus not needed for {addr}")
                 continue
 
-            # Separate command for acknowledging manual focus completion
+            # Manual focus acknowledgment - retry autofocus
             if data == ExtendedCommand.ACKMF:
-                # Client acknowledges they have manually focused
+                # Client chose to retry autofocus after manual adjustment
+                manual_focus_user_choice[addr] = "retry"
                 manual_focus_complete_events[addr].set()
                 conn.sendall(b"ACK")
-                logger.info(f"Manual focus acknowledged by client {addr}")
+                logger.info(f"Manual focus acknowledged by client {addr} - will retry autofocus")
+                continue
+
+            # Skip autofocus retry - use current focus
+            if data == ExtendedCommand.SKIPAF:
+                # Client chose to use current focus position
+                manual_focus_user_choice[addr] = "skip"
+                manual_focus_complete_events[addr].set()
+                conn.sendall(b"ACK")
+                logger.info(f"Manual focus acknowledged by client {addr} - using current focus")
                 continue
 
             # ============ ACQUISITION COMMAND ============
