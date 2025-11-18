@@ -296,7 +296,7 @@ def get_angles_wb_from_settings(settings: Dict[str, Any]) -> Dict[float, List[fl
     ppm_wb = wb_settings.get("ppm", {})
 
     # Map standard angle names to numeric values
-    angle_mapping = {"crossed": 0.0, "uncrossed": 90.0, "positive": 5.0, "negative": -5.0}
+    angle_mapping = {"crossed": 0.0, "uncrossed": 90.0, "positive": 7.0, "negative": -7.0}
 
     for angle_name, angle_value in angle_mapping.items():
         if angle_name in ppm_wb:
@@ -319,8 +319,8 @@ def get_angles_wb_from_settings(settings: Dict[str, Any]) -> Dict[float, List[fl
         angles_wb = {
             0.0: [1.0, 1.0, 1.0],  # crossed
             90.0: [1.2, 1.0, 1.1],  # uncrossed
-            5.0: [1.0, 1.0, 1.0],  # positive
-            -5.0: [1.0, 1.0, 1.0],  # negative
+            7.0: [1.0, 1.0, 1.0],  # positive
+            -7.0: [1.0, 1.0, 1.0],  # negative
         }
 
     return angles_wb

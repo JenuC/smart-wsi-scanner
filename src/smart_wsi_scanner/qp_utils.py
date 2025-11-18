@@ -1239,7 +1239,7 @@ class BackgroundCorrectionUtils:
                         scaling_factor = target_intensity / bg_mean_all if bg_mean_all > 0 else 1.0
                         if logger:
                             logger.info(f"    Background mean intensity at 90°: {bg_mean_all:.1f}")
-                    else:  # Polarized angles (-5, 0, 5)
+                    else:  # Polarized angles (-7, 0, 7)
                         # Preserve the physical intensity level - only correct spatial variation
                         scaling_factor = 1.0  # No intensity scaling - preserve polarization physics
                         if logger:

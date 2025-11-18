@@ -591,7 +591,7 @@ def handle_client(conn, addr):
                                 )
 
                                 # Format exposures as angle:exposure pairs
-                                # e.g., "90:137.1,5:245.8,-5:155.2"
+                                # e.g., "90:137.1,7:245.8,-7:155.2"
                                 exposures_formatted = ",".join(
                                     f"{angle}:{exposure:.2f}"
                                     for angle, exposure in sorted(final_exposures.items())

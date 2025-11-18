@@ -204,7 +204,7 @@ class QuPathTestClient:
         sample_label: str,
         scan_type: str,
         region_name: str,
-        angles: str = "(0,5,-5,90)",
+        angles: str = "(0,7,-7,90)",
         monitor: bool = True,
     ):
         """Test ACQUIRE command with monitoring."""
@@ -248,7 +248,7 @@ class QuPathTestClient:
         yaml_path: str,
         output_path: str,
         modality: str,
-        angles: str = "(0,5,-5,90)",
+        angles: str = "(0,7,-7,90)",
         exposures: Optional[str] = None,
     ):
         """Test BGACQUIRE command."""
@@ -397,7 +397,7 @@ def main():
     parser.add_argument("--sample", help="Sample label for acquisition test")
     parser.add_argument("--scan-type", help="Scan type for acquisition test")
     parser.add_argument("--region", help="Region name for acquisition test")
-    parser.add_argument("--angles", default="(0,5,-5,90)", help="Angles for acquisition")
+    parser.add_argument("--angles", default="(0,7,-7,90)", help="Angles for acquisition")
     parser.add_argument("--modality", help="Modality for background acquisition")
     parser.add_argument("--output", help="Output path for background acquisition")
 
