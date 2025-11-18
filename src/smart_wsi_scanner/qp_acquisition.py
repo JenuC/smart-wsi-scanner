@@ -1171,13 +1171,13 @@ def get_target_intensity_for_background(modality: str, angle: float) -> float:
             return 245.0
         elif abs_angle in [7, 5]:
             # Same target for positive and negative angles
-            return 150.0  # ±7 or ±5 degrees
+            return 180.0  # ±7 or ±5 degrees
         elif abs_angle == 0:
             return 125.0
         else:
             # Default for unknown PPM angles
             logger.warning(f"Unknown PPM angle {angle}, using default target 150")
-            return 150.0
+            return 180.0
 
     # Default fallback
     logger.warning(f"Unknown modality {modality}, using default target 200")
