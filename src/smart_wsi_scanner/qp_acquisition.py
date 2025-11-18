@@ -64,7 +64,9 @@ def autofocus_with_manual_fallback(
         **autofocus_kwargs: Arguments to pass to hardware.autofocus()
 
     Returns:
-        float: Best focus Z position on success
+        tuple: (z_position, skip_all_autofocus) where:
+            - z_position (float): Best focus Z position
+            - skip_all_autofocus (bool): True if user chose to skip all remaining autofocus
 
     Raises:
         RuntimeError: If user cancels acquisition or no callback provided
@@ -74,8 +76,8 @@ def autofocus_with_manual_fallback(
 
         # Check if autofocus succeeded (returns float) or failed (returns dict)
         if isinstance(result, float):
-            # Success!
-            return result
+            # Success! Return Z position and skip_all_autofocus=False
+            return (result, False)
         elif isinstance(result, dict) and result.get('success') == False:
             # Autofocus failed
             logger.warning(f"Autofocus failed (attempt {attempt + 1}/{max_retries}): {result['message']}")
@@ -89,9 +91,9 @@ def autofocus_with_manual_fallback(
                 user_choice = request_manual_focus(retries_remaining)  # Pass retries info
 
                 if user_choice == "skip":
-                    # User chose to use current focus - return attempted Z position
-                    logger.info("User chose to use current focus position")
-                    return result['attempted_z']
+                    # User chose to use current focus - skip ALL remaining autofocus for this annotation
+                    logger.info("User chose to use current focus position - will skip autofocus for remaining tiles")
+                    return (result['attempted_z'], True)  # skip_all_autofocus=True
                 elif user_choice == "cancel":
                     # User chose to cancel acquisition
                     logger.warning("User cancelled acquisition during manual focus")
@@ -104,11 +106,11 @@ def autofocus_with_manual_fallback(
                     else:
                         # No retries left - shouldn't happen since button should be disabled
                         logger.warning("User chose retry but no retries remaining - using current focus")
-                        return result['attempted_z']
+                        return (result['attempted_z'], False)
                 else:
                     # Unknown choice - default to skip
                     logger.warning(f"Unknown user choice '{user_choice}' - using current focus")
-                    return result['attempted_z']
+                    return (result['attempted_z'], True)  # Treat unknown as skip all
             else:
                 # No callback provided, raise exception
                 raise RuntimeError(
@@ -663,6 +665,7 @@ def _acquisition_workflow(
         # Track whether we've performed the first successful autofocus with tissue
         # Use standard autofocus on first tissue, then adaptive for speed on subsequent
         first_tissue_autofocus_done = False
+        skip_all_autofocus = False  # Flag to skip autofocus if user chooses "use current focus"
 
         metadata_txt_for_positions = output_path / "image_positions_metadata.txt"
 
@@ -689,7 +692,8 @@ def _acquisition_workflow(
             t0 = log_timing(logger, "Stage XY movement command", t0)
 
             # Perform autofocus if needed (with tissue detection)
-            if pos_idx in dynamic_af_positions:
+            # Skip if user previously chose "use current focus" for this annotation
+            if pos_idx in dynamic_af_positions and not skip_all_autofocus:
                 logger.info(
                     f"Checking for autofocus at position {pos_idx}: X={pos.x}, Y={pos.y}, Z={pos.z}"
                 )
@@ -760,7 +764,7 @@ def _acquisition_workflow(
                     if not first_tissue_autofocus_done:
                         logger.info(f"  First tissue position - using STANDARD autofocus for accuracy")
                         t_af = time.perf_counter()
-                        new_z = autofocus_with_manual_fallback(
+                        new_z, skip_flag = autofocus_with_manual_fallback(
                             hardware=hardware,
                             logger=logger,
                             request_manual_focus=request_manual_focus,
@@ -776,7 +780,11 @@ def _acquisition_workflow(
                         )
                         t_af = log_timing(logger, "STANDARD autofocus", t_af)
                         first_tissue_autofocus_done = True
-                        logger.info(f"  Standard autofocus :: New Z {new_z}")
+                        skip_all_autofocus = skip_flag  # Set global flag if user chose to skip
+                        if skip_all_autofocus:
+                            logger.info(f"  Standard autofocus :: New Z {new_z} (autofocus skipped for remaining tiles)")
+                        else:
+                            logger.info(f"  Standard autofocus :: New Z {new_z}")
                     else:
                         # Get Z position before adaptive autofocus for drift detection
                         z_before_adaptive = hardware.get_current_position().z
@@ -805,7 +813,7 @@ def _acquisition_workflow(
                             logger.warning(f"  Falling back to STANDARD autofocus to re-establish baseline...")
 
                             t_af_recovery = time.perf_counter()
-                            new_z = autofocus_with_manual_fallback(
+                            new_z, skip_flag = autofocus_with_manual_fallback(
                                 hardware=hardware,
                                 logger=logger,
                                 request_manual_focus=request_manual_focus,
@@ -818,7 +826,11 @@ def _acquisition_workflow(
                                 score_metric=af_score_metric,
                             )
                             t_af_recovery = log_timing(logger, "STANDARD autofocus (drift recovery)", t_af_recovery)
-                            logger.info(f"  STANDARD autofocus (drift recovery) :: New Z {new_z}")
+                            skip_all_autofocus = skip_flag  # Update global flag if user chose to skip
+                            if skip_all_autofocus:
+                                logger.info(f"  STANDARD autofocus (drift recovery) :: New Z {new_z} (autofocus skipped for remaining tiles)")
+                            else:
+                                logger.info(f"  STANDARD autofocus (drift recovery) :: New Z {new_z}")
                 else:
                     reason = "blank tile (RGB)" if tissue_stats.get('brightness_rejected') else "insufficient texture/area"
                     logger.warning(
@@ -851,6 +863,9 @@ def _acquisition_workflow(
                         logger.info(f"Added position {next_af_pos} to autofocus queue")
                     else:
                         logger.warning(f"Could not find suitable position to defer autofocus to")
+            elif skip_all_autofocus and pos_idx in af_positions:
+                # User previously chose to skip autofocus for this annotation
+                logger.info(f"Skipping autofocus at position {pos_idx} (user chose to use current focus for all tiles)")
 
             if params["angles"]:
                 # Storage for birefringence image calculation
