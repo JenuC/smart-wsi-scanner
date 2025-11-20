@@ -1659,7 +1659,7 @@ class PolarizerCalibrationUtils:
         hardware,
         coarse_range_deg: float = 360.0,
         coarse_step_deg: float = 5.0,
-        fine_range_deg: float = 5.0,
+        fine_range_deg: float = 10.0,
         fine_step_deg: float = 0.1,
         exposure_ms: float = 10.0,
         channel: int = 1,
@@ -1685,7 +1685,7 @@ class PolarizerCalibrationUtils:
             hardware: PycromanagerHardware instance with PPM methods.
             coarse_range_deg: Full range to sweep in coarse stage (default: 360.0 deg).
             coarse_step_deg: Step size for coarse sweep (default: 5.0 deg).
-            fine_range_deg: Range around each minimum for fine sweep (default: 5.0 deg).
+            fine_range_deg: Range around each minimum for fine sweep (default: 10.0 deg, increased for optical stability).
             fine_step_deg: Step size for fine sweep (default: 0.1 deg).
             exposure_ms: Camera exposure time in milliseconds (default: 10.0).
             channel: Which RGB channel to analyze (0=R, 1=G, 2=B, None=mean).
@@ -1814,13 +1814,39 @@ class PolarizerCalibrationUtils:
         # Find local minima in coarse sweep
         inverted = -intensities_norm
         min_distance = int(len(coarse_hw_positions) / 4)  # At least 90 deg apart
+
+        # Try with default prominence first
         peaks, properties = find_peaks(inverted, prominence=0.1, distance=min_distance)
 
+        # If we didn't find 2 minima, try with lower prominence
         if len(peaks) < 2:
             logger_instance.warning(
-                f"Only found {len(peaks)} minimum. Expected 2 for full 360 deg sweep. "
-                "Continuing with found minima..."
+                f"Only found {len(peaks)} minimum with prominence=0.1. "
+                "Retrying with lower prominence threshold..."
             )
+            peaks, properties = find_peaks(inverted, prominence=0.05, distance=min_distance)
+
+        # If still only one, try finding the global minimum in opposite half
+        if len(peaks) < 2:
+            logger_instance.warning(
+                f"Still only found {len(peaks)} minimum. "
+                "Searching for second minimum in opposite 180deg region..."
+            )
+            # If we have one peak, look for minimum in opposite half of sweep
+            if len(peaks) == 1:
+                first_min_idx = peaks[0]
+                half_len = len(coarse_intensities) // 2
+
+                # Search in opposite half
+                if first_min_idx < half_len:
+                    # First minimum in first half, search second half
+                    second_half_min_idx = half_len + np.argmin(coarse_intensities[half_len:])
+                else:
+                    # First minimum in second half, search first half
+                    second_half_min_idx = np.argmin(coarse_intensities[:half_len])
+
+                peaks = np.array([peaks[0], second_half_min_idx])
+                logger_instance.info(f"  Found second minimum at index {second_half_min_idx}")
 
         approximate_minima = coarse_hw_positions[peaks].tolist()
         logger_instance.info(f"Found {len(approximate_minima)} approximate minima:")
@@ -1927,4 +1953,110 @@ class PolarizerCalibrationUtils:
             'recommended_offset': recommended_offset,
             'optical_angles': optical_angles,
             'hw_per_deg': hw_per_deg
+        }
+
+    @staticmethod
+    def calibrate_hardware_offset_with_stability_check(
+        hardware,
+        num_runs: int = 3,
+        stability_threshold_counts: float = 50.0,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Run hardware offset calibration multiple times to check optical stability.
+
+        Performs the two-stage calibration multiple times in succession and validates
+        that results are consistent. This helps identify optical instability issues
+        such as loose mounts, thermal drift, or mechanical backlash.
+
+        Args:
+            hardware: PycromanagerHardware instance
+            num_runs: Number of calibration runs to perform (default: 3)
+            stability_threshold_counts: Maximum acceptable variation in encoder counts (default: 50.0 = 0.05deg)
+            **kwargs: Additional arguments passed to calibrate_hardware_offset_two_stage
+
+        Returns:
+            Dictionary with calibration results plus stability metrics:
+                - 'all_runs': List of all calibration results
+                - 'recommended_offset': Average offset from all runs
+                - 'offset_std': Standard deviation of offsets (stability metric)
+                - 'offset_range': Max - min offsets (stability metric)
+                - 'is_stable': Boolean indicating if variation < threshold
+                - 'stability_warning': Warning message if unstable
+
+        Raises:
+            RuntimeError: If optical instability exceeds threshold
+        """
+        logger_instance = kwargs.get('logger_instance', logger)
+
+        logger_instance.info("="*70)
+        logger_instance.info("POLARIZER CALIBRATION WITH STABILITY CHECK")
+        logger_instance.info("="*70)
+        logger_instance.info(f"Running {num_runs} calibrations to validate optical stability")
+        logger_instance.info(f"Stability threshold: +/-{stability_threshold_counts:.1f} encoder counts")
+
+        all_results = []
+        all_offsets = []
+
+        for run_num in range(1, num_runs + 1):
+            logger_instance.info(f"\n{'='*70}")
+            logger_instance.info(f"CALIBRATION RUN {run_num}/{num_runs}")
+            logger_instance.info(f"{'='*70}")
+
+            result = PolarizerCalibrationUtils.calibrate_hardware_offset_two_stage(
+                hardware, **kwargs
+            )
+
+            all_results.append(result)
+            all_offsets.append(result['recommended_offset'])
+
+            logger_instance.info(f"Run {run_num} completed: offset = {result['recommended_offset']:.1f}")
+
+            # Brief pause between runs to allow hardware to settle
+            if run_num < num_runs:
+                import time
+                time.sleep(2.0)
+
+        # Calculate stability metrics
+        all_offsets = np.array(all_offsets)
+        mean_offset = np.mean(all_offsets)
+        std_offset = np.std(all_offsets)
+        range_offset = np.max(all_offsets) - np.min(all_offsets)
+
+        logger_instance.info(f"\n{'='*70}")
+        logger_instance.info("STABILITY ANALYSIS")
+        logger_instance.info(f"{'='*70}")
+        logger_instance.info(f"Offsets from {num_runs} runs: {all_offsets}")
+        logger_instance.info(f"Mean offset: {mean_offset:.1f}")
+        logger_instance.info(f"Std deviation: {std_offset:.2f} counts ({std_offset/1000:.4f} deg)")
+        logger_instance.info(f"Range (max-min): {range_offset:.1f} counts ({range_offset/1000:.4f} deg)")
+
+        is_stable = range_offset <= stability_threshold_counts
+
+        if is_stable:
+            logger_instance.info(f"RESULT: STABLE - Variation {range_offset:.1f} counts within threshold {stability_threshold_counts:.1f}")
+        else:
+            warning_msg = (
+                f"WARNING: OPTICAL INSTABILITY DETECTED!\n"
+                f"  Variation: {range_offset:.1f} counts ({range_offset/1000:.3f} deg)\n"
+                f"  Threshold: {stability_threshold_counts:.1f} counts ({stability_threshold_counts/1000:.3f} deg)\n"
+                f"  Possible causes:\n"
+                f"    - Loose polarizer/analyzer mounts\n"
+                f"    - Thermal drift in optical components\n"
+                f"    - Mechanical backlash in rotation stage\n"
+                f"    - Vibration or external disturbances\n"
+                f"  Recommendation: Check hardware before proceeding with acquisitions"
+            )
+            logger_instance.warning(warning_msg)
+
+        return {
+            'all_runs': all_results,
+            'recommended_offset': float(mean_offset),
+            'offset_std': float(std_offset),
+            'offset_range': float(range_offset),
+            'is_stable': is_stable,
+            'stability_warning': None if is_stable else warning_msg,
+            'individual_offsets': all_offsets.tolist(),
+            'rotation_device': all_results[0]['rotation_device'],
+            'hw_per_deg': all_results[0]['hw_per_deg']
         }

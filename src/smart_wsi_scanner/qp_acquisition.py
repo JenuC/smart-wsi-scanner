@@ -1678,11 +1678,13 @@ def polarizer_calibration_workflow(
         )
         logger.info(f"Exposure: {exposure_ms} ms")
 
-        result = PolarizerCalibrationUtils.calibrate_hardware_offset_two_stage(
+        result = PolarizerCalibrationUtils.calibrate_hardware_offset_with_stability_check(
             hardware=hardware,
+            num_runs=3,  # Run 3 times to validate stability
+            stability_threshold_counts=50.0,  # Warn if variation > 0.05 deg
             coarse_range_deg=360.0,  # Full rotation
             coarse_step_deg=step_size,  # Use user-specified step size for coarse
-            fine_range_deg=step_size,  # Fine sweep range = coarse step size
+            fine_range_deg=10.0,  # Increased from 5.0 for better safety margin
             fine_step_deg=0.1,  # Fine step for precise positioning
             exposure_ms=exposure_ms,
             channel=1,  # Green channel
@@ -1718,13 +1720,15 @@ def polarizer_calibration_workflow(
             f.write("CALIBRATION PARAMETERS:\n")
             f.write(f"  Coarse Range: 360.0 deg\n")
             f.write(f"  Coarse Step Size: {step_size} deg\n")
-            f.write(f"  Fine Range: +/-{step_size} deg around each minimum\n")
+            f.write(f"  Fine Range: +/-10.0 deg around each minimum\n")
             f.write(f"  Fine Step Size: 0.1 deg\n")
             f.write(f"  Exposure: {exposure_ms} ms\n")
-            f.write(f"  Channel: Green (1)\n\n")
+            f.write(f"  Channel: Green (1)\n")
+            f.write(f"  Stability runs: {len(result.get('all_runs', [result]))}\n\n")
 
             f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
-            coarse_intensities = result["coarse_intensities"]
+            primary_result = result.get('all_runs', [result])[0] if 'all_runs' in result else result
+            coarse_intensities = primary_result["coarse_intensities"]
             f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
             f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
             f.write(
@@ -1732,13 +1736,35 @@ def polarizer_calibration_workflow(
             )
 
             f.write("=" * 80 + "\n")
+            f.write("STABILITY CHECK RESULTS\n")
+            f.write("=" * 80 + "\n\n")
+
+            f.write(f"Number of calibration runs: {len(result.get('all_runs', [result]))}\n")
+            if 'offset_std' in result:
+                f.write(f"Recommended offset (average): {result['recommended_offset']:.1f} counts\n")
+                f.write(f"Individual offsets: {result['individual_offsets']}\n")
+                f.write(f"Standard deviation: {result['offset_std']:.2f} counts ({result['offset_std']/1000:.4f} deg)\n")
+                f.write(f"Range (max-min): {result['offset_range']:.1f} counts ({result['offset_range']/1000:.4f} deg)\n")
+                f.write(f"Stability: {'PASS' if result['is_stable'] else 'FAIL'}\n")
+                if not result['is_stable']:
+                    f.write(f"\nWARNING: Optical instability detected!\n")
+                    f.write(f"Variation of {result['offset_range']:.1f} counts exceeds threshold of 50.0 counts.\n")
+                    f.write(f"Check polarizer/analyzer mounts and rotation stage for mechanical issues.\n")
+                f.write("\n")
+            else:
+                f.write("Single run calibration (no stability check)\n\n")
+
+            f.write("=" * 80 + "\n")
             f.write("CALIBRATION RESULTS\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write(f"Found {len(result['exact_minima'])} crossed polarizer positions:\n\n")
+            # Get the first run's results (or single result if no stability check)
+            primary_result = result.get('all_runs', [result])[0] if 'all_runs' in result else result
+
+            f.write(f"Found {len(primary_result['exact_minima'])} crossed polarizer positions:\n\n")
 
             for i, (hw_pos, opt_angle) in enumerate(
-                zip(result["exact_minima"], result["optical_angles"])
+                zip(primary_result["exact_minima"], primary_result["optical_angles"])
             ):
                 f.write(f"  Minimum {i+1}:\n")
                 f.write(f"    Hardware Position: {hw_pos:.1f} encoder counts\n")
@@ -1747,20 +1773,20 @@ def polarizer_calibration_workflow(
                 )
 
                 # Find corresponding fine sweep result
-                for fine_result in result["fine_results"]:
+                for fine_result in primary_result["fine_results"]:
                     if abs(fine_result["exact_position"] - hw_pos) < 0.1:
                         f.write(f"    Intensity: {fine_result['exact_intensity']:.1f}\n")
                         break
                 f.write("\n")
 
             # Calculate separation between minima
-            if len(result["exact_minima"]) >= 2:
-                separation = abs(result["exact_minima"][1] - result["exact_minima"][0])
-                separation_deg = separation / result["hw_per_deg"]
+            if len(primary_result["exact_minima"]) >= 2:
+                separation = abs(primary_result["exact_minima"][1] - primary_result["exact_minima"][0])
+                separation_deg = separation / primary_result["hw_per_deg"]
                 f.write(
                     f"Separation between minima: {separation:.1f} counts ({separation_deg:.1f} deg)\n"
                 )
-                f.write(f"Expected: {180.0 * result['hw_per_deg']:.1f} counts (180.0 deg)\n\n")
+                f.write(f"Expected: {180.0 * primary_result['hw_per_deg']:.1f} counts (180.0 deg)\n\n")
 
             f.write("\n" + "=" * 80 + "\n")
             f.write("CONFIG_PPM.YML UPDATE RECOMMENDATIONS\n")
@@ -1819,26 +1845,26 @@ def polarizer_calibration_workflow(
             f.write(f"  Channel: Green (1)\n\n")
 
             f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
-            coarse_intensities = result['coarse_intensities']
+            coarse_intensities = primary_result['coarse_intensities']
             f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
             f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
             f.write(f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n")
 
             f.write("=" * 80 + "\n")
-            f.write("RAW DATA - COARSE SWEEP\n")
+            f.write("RAW DATA - COARSE SWEEP (RUN 1)\n")
             f.write("=" * 80 + "\n\n")
 
             f.write("Hardware Position (counts), Intensity\n")
             for hw_pos, intensity in zip(
-                result["coarse_hardware_positions"], result["coarse_intensities"]
+                primary_result["coarse_hardware_positions"], primary_result["coarse_intensities"]
             ):
                 f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
 
             f.write("\n" + "=" * 80 + "\n")
-            f.write("RAW DATA - FINE SWEEPS\n")
+            f.write("RAW DATA - FINE SWEEPS (RUN 1)\n")
             f.write("=" * 80 + "\n\n")
 
-            for i, fine_result in enumerate(result["fine_results"]):
+            for i, fine_result in enumerate(primary_result["fine_results"]):
                 f.write(
                     f"\nFine Sweep {i+1} (centered on {fine_result['approximate_position']:.1f}):\n"
                 )
