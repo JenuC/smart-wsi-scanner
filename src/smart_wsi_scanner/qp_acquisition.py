@@ -1171,7 +1171,7 @@ def get_target_intensity_for_background(modality: str, angle: float) -> float:
             return 245.0
         elif abs_angle in [7, 5]:
             # Same target for positive and negative angles
-            return 170.0  # ±7 or ±5 degrees (lowered to match achievable intensity)
+            return 160.0  # ±7 or ±5 degrees (lowered to match achievable intensity)
         elif abs_angle == 0:
             return 125.0
         else:
