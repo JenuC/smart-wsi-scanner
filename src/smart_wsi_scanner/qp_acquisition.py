@@ -1741,8 +1741,12 @@ def polarizer_calibration_workflow(
 
             f.write(f"Number of calibration runs: {len(result.get('all_runs', [result]))}\n")
             if 'offset_std' in result:
-                f.write(f"Recommended offset (average): {result['recommended_offset']:.1f} counts\n")
-                f.write(f"Individual offsets: {result['individual_offsets']}\n")
+                f.write(f"Recommended offset (normalized average): {result['recommended_offset']:.1f} counts\n")
+                f.write(f"Individual offsets (raw): {result['individual_offsets']}\n")
+                if 'normalized_offsets' in result:
+                    f.write(f"Individual offsets (normalized to 0-360 deg): {result['normalized_offsets']}\n")
+                    f.write(f"Note: Raw offsets differ by full rotations due to continuous stage rotation.\n")
+                    f.write(f"      Normalized offsets show true repeatability within a single 360 deg range.\n")
                 f.write(f"Standard deviation: {result['offset_std']:.2f} counts ({result['offset_std']/1000:.4f} deg)\n")
                 f.write(f"Range (max-min): {result['offset_range']:.1f} counts ({result['offset_range']/1000:.4f} deg)\n")
                 f.write(f"Stability: {'PASS' if result['is_stable'] else 'FAIL'}\n")
