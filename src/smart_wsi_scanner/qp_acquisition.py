@@ -1807,9 +1807,10 @@ def polarizer_calibration_workflow(
             )
 
             # If there's a second minimum, suggest it as the other crossed position
-            if len(result["exact_minima"]) >= 2:
-                other_angle = result["optical_angles"][1]
-                other_hw = result["exact_minima"][1]
+            # Use primary_result (first run) for exact_minima, not the top-level result
+            if len(primary_result["exact_minima"]) >= 2:
+                other_angle = primary_result["optical_angles"][1]
+                other_hw = primary_result["exact_minima"][1]
                 f.write(
                     "    # OR tick: {:.0f}   # Alternate crossed (hardware: {:.1f})\n".format(
                         other_angle, other_hw
@@ -1839,7 +1840,7 @@ def polarizer_calibration_workflow(
             f.write("CALIBRATION PARAMETERS:\n")
             f.write(f"  Coarse Range: 360.0 deg\n")
             f.write(f"  Coarse Step Size: {step_size} deg\n")
-            f.write(f"  Fine Range: +/-{step_size} deg around each minimum\n")
+            f.write(f"  Fine Range: +/-10.0 deg around each minimum\n")
             f.write(f"  Fine Step Size: 0.1 deg\n")
             f.write(f"  Exposure: {exposure_ms} ms\n")
             f.write(f"  Channel: Green (1)\n\n")
