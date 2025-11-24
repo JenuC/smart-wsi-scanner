@@ -934,6 +934,9 @@ class TifWriterUtils:
 
         # Calculate absolute difference per channel and sum across RGB
         # |R1-R2| + |G1-G2| + |B1-B2|
+
+        ## this wont work @MIKE!
+
         abs_diff = np.abs(img1_i16 - img2_i16)
         sum_abs_diff = np.sum(abs_diff, axis=2)
 
