@@ -33,7 +33,6 @@ from smart_wsi_scanner.tests.test_client import QuPathTestClient
 from smart_wsi_scanner.qp_utils import (
     PolarizerCalibrationUtils,
     BackgroundCorrectionUtils,
-    QPScope
 )
 from smart_wsi_scanner.qp_server_config import ExtendedCommand, END_MARKER
 from smart_wsi_scanner.config import ConfigurationManager
