@@ -35,7 +35,7 @@ from smart_wsi_scanner.qp_utils import (
     BackgroundCorrectionUtils,
 )
 from smart_wsi_scanner.qp_server_config import ExtendedCommand, END_MARKER
-from smart_wsi_scanner.config import ConfigurationManager
+from smart_wsi_scanner.config import ConfigManager
 
 # Import the analysis modules from parent directory
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -77,8 +77,8 @@ class PPMRotationSensitivityTester:
         self.setup_logging()
 
         # Load configuration
-        self.config_manager = ConfigurationManager(str(self.config_yaml))
-        self.config = self.config_manager.config
+        self.config_manager = ConfigManager()
+        self.config = self.config_manager.load_config_file(str(self.config_yaml))
 
         # Initialize client connection
         self.client = QuPathTestClient(host=host, port=port)
@@ -391,31 +391,30 @@ class PPMRotationSensitivityTester:
         output_folder = self.output_dir / "polarizer_calibration"
         output_folder.mkdir(exist_ok=True)
 
-        try:
-            # Run calibration sweep using the utility
-            results = self.pol_utils.calibrate_hardware_offset_two_stage(
-                yaml_file_path=str(self.config_yaml),
-                output_folder_path=str(output_folder),
-                start_angle=0,
-                end_angle=180,
-                coarse_step=5.0,
-                fine_step=0.5,
-                exposure_ms=10.0,
-                hardware=None,  # Will be created by utility
-                config_manager=self.config_manager,
-                logger=self.logger
-            )
+        # NOTE: calibrate_hardware_offset_two_stage requires direct hardware access
+        # The actual method signature is:
+        #   calibrate_hardware_offset_two_stage(hardware, coarse_range_deg, coarse_step_deg,
+        #                                       fine_range_deg, fine_step_deg, exposure_ms,
+        #                                       channel, logger_instance)
+        # This test currently connects via socket to qp_server and doesn't have direct
+        # hardware access. To use this calibration, either:
+        #   1. Run calibration through qp_server command protocol
+        #   2. Or refactor to get hardware object from the server connection
 
-            self.logger.info(f"Calibration complete:")
-            self.logger.info(f"  Crossed positions: {results.get('crossed_positions', [])}")
-            self.logger.info(f"  Optimal exposure: {results.get('optimal_exposure', 'N/A')}")
+        self.logger.warning(
+            "Polarizer calibration skipped - requires direct hardware access. "
+            "Use qp_server commands for calibration instead."
+        )
 
-            self.test_results['polarizer_calibration'] = results
-            return results
+        # Placeholder results
+        results = {
+            'status': 'skipped',
+            'reason': 'Direct hardware access required - not available via socket connection',
+            'suggestion': 'Run calibration through qp_server CALIBRATE command'
+        }
 
-        except Exception as e:
-            self.logger.error(f"Polarizer calibration failed: {e}")
-            return {}
+        self.test_results['polarizer_calibration'] = results
+        return results
 
     def analyze_results(self) -> Dict:
         """
