@@ -58,3 +58,4 @@ class ExtendedCommand:
     REQMANF = b"reqmanf_"  # Check if manual focus is requested
     ACKMF = b"ackmf___"  # Acknowledge manual focus - retry autofocus
     SKIPAF = b"skipaf__"  # Skip autofocus retry - use current focus
+    AFBENCH = b"afbench_"  # Run autofocus parameter benchmark

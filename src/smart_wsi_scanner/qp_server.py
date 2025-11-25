@@ -908,6 +908,143 @@ def handle_client(conn, addr):
 
                 continue
 
+            if data == ExtendedCommand.AFBENCH:
+                logger.info(f"Client {addr} requested autofocus benchmark")
+
+                # Read the message with parameters
+                message_parts = []
+                total_bytes = 0
+                start_time = time.time()
+
+                conn.settimeout(5.0)
+
+                try:
+                    while True:
+                        chunk = conn.recv(1024)
+                        if not chunk:
+                            logger.error(
+                                "Connection closed while reading benchmark message"
+                            )
+                            conn.sendall(b"FAILED:Connection closed")
+                            break
+
+                        message_parts.append(chunk.decode("utf-8"))
+                        total_bytes += len(chunk)
+
+                        full_message = "".join(message_parts)
+
+                        if "END_MARKER" in full_message:
+                            message = full_message.replace("END_MARKER", "").strip()
+
+                            # Parse the message
+                            params = {}
+
+                            # Split by known flags
+                            flags = ["--reference_z", "--output", "--distances", "--quick", "--objective"]
+
+                            for i, flag in enumerate(flags):
+                                if flag in message:
+                                    start_idx = message.index(flag) + len(flag)
+                                    end_idx = len(message)
+                                    for next_flag in flags[i + 1:]:
+                                        if next_flag in message[start_idx:]:
+                                            next_pos = message.index(next_flag, start_idx)
+                                            if next_pos < end_idx:
+                                                end_idx = next_pos
+                                                break
+
+                                    value = message[start_idx:end_idx].strip()
+
+                                    if flag == "--reference_z":
+                                        params["reference_z"] = float(value)
+                                    elif flag == "--output":
+                                        params["output_folder"] = value
+                                    elif flag == "--distances":
+                                        # Parse comma-separated distances
+                                        params["test_distances"] = [float(d.strip()) for d in value.split(",")]
+                                    elif flag == "--quick":
+                                        params["quick_mode"] = value.lower() in ("true", "1", "yes")
+                                    elif flag == "--objective":
+                                        params["objective"] = value
+
+                            # Validate required parameters
+                            required = ["reference_z", "output_folder"]
+                            missing = [key for key in required if key not in params]
+                            if missing:
+                                error_msg = f"Missing required parameters: {missing}"
+                                logger.error(error_msg)
+                                conn.sendall(f"FAILED:{error_msg}".encode())
+                                break
+
+                            # Send immediate acknowledgment
+                            try:
+                                ack_response = f"STARTED:{params['output_folder']}".encode()
+                                conn.sendall(ack_response)
+                                logger.info("Sent STARTED acknowledgment for autofocus benchmark")
+
+                                # Execute benchmark
+                                from smart_wsi_scanner.qp_autofocus_benchmark import (
+                                    run_autofocus_benchmark_from_server,
+                                )
+
+                                result = run_autofocus_benchmark_from_server(
+                                    hardware=hardware,
+                                    config_manager=config_manager,
+                                    reference_z=params["reference_z"],
+                                    output_folder=params["output_folder"],
+                                    test_distances=params.get("test_distances"),
+                                    quick_mode=params.get("quick_mode", False),
+                                    objective=params.get("objective"),
+                                    logger=logger,
+                                )
+
+                                # Check for safety violation
+                                if result.get("safety_violation"):
+                                    error_msg = result.get("error", "Safety limit exceeded")
+                                    response = f"FAILED:SAFETY:{error_msg}".encode()
+                                    conn.sendall(response)
+                                    logger.error(f"Autofocus benchmark SAFETY VIOLATION: {error_msg}")
+                                else:
+                                    # Format response
+                                    success_rate = result.get("success_rate", 0)
+                                    total_trials = result.get("total_trials", 0)
+                                    results_dir = result.get("results_directory", "")
+
+                                    response = f"SUCCESS:Benchmark complete. {total_trials} trials, {success_rate:.1%} success rate|{results_dir}".encode()
+                                    conn.sendall(response)
+                                    logger.info(f"Autofocus benchmark completed: {total_trials} trials")
+
+                            except Exception as e:
+                                logger.error(
+                                    f"Autofocus benchmark failed: {str(e)}", exc_info=True
+                                )
+                                response = f"FAILED:{str(e)}".encode()
+                                conn.sendall(response)
+
+                            break
+
+                        # Safety checks
+                        if total_bytes > 10000:
+                            logger.error(f"Benchmark message too large: {total_bytes} bytes")
+                            conn.sendall(b"FAILED:Message too large")
+                            break
+
+                        if time.time() - start_time > 10:
+                            logger.error("Timeout reading benchmark message")
+                            conn.sendall(b"FAILED:Timeout waiting for complete message")
+                            break
+
+                except socket.timeout:
+                    logger.error(f"Timeout reading benchmark message from {addr}")
+                    conn.sendall(b"FAILED:Timeout reading message")
+                except Exception as e:
+                    logger.error(f"Error in autofocus benchmark: {str(e)}", exc_info=True)
+                    conn.sendall(f"FAILED:{str(e)}".encode())
+                finally:
+                    conn.settimeout(None)
+
+                continue
+
             if data == ExtendedCommand.POLCAL:
                 logger.info(f"Client {addr} requested polarizer calibration")
 
