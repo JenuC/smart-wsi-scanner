@@ -153,6 +153,43 @@ class PPMRotationSensitivityTester:
             except Exception as e:
                 self.logger.error(f"Error during disconnect: {e}")
 
+    def _drain_socket(self):
+        """Drain any leftover data from the socket buffer."""
+        if not self.client.socket:
+            return
+        try:
+            self.client.socket.setblocking(False)
+            while True:
+                try:
+                    data = self.client.socket.recv(4096)
+                    if not data:
+                        break
+                    self.logger.debug(f"Drained {len(data)} bytes from socket")
+                except BlockingIOError:
+                    break  # No more data
+                except Exception:
+                    break
+        finally:
+            self.client.socket.setblocking(True)
+            self.client.socket.settimeout(10.0)
+
+    def _reconnect(self):
+        """Reconnect to the server to reset socket state."""
+        self.logger.info("Reconnecting to reset socket state...")
+        try:
+            if self.client.socket:
+                try:
+                    self.client.socket.close()
+                except:
+                    pass
+                self.client.socket = None
+            self.connected = False
+            time.sleep(0.5)
+            return self.connect()
+        except Exception as e:
+            self.logger.error(f"Reconnection failed: {e}")
+            return False
+
     def acquire_at_angle(self, angle: float, save_name: str,
                         exposure_ms: float = None) -> Optional[Path]:
         """
@@ -169,6 +206,9 @@ class PPMRotationSensitivityTester:
         if not self.connected:
             self.logger.error("Not connected to server")
             return None
+
+        # Drain any leftover data from previous operations
+        self._drain_socket()
 
         try:
             # Move to angle
@@ -192,70 +232,87 @@ class PPMRotationSensitivityTester:
                 f"--yaml {self.config_yaml} "
                 f"--output {output_path.parent} "
                 f"--modality {self.config.get('modality', 'ppm_20x')} "
-                f"--angles ({angle}) "
+                f"--angles {angle} "
             )
 
             if exposure_ms:
-                message += f"--exposures ({exposure_ms}) "
+                message += f"--exposures {exposure_ms} "
 
             # Note: Server expects literal "END_MARKER" string, not the END_MARKER constant
             # which is defined as "ENDOFSTR". The Java client sends "END_MARKER" literally.
             message += "END_MARKER"
 
             # Send BGACQUIRE command
-            self.logger.debug(f"Sending BGACQUIRE command")
+            self.logger.debug(f"Sending BGACQUIRE: {message[:80]}...")
             self.client.socket.sendall(ExtendedCommand.BGACQUIRE)
             self.client.socket.sendall(message.encode('utf-8'))
 
-            # Wait for acknowledgment
-            ack = self.client.socket.recv(256).decode()
-            self.logger.debug(f"ACK: {ack}")
+            # Set timeout and wait for response
+            self.client.socket.settimeout(30.0)
 
-            if ack.startswith("STARTED:"):
-                # Monitor acquisition with timeout
-                self.logger.debug("Monitoring acquisition progress")
-                max_wait_seconds = 60  # Maximum time to wait for acquisition
-                start_wait = time.time()
-                last_status = None
+            # Read response - collect until we see a complete message
+            response_data = b""
+            max_wait = 30.0
+            start_time = time.time()
 
-                while (time.time() - start_wait) < max_wait_seconds:
-                    time.sleep(0.5)
-                    status = self.client.test_status()
+            while (time.time() - start_time) < max_wait:
+                try:
+                    chunk = self.client.socket.recv(1024)
+                    if not chunk:
+                        break
+                    response_data += chunk
 
-                    # Only log status changes to reduce spam
-                    if status != last_status:
-                        self.logger.debug(f"Status changed: {last_status} -> {status}")
-                        last_status = status
+                    # Try to decode and check for completion markers
+                    try:
+                        response = response_data.decode('utf-8')
+                        if 'SUCCESS:' in response or 'FAILED:' in response:
+                            break
+                    except UnicodeDecodeError:
+                        # Not valid UTF-8 yet, keep reading
+                        pass
 
-                    if status == "COMPLETED":
-                        # Get final response
-                        result = self.client.socket.recv(1024).decode()
-                        if result.startswith("SUCCESS:"):
-                            self.logger.info(f"Successfully acquired image at {angle} deg -> {save_name}")
-                            return output_path
-                        else:
-                            self.logger.error(f"Acquisition failed: {result}")
-                            return None
-                    elif status in ["FAILED", "CANCELLED"]:
-                        self.logger.error(f"Acquisition {status}")
-                        return None
-                    elif status == "IDLE":
-                        # Server may have completed and reset to IDLE
-                        # Check if the output file exists
-                        time.sleep(0.5)  # Brief wait for file system
-                        if output_path.exists():
-                            self.logger.info(f"Acquisition complete (status IDLE, file exists): {save_name}")
-                            return output_path
-                        # Otherwise keep waiting - might not have started yet
+                    # Brief pause before next read attempt
+                    time.sleep(0.1)
+                except socket.timeout:
+                    break
 
-                self.logger.error(f"Acquisition timed out after {max_wait_seconds}s (last status: {status})")
+            # Parse response
+            try:
+                response = response_data.decode('utf-8', errors='replace')
+            except:
+                response = str(response_data)
+
+            self.logger.debug(f"Response: {response[:100]}...")
+
+            if 'SUCCESS:' in response:
+                self.logger.info(f"Successfully acquired image at {angle} deg -> {save_name}")
+                # Give time for file to be written
+                time.sleep(1.0)
+                return output_path
+            elif 'STARTED:' in response:
+                # Acquisition started, wait for completion
+                self.logger.debug("Acquisition started, waiting for completion...")
+                time.sleep(5.0)  # Wait for acquisition to complete
+
+                # Check if file exists
+                if output_path.exists():
+                    self.logger.info(f"Acquisition complete (file exists): {save_name}")
+                    return output_path
+
+                # Read any additional response
+                self._drain_socket()
+                self.logger.warning(f"Acquisition may have completed but file not found: {output_path}")
                 return None
             else:
-                self.logger.error(f"Failed to start acquisition: {ack}")
+                self.logger.error(f"Acquisition failed: {response[:200]}")
+                # Reconnect to reset socket state after failure
+                self._reconnect()
                 return None
 
         except Exception as e:
             self.logger.error(f"Error acquiring at angle {angle}: {e}")
+            # Reconnect to reset socket state after error
+            self._reconnect()
             return None
 
     def run_standard_angles_test(self) -> Dict[float, Path]:
