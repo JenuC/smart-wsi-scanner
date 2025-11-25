@@ -2022,15 +2022,28 @@ class PolarizerCalibrationUtils:
 
         # Calculate stability metrics
         all_offsets = np.array(all_offsets)
-        mean_offset = np.mean(all_offsets)
-        std_offset = np.std(all_offsets)
-        range_offset = np.max(all_offsets) - np.min(all_offsets)
+
+        # Get hardware conversion factor from first run
+        hw_per_deg = all_results[0]['hw_per_deg']
+        full_rotation_counts = 360.0 * hw_per_deg  # e.g., 360000 for PI stage
+
+        # Normalize offsets to a single 360-degree range
+        # The stage may have rotated multiple full turns between runs
+        normalized_offsets = all_offsets % full_rotation_counts
+
+        # Calculate statistics on normalized offsets
+        mean_offset = np.mean(all_offsets)  # Keep original mean for recommended offset
+        normalized_mean = np.mean(normalized_offsets)
+        std_offset = np.std(normalized_offsets)  # Use normalized for std
+        range_offset = np.max(normalized_offsets) - np.min(normalized_offsets)  # Use normalized for range
 
         logger_instance.info(f"\n{'='*70}")
         logger_instance.info("STABILITY ANALYSIS")
         logger_instance.info(f"{'='*70}")
-        logger_instance.info(f"Offsets from {num_runs} runs: {all_offsets}")
-        logger_instance.info(f"Mean offset: {mean_offset:.1f}")
+        logger_instance.info(f"Raw offsets from {num_runs} runs: {all_offsets}")
+        logger_instance.info(f"Normalized offsets (within 0-360 deg): {normalized_offsets}")
+        logger_instance.info(f"Mean offset (for config): {mean_offset:.1f}")
+        logger_instance.info(f"Normalized mean: {normalized_mean:.1f}")
         logger_instance.info(f"Std deviation: {std_offset:.2f} counts ({std_offset/1000:.4f} deg)")
         logger_instance.info(f"Range (max-min): {range_offset:.1f} counts ({range_offset/1000:.4f} deg)")
 
@@ -2054,12 +2067,13 @@ class PolarizerCalibrationUtils:
 
         return {
             'all_runs': all_results,
-            'recommended_offset': float(mean_offset),
+            'recommended_offset': float(normalized_mean),  # Use normalized mean for recommended offset
             'offset_std': float(std_offset),
             'offset_range': float(range_offset),
             'is_stable': is_stable,
             'stability_warning': None if is_stable else warning_msg,
             'individual_offsets': all_offsets.tolist(),
+            'normalized_offsets': normalized_offsets.tolist(),  # Add normalized offsets
             'rotation_device': all_results[0]['rotation_device'],
             'hw_per_deg': all_results[0]['hw_per_deg']
         }

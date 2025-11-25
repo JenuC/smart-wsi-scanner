@@ -1741,8 +1741,12 @@ def polarizer_calibration_workflow(
 
             f.write(f"Number of calibration runs: {len(result.get('all_runs', [result]))}\n")
             if 'offset_std' in result:
-                f.write(f"Recommended offset (average): {result['recommended_offset']:.1f} counts\n")
-                f.write(f"Individual offsets: {result['individual_offsets']}\n")
+                f.write(f"Recommended offset (normalized average): {result['recommended_offset']:.1f} counts\n")
+                f.write(f"Individual offsets (raw): {result['individual_offsets']}\n")
+                if 'normalized_offsets' in result:
+                    f.write(f"Individual offsets (normalized to 0-360 deg): {result['normalized_offsets']}\n")
+                    f.write(f"Note: Raw offsets differ by full rotations due to continuous stage rotation.\n")
+                    f.write(f"      Normalized offsets show true repeatability within a single 360 deg range.\n")
                 f.write(f"Standard deviation: {result['offset_std']:.2f} counts ({result['offset_std']/1000:.4f} deg)\n")
                 f.write(f"Range (max-min): {result['offset_range']:.1f} counts ({result['offset_range']/1000:.4f} deg)\n")
                 f.write(f"Stability: {'PASS' if result['is_stable'] else 'FAIL'}\n")
@@ -1861,19 +1865,22 @@ def polarizer_calibration_workflow(
             ):
                 f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
 
-            f.write("\n" + "=" * 80 + "\n")
-            f.write("RAW DATA - FINE SWEEPS (RUN 1)\n")
-            f.write("=" * 80 + "\n\n")
+            # Write raw data for all runs if stability check was performed
+            all_runs = result.get('all_runs', [primary_result])
+            for run_idx, run_result in enumerate(all_runs, 1):
+                f.write("\n" + "=" * 80 + "\n")
+                f.write(f"RAW DATA - FINE SWEEPS (RUN {run_idx})\n")
+                f.write("=" * 80 + "\n\n")
 
-            for i, fine_result in enumerate(primary_result["fine_results"]):
-                f.write(
-                    f"\nFine Sweep {i+1} (centered on {fine_result['approximate_position']:.1f}):\n"
-                )
-                f.write("Hardware Position (counts), Intensity\n")
-                for hw_pos, intensity in zip(
-                    fine_result["fine_hw_positions"], fine_result["fine_intensities"]
-                ):
-                    f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
+                for i, fine_result in enumerate(run_result["fine_results"]):
+                    f.write(
+                        f"\nFine Sweep {i+1} (centered on {fine_result['approximate_position']:.1f}):\n"
+                    )
+                    f.write("Hardware Position (counts), Intensity\n")
+                    for hw_pos, intensity in zip(
+                        fine_result["fine_hw_positions"], fine_result["fine_intensities"]
+                    ):
+                        f.write(f"{hw_pos:.1f}, {intensity:.2f}\n")
 
         logger.info(f"Calibration report saved to: {report_path}")
         logger.info("=== POLARIZER CALIBRATION WORKFLOW COMPLETE ===")
