@@ -491,10 +491,17 @@ class PPMRotationSensitivityTester:
                     'angles_list': sorted(results.keys())
                 }
             elif test_name.startswith('deviation_'):
-                summary['results'][test_name] = {
-                    'images_acquired': len(results),
-                    'angle_range': [min(results.keys()), max(results.keys())]
-                }
+                if results:
+                    summary['results'][test_name] = {
+                        'images_acquired': len(results),
+                        'angle_range': [min(results.keys()), max(results.keys())]
+                    }
+                else:
+                    summary['results'][test_name] = {
+                        'images_acquired': 0,
+                        'angle_range': [],
+                        'error': 'No images acquired - acquisition may have timed out'
+                    }
             elif test_name == 'repeatability':
                 summary['results'][test_name] = results.get('statistics', {})
             elif test_name == 'analysis':
@@ -519,12 +526,17 @@ class PPMRotationSensitivityTester:
                 f.write(f"  - {test}\n")
 
             if 'repeatability' in self.test_results:
-                stats = self.test_results['repeatability']['statistics']
-                f.write(f"\nMECHANICAL REPEATABILITY:\n")
-                f.write("-" * 40 + "\n")
-                f.write(f"  Mean error: {stats['mean_error']:.4f} degrees\n")
-                f.write(f"  2-sigma repeatability: {stats['repeatability_2sigma']:.4f} degrees\n")
-                f.write(f"  Maximum error: {stats['max_error']:.4f} degrees\n")
+                stats = self.test_results['repeatability'].get('statistics', {})
+                if stats:
+                    f.write(f"\nMECHANICAL REPEATABILITY:\n")
+                    f.write("-" * 40 + "\n")
+                    f.write(f"  Mean error: {stats.get('mean_error', 0):.4f} degrees\n")
+                    f.write(f"  2-sigma repeatability: {stats.get('repeatability_2sigma', 0):.4f} degrees\n")
+                    f.write(f"  Maximum error: {stats.get('max_error', 0):.4f} degrees\n")
+                else:
+                    f.write(f"\nMECHANICAL REPEATABILITY:\n")
+                    f.write("-" * 40 + "\n")
+                    f.write(f"  Statistics not available\n")
 
             f.write(f"\nFull details in: {summary_file}\n")
 
