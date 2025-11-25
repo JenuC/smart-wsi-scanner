@@ -34,7 +34,7 @@ from smart_wsi_scanner.qp_utils import (
     PolarizerCalibrationUtils,
     BackgroundCorrectionUtils,
 )
-from smart_wsi_scanner.qp_server_config import ExtendedCommand, END_MARKER
+from smart_wsi_scanner.qp_server_config import ExtendedCommand
 from smart_wsi_scanner.config import ConfigManager
 
 # Import the analysis modules from parent directory
@@ -198,7 +198,9 @@ class PPMRotationSensitivityTester:
             if exposure_ms:
                 message += f"--exposures ({exposure_ms}) "
 
-            message += END_MARKER
+            # Note: Server expects literal "END_MARKER" string, not the END_MARKER constant
+            # which is defined as "ENDOFSTR". The Java client sends "END_MARKER" literally.
+            message += "END_MARKER"
 
             # Send BGACQUIRE command
             self.logger.debug(f"Sending BGACQUIRE command")
