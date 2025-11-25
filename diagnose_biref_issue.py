@@ -99,22 +99,43 @@ def diagnose(background_base: pathlib.Path):
                     pass
 
             if 'pos_img' in locals() and 'neg_img' in locals():
+                # Uncorrected birefringence
                 diff_img = np.abs(pos_img.astype(np.int16) - neg_img.astype(np.int16))
                 if len(diff_img.shape) == 3:
                     biref_sim = np.sum(diff_img, axis=2)
                 else:
                     biref_sim = diff_img
 
-                print(f"\n4. SIMULATED BIREFRINGENCE BACKGROUND:")
+                print(f"\n4. SIMULATED BIREFRINGENCE BACKGROUND (uncorrected):")
                 print(f"   Mean: {biref_sim.mean():.1f}")
                 print(f"   Range: [{biref_sim.min()}, {biref_sim.max()}]")
 
-                if biref_sim.mean() > 30:
-                    print(f"\n   ERROR: Birefringence background too bright!")
-                    print(f"   Expected: < 10 (ideally < 5)")
-                    print(f"   Your value: {biref_sim.mean():.1f}")
+                # Corrected birefringence (with scaling)
+                pos_mean = pos_img.astype(np.float32).mean()
+                neg_mean = neg_img.astype(np.float32).mean()
+                scale_factor = pos_mean / neg_mean if neg_mean > 0 else 1.0
+
+                neg_scaled = neg_img.astype(np.float32) * scale_factor
+                diff_corrected = np.abs(pos_img.astype(np.float32) - neg_scaled)
+                if len(diff_corrected.shape) == 3:
+                    biref_corrected = np.sum(diff_corrected, axis=2)
                 else:
-                    print(f"   OK: Birefringence background is acceptable")
+                    biref_corrected = diff_corrected
+
+                print(f"\n5. SIMULATED BIREFRINGENCE BACKGROUND (with scale correction):")
+                print(f"   Scale factor applied to -7deg: {scale_factor:.4f}")
+                print(f"   Mean: {biref_corrected.mean():.1f}")
+                print(f"   Range: [{biref_corrected.min():.0f}, {biref_corrected.max():.0f}]")
+                print(f"   Improvement: {biref_sim.mean():.1f} -> {biref_corrected.mean():.1f} ({(1 - biref_corrected.mean()/biref_sim.mean())*100:.0f}% reduction)")
+
+                if biref_corrected.mean() > 20:
+                    print(f"\n   WARNING: Corrected birefringence background still elevated!")
+                    print(f"   This may indicate per-channel color differences")
+                    print(f"   Consider checking white balance settings")
+                elif biref_corrected.mean() > 10:
+                    print(f"\n   OK: Birefringence background is acceptable with correction")
+                else:
+                    print(f"\n   GOOD: Birefringence background is well-matched")
         else:
             print(f"   WARNING: Missing +7 or -7 background image")
             print(f"   Found angles: {sorted(bg_stats.keys())}")
