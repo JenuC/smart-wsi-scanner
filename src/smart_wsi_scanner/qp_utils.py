@@ -866,27 +866,18 @@ class TifWriterUtils:
         pixel_size_um: float,
         tile_config_source: Optional[pathlib.Path] = None,
         logger=None,
-        pos_background: np.ndarray = None,
-        neg_background: np.ndarray = None,
     ) -> np.ndarray:
         """
         Create a single birefringence image from positive and negative angle images.
 
-        When background images are provided, per-channel scaling is applied to
-        ensure that non-birefringent regions (backgrounds) produce near-zero
-        birefringence values. This corrects for optical path differences between
-        positive and negative polarization angles.
-
         Args:
-            pos_image: Positive angle image (+7 or +5 degrees)
-            neg_image: Negative angle image (-7 or -5 degrees)
+            pos_image: Positive angle image
+            neg_image: Negative angle image
             output_dir: Directory to save birefringence image
             filename: Output filename
             pixel_size_um: Pixel size for OME-TIFF metadata
             tile_config_source: Path to source TileConfiguration.txt to copy (optional)
             logger: Logger instance (optional)
-            pos_background: Background image for positive angle (optional)
-            neg_background: Background image for negative angle (optional)
 
         Returns:
             The birefringence image array
@@ -904,21 +895,7 @@ class TifWriterUtils:
         # Calculate birefringence (sum of absolute differences)
         output_path = output_dir / filename
 
-        # Pass backgrounds for per-channel correction if available
-        biref_img = TifWriterUtils.ppm_angle_difference(
-            pos_image, neg_image, pos_background, neg_background
-        )
-
-        if logger and pos_background is not None and neg_background is not None:
-            # Log the correction that was applied
-            pos_bg_mean = pos_background.astype(np.float32).mean()
-            neg_bg_mean = neg_background.astype(np.float32).mean()
-            scale_factor = pos_bg_mean / neg_bg_mean if neg_bg_mean > 0 else 1.0
-            logger.info(
-                f"  Biref background correction: "
-                f"pos_bg_mean={pos_bg_mean:.1f}, neg_bg_mean={neg_bg_mean:.1f}, "
-                f"scale_factor={scale_factor:.4f}"
-            )
+        biref_img = TifWriterUtils.ppm_angle_difference(pos_image, neg_image)
 
         # Save as 16-bit single-channel image (no normalization)
         # Range: 0-765 (sum of absolute RGB differences)
@@ -939,61 +916,32 @@ class TifWriterUtils:
         return pos_image.astype(np.float32) - neg_image.astype(np.float32)
 
     @staticmethod
-    def ppm_angle_difference(
-        img1: np.ndarray,
-        img2: np.ndarray,
-        bg1: np.ndarray = None,
-        bg2: np.ndarray = None,
-    ) -> np.ndarray:
+    def ppm_angle_difference(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
         """
         Calculate angle difference for polarized microscopy images.
         Sum of absolute differences across RGB channels.
 
-        When background images are provided, calculates a scaling factor to
-        match the overall intensity of img2 to img1. This ensures that
-        non-birefringent regions (backgrounds) produce near-zero birefringence.
-
-        Note: Flat-field correction normalizes images toward the overall bg_mean,
-        making per-channel values uniform. Therefore, we use overall (not per-channel)
-        scaling to avoid introducing artificial per-channel differences.
-
         Args:
-            img1: First image (RGB, uint8) - typically positive angle (+7)
-            img2: Second image (RGB, uint8) - typically negative angle (-7)
-            bg1: Optional background for img1 (RGB, uint8)
-            bg2: Optional background for img2 (RGB, uint8)
+            img1: First image (RGB, uint8)
+            img2: Second image (RGB, uint8)
 
         Returns:
             Difference image as single channel (uint16), range 0-765 (3 * 255)
         """
-        # Convert to float32 for calculations
-        img1_f = img1.astype(np.float32)
-        img2_f = img2.astype(np.float32)
-
-        # Apply background-based intensity correction if backgrounds provided
-        if bg1 is not None and bg2 is not None:
-            # Calculate overall mean intensities of backgrounds
-            # (Not per-channel, because flat-field correction normalizes all channels
-            # to the same overall mean, making per-channel scaling incorrect)
-            bg1_mean = bg1.astype(np.float32).mean()
-            bg2_mean = bg2.astype(np.float32).mean()
-
-            if bg2_mean > 0:
-                # Scale img2 to match img1's background intensity level
-                # After flat-field correction:
-                #   - img1 background regions -> ~bg1_mean
-                #   - img2 background regions -> ~bg2_mean
-                # We want: img2_scaled background -> ~bg1_mean
-                scale_factor = bg1_mean / bg2_mean
-                img2_f = img2_f * scale_factor
+        # Convert to int16 to handle negative differences
+        img1_i16 = img1.astype(np.int16)
+        img2_i16 = img2.astype(np.int16)
 
         # Calculate absolute difference per channel and sum across RGB
         # |R1-R2| + |G1-G2| + |B1-B2|
-        abs_diff = np.abs(img1_f - img2_f)
+
+        ## this wont work @MIKE!
+
+        abs_diff = np.abs(img1_i16 - img2_i16)
         sum_abs_diff = np.sum(abs_diff, axis=2)
 
         # Convert to uint16 (range is 0 to 765, well within uint16)
-        return np.clip(sum_abs_diff, 0, 765).astype(np.uint16)
+        return sum_abs_diff.astype(np.uint16)
 
     @staticmethod
     def ppm_angle_sum(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
@@ -1337,42 +1285,6 @@ class BackgroundCorrectionUtils:
             logger.info(f"Successfully loaded {len(backgrounds)}/{len(angles)} background images")
         elif logger:
             logger.warning("No background images were loaded")
-
-        # ======= BIREFRINGENCE PAIR MATCHING =======
-        # For paired polarization angles (+7/-7 or +5/-5), calculate differential
-        # scaling factors so their corrected backgrounds have matching intensities.
-        # This is critical for birefringence calculations where we compute |pos - neg|.
-        # Without this, the different bg_mean values cause non-zero biref backgrounds.
-        polarization_pairs = [(7.0, -7.0), (5.0, -5.0)]
-
-        for pos_angle, neg_angle in polarization_pairs:
-            if pos_angle in backgrounds and neg_angle in backgrounds:
-                pos_bg_mean = backgrounds[pos_angle].astype(np.float32).mean()
-                neg_bg_mean = backgrounds[neg_angle].astype(np.float32).mean()
-
-                if neg_bg_mean > 0:
-                    # Scale the negative angle to match positive angle intensity
-                    # After flat-field: corrected = image * (bg_mean / bg_pixel) * scaling_factor
-                    # We want: pos_corrected_bg == neg_corrected_bg
-                    # pos normalizes to pos_bg_mean, neg normalizes to neg_bg_mean
-                    # So: neg_scaling_factor = pos_bg_mean / neg_bg_mean
-                    differential_scale = pos_bg_mean / neg_bg_mean
-                    scaling_factors[neg_angle] = differential_scale
-
-                    if logger:
-                        logger.info(
-                            f"  Birefringence pair matching: {pos_angle}/{neg_angle} degrees"
-                        )
-                        logger.info(
-                            f"    +{abs(pos_angle)} bg_mean: {pos_bg_mean:.1f}, "
-                            f"-{abs(neg_angle)} bg_mean: {neg_bg_mean:.1f}"
-                        )
-                        logger.info(
-                            f"    Differential scaling for {neg_angle}: {differential_scale:.4f}"
-                        )
-                        logger.info(
-                            f"    Expected corrected background intensity: ~{pos_bg_mean:.1f} for both"
-                        )
 
         return backgrounds, scaling_factors, white_balance_coeffs
 

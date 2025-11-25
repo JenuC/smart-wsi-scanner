@@ -1022,13 +1022,9 @@ def _acquisition_workflow(
                     biref_dir = output_path / f"{pos_angle}.biref"
                     tile_config_source = output_path / str(pos_angle) / "TileConfiguration.txt"
 
-                    # Get background images for birefringence correction if available
-                    pos_background = background_images.get(pos_angle, None)
-                    neg_background = background_images.get(neg_angle, None)
-
-                    # Create birefringence image with background correction
+                    # Create birefringence image
                     t_biref = time.perf_counter()
-                    TifWriterUtils.create_birefringence_tile(
+                    TifWriterUtils.create_birefringence_tile(  # biref
                         pos_image=angle_images[pos_angle],
                         neg_image=angle_images[neg_angle],
                         output_dir=biref_dir,
@@ -1036,8 +1032,6 @@ def _acquisition_workflow(
                         pixel_size_um=hardware.core.get_pixel_size_um(),
                         tile_config_source=tile_config_source,
                         logger=logger,
-                        pos_background=pos_background,
-                        neg_background=neg_background,
                     )
                     t_biref = log_timing(logger, f"Birefringence calculation and save", t_biref)
 
