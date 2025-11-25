@@ -212,11 +212,21 @@ class PPMRotationSensitivityTester:
             self.logger.debug(f"ACK: {ack}")
 
             if ack.startswith("STARTED:"):
-                # Monitor acquisition
+                # Monitor acquisition with timeout
                 self.logger.debug("Monitoring acquisition progress")
-                while True:
+                max_wait_seconds = 60  # Maximum time to wait for acquisition
+                start_wait = time.time()
+                last_status = None
+
+                while (time.time() - start_wait) < max_wait_seconds:
                     time.sleep(0.5)
                     status = self.client.test_status()
+
+                    # Only log status changes to reduce spam
+                    if status != last_status:
+                        self.logger.debug(f"Status changed: {last_status} -> {status}")
+                        last_status = status
+
                     if status == "COMPLETED":
                         # Get final response
                         result = self.client.socket.recv(1024).decode()
@@ -229,6 +239,17 @@ class PPMRotationSensitivityTester:
                     elif status in ["FAILED", "CANCELLED"]:
                         self.logger.error(f"Acquisition {status}")
                         return None
+                    elif status == "IDLE":
+                        # Server may have completed and reset to IDLE
+                        # Check if the output file exists
+                        time.sleep(0.5)  # Brief wait for file system
+                        if output_path.exists():
+                            self.logger.info(f"Acquisition complete (status IDLE, file exists): {save_name}")
+                            return output_path
+                        # Otherwise keep waiting - might not have started yet
+
+                self.logger.error(f"Acquisition timed out after {max_wait_seconds}s (last status: {status})")
+                return None
             else:
                 self.logger.error(f"Failed to start acquisition: {ack}")
                 return None
