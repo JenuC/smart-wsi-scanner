@@ -1398,6 +1398,12 @@ def simple_background_collection(
         # Track final exposures for each angle
         final_exposures = {}
 
+        # Track actual intensities for birefringence pair matching
+        # When acquiring paired polarization angles (+7/-7 or +5/-5), the negative
+        # angle should target the ACTUAL intensity achieved by the positive angle,
+        # not a fixed value. This ensures backgrounds match through exposure adjustment.
+        biref_pair_intensities = {}  # Maps positive angle -> actual intensity achieved
+
         # Acquire background for each angle
         for angle_idx, angle in enumerate(angles):
             logger.info(f"Acquiring background {angle_idx + 1}/{total_images} for angle {angle}°")
@@ -1410,7 +1416,26 @@ def simple_background_collection(
                 logger.info(f"Set angle to {angle}°")
 
             # Get target intensity for this modality/angle
-            target_intensity = get_target_intensity_for_background(modality, angle)
+            # For negative angles, check if we have the paired positive angle's actual intensity
+            paired_positive = abs(angle)  # e.g., -7 pairs with 7
+            if angle < 0 and angle != -90:  # Negative polarization angle
+                if paired_positive in biref_pair_intensities:
+                    # Use the actual intensity from the positive angle as our target
+                    target_intensity = biref_pair_intensities[paired_positive]
+                    logger.info(
+                        f"Biref pair matching: using +{paired_positive} actual intensity "
+                        f"({target_intensity:.1f}) as target for {angle}"
+                    )
+                else:
+                    # Positive angle hasn't been acquired yet - use default but warn
+                    target_intensity = get_target_intensity_for_background(modality, angle)
+                    logger.warning(
+                        f"Biref pair matching: +{paired_positive} not yet acquired. "
+                        f"For best results, acquire positive angles before negative. "
+                        f"Using default target: {target_intensity:.1f}"
+                    )
+            else:
+                target_intensity = get_target_intensity_for_background(modality, angle)
             logger.info(f"Target intensity: {target_intensity:.1f}")
 
             # Use exposure from QuPath as initial value for adaptive exposure
@@ -1428,12 +1453,21 @@ def simple_background_collection(
                     max_iterations=10,
                     logger=logger,
                 )
+                actual_intensity = float(np.median(image))
                 logger.info(
-                    f"Acquired background: shape={image.shape}, median={float(np.median(image)):.1f}, "
+                    f"Acquired background: shape={image.shape}, median={actual_intensity:.1f}, "
                     f"final_exposure={final_exposure:.1f}ms"
                 )
                 # Store final exposure for this angle
                 final_exposures[angle] = final_exposure
+
+                # Store actual intensity for positive angles (used as target for paired negative)
+                # This ensures +7/-7 or +5/-5 backgrounds match through exposure adjustment
+                if angle > 0 and angle != 90:  # Positive polarization angles (not brightfield)
+                    biref_pair_intensities[angle] = actual_intensity
+                    logger.info(
+                        f"Stored +{angle} intensity ({actual_intensity:.1f}) for birefringence pair matching"
+                    )
             except RuntimeError as e:
                 logger.error(f"Failed to acquire background at angle {angle}°: {e}")
                 continue
