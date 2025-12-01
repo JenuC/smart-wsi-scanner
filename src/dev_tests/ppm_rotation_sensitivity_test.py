@@ -37,9 +37,8 @@ from smart_wsi_scanner.qp_utils import (
 from smart_wsi_scanner.qp_server_config import ExtendedCommand
 from smart_wsi_scanner.config import ConfigManager
 
-# Import the analysis modules from QPSC_Project directory
-# Path: smart-wsi-scanner/src/dev_tests/ -> need to go up to QPSC_Project
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+# Import the analysis module from same directory (dev_tests)
+sys.path.insert(0, str(Path(__file__).parent))
 try:
     from ppm_rotation_sensitivity_analysis import PPMRotationAnalyzer
     ANALYZER_AVAILABLE = True
