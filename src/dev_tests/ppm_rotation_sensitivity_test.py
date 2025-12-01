@@ -191,8 +191,7 @@ class PPMRotationSensitivityTester:
             return False
 
     def acquire_at_angle(self, angle: float, save_name: str,
-                        exposure_ms: float = None,
-                        fresh_connection: bool = True) -> Optional[Path]:
+                        exposure_ms: float = None) -> Optional[Path]:
         """
         Acquire a single image at specified rotation angle.
 
@@ -200,30 +199,21 @@ class PPMRotationSensitivityTester:
             angle: Rotation angle in degrees
             save_name: Name for the saved image
             exposure_ms: Exposure time in milliseconds (uses config default if None)
-            fresh_connection: If True, reconnect before each acquisition for reliability
 
         Returns:
             Path to acquired image or None if failed
         """
-        # Use fresh connection for each acquisition to avoid socket sync issues
-        if fresh_connection:
-            if not self._reconnect():
-                self.logger.error("Failed to establish fresh connection")
-                return None
-        elif not self.connected:
+        if not self.connected:
             self.logger.error("Not connected to server")
             return None
-        else:
-            # Drain any leftover data from previous operations
-            self._drain_socket()
 
         try:
-            # Move to angle
+            # Step 1: Move to angle and wait for completion
             self.logger.debug(f"Moving to angle {angle} degrees")
             self.client.test_move_rotation(angle)
             time.sleep(0.5)  # Allow settling
 
-            # Verify position
+            # Step 2: Verify position (this is a complete request/response cycle)
             actual_angle = self.client.test_get_rotation()
             angle_error = abs(actual_angle - angle)
             self.logger.info(f"Set: {angle:.2f} deg, Read: {actual_angle:.2f} deg, Error: {angle_error:.3f} deg")
@@ -231,8 +221,7 @@ class PPMRotationSensitivityTester:
             if angle_error > 0.5:  # Warning threshold
                 self.logger.warning(f"Large angle error: {angle_error:.3f} degrees")
 
-            # Build acquisition command for background acquisition
-            # We'll use the BGACQUIRE command with single angle
+            # Step 3: Build and send BGACQUIRE command
             output_path = self.output_dir / save_name
 
             message = (
@@ -245,100 +234,67 @@ class PPMRotationSensitivityTester:
             if exposure_ms:
                 message += f"--exposures {exposure_ms} "
 
-            # Note: Server expects literal "END_MARKER" string, not the END_MARKER constant
-            # which is defined as "ENDOFSTR". The Java client sends "END_MARKER" literally.
             message += "END_MARKER"
 
-            # Send BGACQUIRE command
             self.logger.debug(f"Sending BGACQUIRE: {message[:80]}...")
             self.client.socket.sendall(ExtendedCommand.BGACQUIRE)
             self.client.socket.sendall(message.encode('utf-8'))
 
-            # Set timeout and wait for response
-            self.client.socket.settimeout(30.0)
-
-            # Read response - collect until we see a complete message
+            # Step 4: Read the COMPLETE response - DO NOT send any other commands
+            # The response will be either:
+            #   - "STARTED:..." followed eventually by "SUCCESS:..." or "FAILED:..."
+            #   - "FAILED:..." immediately
             response_data = b""
-            max_wait = 30.0
-            start_time = time.time()
+            self.client.socket.settimeout(120.0)  # Long timeout for acquisition
 
-            while (time.time() - start_time) < max_wait:
+            # Read until we get a final SUCCESS or FAILED (after any STARTED)
+            got_started = False
+            while True:
                 try:
-                    chunk = self.client.socket.recv(1024)
+                    chunk = self.client.socket.recv(4096)
                     if not chunk:
+                        self.logger.error("Connection closed while waiting for response")
                         break
+
                     response_data += chunk
+                    response = response_data.decode('utf-8', errors='replace')
 
-                    # Try to decode and check for completion markers
-                    try:
-                        response = response_data.decode('utf-8')
-                        if 'SUCCESS:' in response or 'FAILED:' in response:
-                            break
-                    except UnicodeDecodeError:
-                        # Not valid UTF-8 yet, keep reading
-                        pass
+                    # Check for STARTED
+                    if 'STARTED:' in response:
+                        if not got_started:
+                            self.logger.debug("Acquisition started, waiting for completion...")
+                            got_started = True
 
-                    # Brief pause before next read attempt
-                    time.sleep(0.1)
-                except socket.timeout:
-                    break
-
-            # Parse response
-            try:
-                response = response_data.decode('utf-8', errors='replace')
-            except:
-                response = str(response_data)
-
-            self.logger.debug(f"Response: {response[:100]}...")
-
-            if 'SUCCESS:' in response:
-                self.logger.info(f"Successfully acquired image at {angle} deg -> {save_name}")
-                # Give time for file to be written
-                time.sleep(1.0)
-                return output_path
-            elif 'STARTED:' in response:
-                # Acquisition started, wait for completion by polling for SUCCESS
-                self.logger.debug("Acquisition started, waiting for completion...")
-
-                # Keep reading for the final SUCCESS/FAILED response
-                completion_timeout = 60.0
-                completion_start = time.time()
-
-                while (time.time() - completion_start) < completion_timeout:
-                    try:
-                        self.client.socket.settimeout(2.0)
-                        chunk = self.client.socket.recv(1024)
-                        if chunk:
-                            response_data += chunk
-                            response = response_data.decode('utf-8', errors='replace')
-                            if 'SUCCESS:' in response:
-                                self.logger.info(f"Acquisition complete: {save_name}")
-                                time.sleep(0.5)  # Brief pause for file write
-                                return output_path
-                            elif 'FAILED:' in response and 'FAILED:' in response[response.index('STARTED:')+8:]:
-                                # FAILED after STARTED
-                                self.logger.error(f"Acquisition failed after start: {response[-200:]}")
-                                return None
-                    except socket.timeout:
-                        # Check if file exists
-                        if output_path.exists():
-                            self.logger.info(f"Acquisition complete (file exists): {save_name}")
+                    # Check for final response (SUCCESS or FAILED after STARTED, or immediate FAILED)
+                    if got_started:
+                        # Look for SUCCESS or FAILED after the STARTED message
+                        after_started = response[response.index('STARTED:'):]
+                        if 'SUCCESS:' in after_started:
+                            self.logger.info(f"Acquisition complete: {save_name}")
                             return output_path
-                        continue
-                    except Exception as e:
-                        self.logger.debug(f"Read error: {e}")
-                        break
+                        elif after_started.count('FAILED:') > 0 and 'FAILED:' in after_started[8:]:
+                            # FAILED that appears after STARTED (not part of STARTED message)
+                            self.logger.error(f"Acquisition failed: {response[-300:]}")
+                            return None
+                    else:
+                        # No STARTED yet - check for immediate FAILED
+                        if 'FAILED:' in response:
+                            self.logger.error(f"Acquisition failed: {response[:300]}")
+                            return None
+                        # Or immediate SUCCESS (unlikely but possible)
+                        if 'SUCCESS:' in response:
+                            self.logger.info(f"Acquisition complete: {save_name}")
+                            return output_path
 
-                # Final check for file
-                if output_path.exists():
-                    self.logger.info(f"Acquisition complete (file exists after timeout): {save_name}")
-                    return output_path
+                except socket.timeout:
+                    self.logger.error("Timeout waiting for acquisition response")
+                    # Check if file exists as last resort
+                    if output_path.exists():
+                        self.logger.info(f"File exists despite timeout: {save_name}")
+                        return output_path
+                    return None
 
-                self.logger.warning(f"Acquisition timed out, file not found: {output_path}")
-                return None
-            else:
-                self.logger.error(f"Acquisition failed: {response[:200]}")
-                return None
+            return None
 
         except Exception as e:
             self.logger.error(f"Error acquiring at angle {angle}: {e}")
