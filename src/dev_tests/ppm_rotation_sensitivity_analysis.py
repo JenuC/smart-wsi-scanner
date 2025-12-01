@@ -96,6 +96,52 @@ class PPMRotationAnalyzer:
         print(f"Loaded {len(self.images)} images")
         return self.images
 
+    def load_deviation_images(self) -> Dict[float, np.ndarray]:
+        """
+        Load PPM deviation test images with names like:
+        - deviation_45deg_plus_0.05.tif
+        - deviation_45deg_minus_1.00.tif
+
+        These are parsed to extract the actual angle:
+        - deviation_45deg_plus_0.05.tif -> 45.05 degrees
+        - deviation_45deg_minus_1.00.tif -> 44.00 degrees
+
+        Returns:
+            Dictionary mapping actual angles to image arrays
+        """
+        import re
+        print("Loading PPM deviation images...")
+
+        # Pattern: deviation_{base}deg_{plus|minus}_{deviation}.tif
+        pattern = re.compile(r'deviation_(\d+)deg_(plus|minus)_(\d+\.?\d*)\.(tif|tiff)', re.IGNORECASE)
+
+        for file_path in self.base_path.glob("deviation_*.tif"):
+            match = pattern.match(file_path.name)
+            if match:
+                base_angle = float(match.group(1))
+                direction = match.group(2)
+                deviation = float(match.group(3))
+
+                # Calculate actual angle
+                if direction == 'plus':
+                    actual_angle = base_angle + deviation
+                else:  # minus
+                    actual_angle = base_angle - deviation
+
+                # Load the image
+                img = cv2.imread(str(file_path), cv2.IMREAD_UNCHANGED)
+                if img is not None:
+                    img = img.astype(np.float32)
+                    if len(img.shape) == 3:
+                        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    self.images[actual_angle] = img
+                    if self.image_shape is None:
+                        self.image_shape = img.shape
+                    print(f"  Loaded {actual_angle:.2f} deg image: {file_path.name}")
+
+        print(f"Loaded {len(self.images)} deviation images")
+        return self.images
+
     def simulate_angular_deviations(self, reference_angle: float = 7.0,
                                    deviations: List[float] = [0.1, 0.2, 0.3, 0.5, 1.0]) -> Dict:
         """

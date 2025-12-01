@@ -503,27 +503,51 @@ class PPMRotationSensitivityTester:
                 output_dir=self.output_dir / "analysis"
             )
 
-            # Load acquired images
+            # Try loading standard images first, then deviation images
             images = analyzer.load_images()
 
             if len(images) < 3:
-                self.logger.warning("Insufficient images for analysis")
+                self.logger.info("No standard angle images found, trying deviation images...")
+                images = analyzer.load_deviation_images()
+
+            if len(images) < 3:
+                self.logger.warning("Insufficient images for analysis (need at least 3)")
                 return {}
+
+            # Determine reference angle from loaded images
+            # Use the center angle (e.g., 45.0 for deviation test, 7.0 for standard test)
+            available_angles = sorted(images.keys())
+            center_idx = len(available_angles) // 2
+            reference_angle = available_angles[center_idx]
+            self.logger.info(f"Using reference angle: {reference_angle:.2f} deg")
 
             # Run analyses
             self.logger.info("Computing image differences...")
-            df_differences = analyzer.compute_image_differences(reference_angle=7.0)
+            df_differences = analyzer.compute_image_differences(reference_angle=reference_angle)
 
-            self.logger.info("Analyzing birefringence sensitivity...")
-            df_birefringence = analyzer.analyze_birefringence_sensitivity(
-                deviations=[0.1, 0.2, 0.3, 0.5, 1.0]
-            )
+            self.logger.info("Analyzing deviation sensitivity...")
+            # Log key findings
+            if not df_differences.empty:
+                self.logger.info("=" * 60)
+                self.logger.info("INTENSITY DIFFERENCE ANALYSIS")
+                self.logger.info("=" * 60)
+                for _, row in df_differences.iterrows():
+                    angle_diff = row['angular_difference']
+                    mae = row['mae']
+                    pct_diff = row['normalized_mae'] * 100
+                    self.logger.info(
+                        f"  {row['comparison_angle']:.2f} deg "
+                        f"(delta={angle_diff:.2f} deg): "
+                        f"MAE={mae:.1f}, {pct_diff:.2f}% intensity change"
+                    )
+
+            # Skip birefringence analysis for deviation test (needs specific angle pairs)
+            import pandas as pd
+            df_birefringence = pd.DataFrame()
 
             # Generate visualizations
             self.logger.info("Generating visualizations...")
-            analyzer.visualize_difference_maps(reference_angle=7.0)
-            analyzer.visualize_birefringence_comparison()
-            analyzer.generate_sensitivity_plots(df_differences, df_birefringence)
+            analyzer.visualize_difference_maps(reference_angle=reference_angle)
 
             # Generate report
             self.logger.info("Generating analysis report...")
