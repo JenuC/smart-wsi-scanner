@@ -191,7 +191,8 @@ class PPMRotationSensitivityTester:
             return False
 
     def acquire_at_angle(self, angle: float, save_name: str,
-                        exposure_ms: float = None) -> Optional[Path]:
+                        exposure_ms: float = None,
+                        fresh_connection: bool = True) -> Optional[Path]:
         """
         Acquire a single image at specified rotation angle.
 
@@ -199,16 +200,22 @@ class PPMRotationSensitivityTester:
             angle: Rotation angle in degrees
             save_name: Name for the saved image
             exposure_ms: Exposure time in milliseconds (uses config default if None)
+            fresh_connection: If True, reconnect before each acquisition for reliability
 
         Returns:
             Path to acquired image or None if failed
         """
-        if not self.connected:
+        # Use fresh connection for each acquisition to avoid socket sync issues
+        if fresh_connection:
+            if not self._reconnect():
+                self.logger.error("Failed to establish fresh connection")
+                return None
+        elif not self.connected:
             self.logger.error("Not connected to server")
             return None
-
-        # Drain any leftover data from previous operations
-        self._drain_socket()
+        else:
+            # Drain any leftover data from previous operations
+            self._drain_socket()
 
         try:
             # Move to angle
@@ -290,29 +297,51 @@ class PPMRotationSensitivityTester:
                 time.sleep(1.0)
                 return output_path
             elif 'STARTED:' in response:
-                # Acquisition started, wait for completion
+                # Acquisition started, wait for completion by polling for SUCCESS
                 self.logger.debug("Acquisition started, waiting for completion...")
-                time.sleep(5.0)  # Wait for acquisition to complete
 
-                # Check if file exists
+                # Keep reading for the final SUCCESS/FAILED response
+                completion_timeout = 60.0
+                completion_start = time.time()
+
+                while (time.time() - completion_start) < completion_timeout:
+                    try:
+                        self.client.socket.settimeout(2.0)
+                        chunk = self.client.socket.recv(1024)
+                        if chunk:
+                            response_data += chunk
+                            response = response_data.decode('utf-8', errors='replace')
+                            if 'SUCCESS:' in response:
+                                self.logger.info(f"Acquisition complete: {save_name}")
+                                time.sleep(0.5)  # Brief pause for file write
+                                return output_path
+                            elif 'FAILED:' in response and 'FAILED:' in response[response.index('STARTED:')+8:]:
+                                # FAILED after STARTED
+                                self.logger.error(f"Acquisition failed after start: {response[-200:]}")
+                                return None
+                    except socket.timeout:
+                        # Check if file exists
+                        if output_path.exists():
+                            self.logger.info(f"Acquisition complete (file exists): {save_name}")
+                            return output_path
+                        continue
+                    except Exception as e:
+                        self.logger.debug(f"Read error: {e}")
+                        break
+
+                # Final check for file
                 if output_path.exists():
-                    self.logger.info(f"Acquisition complete (file exists): {save_name}")
+                    self.logger.info(f"Acquisition complete (file exists after timeout): {save_name}")
                     return output_path
 
-                # Read any additional response
-                self._drain_socket()
-                self.logger.warning(f"Acquisition may have completed but file not found: {output_path}")
+                self.logger.warning(f"Acquisition timed out, file not found: {output_path}")
                 return None
             else:
                 self.logger.error(f"Acquisition failed: {response[:200]}")
-                # Reconnect to reset socket state after failure
-                self._reconnect()
                 return None
 
         except Exception as e:
             self.logger.error(f"Error acquiring at angle {angle}: {e}")
-            # Reconnect to reset socket state after error
-            self._reconnect()
             return None
 
     def run_standard_angles_test(self) -> Dict[float, Path]:
