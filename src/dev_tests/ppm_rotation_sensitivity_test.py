@@ -329,13 +329,23 @@ class PPMRotationSensitivityTester:
         return acquired
 
     def run_fine_deviation_test(self, base_angle: float = 7.0,
-                               deviations: List[float] = None) -> Dict[float, Path]:
+                               deviations: List[float] = None,
+                               fixed_exposure_ms: float = None) -> Dict[float, Path]:
         """
         Test fine angular deviations around a base angle.
+
+        IMPORTANT: For valid sensitivity measurements, use fixed_exposure_ms to
+        ensure all images are acquired with the same exposure. Without this,
+        adaptive exposure may target different intensities for different angles,
+        making the comparison invalid.
 
         Args:
             base_angle: Center angle for testing
             deviations: List of deviations to test (positive and negative)
+            fixed_exposure_ms: Fixed exposure time for ALL images (recommended).
+                              If None, uses adaptive exposure (NOT recommended
+                              for sensitivity testing as different angles may
+                              get different target intensities).
 
         Returns:
             Dictionary mapping angles to image paths
@@ -348,6 +358,13 @@ class PPMRotationSensitivityTester:
         self.logger.info("=" * 60)
         self.logger.info(f"Testing deviations: {deviations}")
 
+        if fixed_exposure_ms:
+            self.logger.info(f"Using FIXED exposure: {fixed_exposure_ms} ms for all images")
+        else:
+            self.logger.warning("WARNING: Using adaptive exposure - images may have different "
+                               "intensities due to different target settings. Consider using "
+                               "fixed_exposure_ms for valid sensitivity comparison.")
+
         acquired = {}
 
         for i, dev in enumerate(deviations):
@@ -356,7 +373,8 @@ class PPMRotationSensitivityTester:
             if 0 <= angle_pos <= 180:  # Check hardware limits
                 self.logger.info(f"[{i*2+1}/{len(deviations)*2}] Testing {angle_pos:.2f} deg (+{dev})")
                 save_name = f"deviation_{base_angle}deg_plus_{dev:.2f}.tif"
-                image_path = self.acquire_at_angle(angle_pos, save_name)
+                image_path = self.acquire_at_angle(angle_pos, save_name,
+                                                   exposure_ms=fixed_exposure_ms)
                 if image_path:
                     acquired[angle_pos] = image_path
 
@@ -366,7 +384,8 @@ class PPMRotationSensitivityTester:
                 if 0 <= angle_neg <= 180:
                     self.logger.info(f"[{i*2+2}/{len(deviations)*2}] Testing {angle_neg:.2f} deg (-{dev})")
                     save_name = f"deviation_{base_angle}deg_minus_{dev:.2f}.tif"
-                    image_path = self.acquire_at_angle(angle_neg, save_name)
+                    image_path = self.acquire_at_angle(angle_neg, save_name,
+                                                       exposure_ms=fixed_exposure_ms)
                     if image_path:
                         acquired[angle_neg] = image_path
 

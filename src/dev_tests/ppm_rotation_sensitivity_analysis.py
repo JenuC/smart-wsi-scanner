@@ -690,34 +690,51 @@ class PPMRotationAnalyzer:
             Dict with hue shift metrics
         """
         if angle1 not in self.images or angle2 not in self.images:
-            return {}
+            return {'error': f'Missing angle: {angle1} or {angle2}'}
 
         img1 = self.images[angle1]
         img2 = self.images[angle2]
 
         # Compute phase difference (simplified birefringence proxy)
-        # In full PPM, this would use Stokes parameters
         diff = img2.astype(np.float64) - img1.astype(np.float64)
 
         # Find background level using mode (most common value)
-        # Use histogram to find mode
-        hist, bin_edges = np.histogram(img1.flatten(), bins=256)
+        # Use appropriate number of bins for image bit depth
+        img_min, img_max = float(img1.min()), float(img1.max())
+        img_range = img_max - img_min
+
+        if img_range == 0:
+            return {'error': 'Image has no intensity variation'}
+
+        # Use 256 bins but scaled to actual data range
+        n_bins = min(256, int(img_range) + 1)
+        hist, bin_edges = np.histogram(img1.flatten(), bins=n_bins)
         mode_idx = np.argmax(hist)
         background_level = (bin_edges[mode_idx] + bin_edges[mode_idx + 1]) / 2
 
-        # Mask for pixels above background
-        above_bg_mask = img1 > (background_level + 10)  # 10 units above mode
+        # Threshold: 5% of image range above mode, or at least 1 intensity unit
+        threshold = max(img_range * 0.05, 1.0)
+        above_bg_mask = img1 > (background_level + threshold)
 
-        if np.sum(above_bg_mask) == 0:
-            return {'error': 'No pixels above background'}
+        n_above = int(np.sum(above_bg_mask))
+        if n_above == 0:
+            # Fall back to top 25% of pixels
+            threshold_75 = np.percentile(img1, 75)
+            above_bg_mask = img1 > threshold_75
+            n_above = int(np.sum(above_bg_mask))
+            background_level = threshold_75  # Update for reporting
+
+        if n_above == 0:
+            return {'error': 'No pixels above background (even with fallback)'}
 
         # Compute statistics for pixels above background
         diff_above_bg = diff[above_bg_mask]
 
         return {
             'background_mode': float(background_level),
-            'n_pixels_above_bg': int(np.sum(above_bg_mask)),
-            'pct_pixels_above_bg': float(np.sum(above_bg_mask) / above_bg_mask.size * 100),
+            'threshold_used': float(threshold) if 'threshold' in dir() else float(background_level),
+            'n_pixels_above_bg': n_above,
+            'pct_pixels_above_bg': float(n_above / above_bg_mask.size * 100),
             'mean_diff_above_bg': float(np.mean(diff_above_bg)),
             'std_diff_above_bg': float(np.std(diff_above_bg)),
             'median_diff_above_bg': float(np.median(diff_above_bg)),
@@ -895,15 +912,22 @@ class PPMRotationAnalyzer:
                 f.write("  Angle Pair          |  Background  |  Mean Diff  |  Std Diff  |  Pixels > BG\n")
                 f.write("  " + "-" * 75 + "\n")
 
+                hue_results_found = False
                 for angle in sorted(angles_near_45):
                     if angle != base_45:
                         hue_data = self.compute_birefringence_hue_shift(base_45, angle)
                         if hue_data and 'error' not in hue_data:
+                            hue_results_found = True
                             f.write(f"  {base_45:.2f} -> {angle:.2f}  |  "
                                    f"{hue_data['background_mode']:10.1f}  |  "
                                    f"{hue_data['mean_diff_above_bg']:9.2f}  |  "
                                    f"{hue_data['std_diff_above_bg']:8.2f}  |  "
                                    f"{hue_data['pct_pixels_above_bg']:6.1f}%\n")
+                        elif hue_data and 'error' in hue_data:
+                            f.write(f"  {base_45:.2f} -> {angle:.2f}  |  ERROR: {hue_data['error']}\n")
+
+                if not hue_results_found:
+                    f.write("  (No valid hue comparisons found)\n")
 
                 # Also compare to a distant angle if available
                 if angles_near_7:
@@ -916,6 +940,8 @@ class PPMRotationAnalyzer:
                         f.write(f"    Mean diff (above BG): {hue_data['mean_diff_above_bg']:.2f}\n")
                         f.write(f"    Std diff (above BG): {hue_data['std_diff_above_bg']:.2f}\n")
                         f.write(f"    Pixels above BG: {hue_data['pct_pixels_above_bg']:.1f}%\n")
+                    elif hue_data and 'error' in hue_data:
+                        f.write(f"    ERROR: {hue_data['error']}\n")
 
                 f.write("\n")
             else:
