@@ -832,14 +832,12 @@ class TifWriterUtils:
             data: Image data array
         """
         with tf.TiffWriter(filename) as tif:
-            # JPEG compression only works with 8-bit RGB or grayscale
-            # Use LZW for 16-bit data
-            is_16bit = data.dtype == np.uint16
-            compression = "lzw" if is_16bit else "jpeg"
-
+            # Use lossless compression for scientific imaging
+            # LZW works well for all bit depths and is widely compatible
+            # NEVER use JPEG for scientific data (lossy compression)
             options = {
                 "photometric": "rgb" if len(data.shape) == 3 else "minisblack",
-                "compression": compression,
+                "compression": "lzw",  # Lossless compression for all data
                 "resolutionunit": "CENTIMETER",
                 "maxworkers": 2,
             }
