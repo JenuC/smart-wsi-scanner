@@ -521,29 +521,46 @@ class PPMRotationSensitivityTester:
             reference_angle = available_angles[center_idx]
             self.logger.info(f"Using reference angle: {reference_angle:.2f} deg")
 
-            # Run analyses
-            self.logger.info("Computing image differences...")
-            df_differences = analyzer.compute_image_differences(reference_angle=reference_angle)
+            # Run fine sensitivity analysis - this is the key analysis!
+            self.logger.info("=" * 60)
+            self.logger.info("FINE ANGULAR SENSITIVITY ANALYSIS")
+            self.logger.info("=" * 60)
 
-            self.logger.info("Analyzing deviation sensitivity...")
-            # Log key findings
-            if not df_differences.empty:
-                self.logger.info("=" * 60)
-                self.logger.info("INTENSITY DIFFERENCE ANALYSIS")
-                self.logger.info("=" * 60)
-                for _, row in df_differences.iterrows():
-                    angle_diff = row['angular_difference']
-                    mae = row['mae']
-                    pct_diff = row['normalized_mae'] * 100
-                    self.logger.info(
-                        f"  {row['comparison_angle']:.2f} deg "
-                        f"(delta={angle_diff:.2f} deg): "
-                        f"MAE={mae:.1f}, {pct_diff:.2f}% intensity change"
-                    )
+            # Analyze sensitivity around key angles (7 and 45 degrees)
+            fine_sensitivity = analyzer.analyze_fine_sensitivity(base_angles=[7, 45])
+
+            # Also compute adjacent differences for the full picture
+            self.logger.info("\n" + "=" * 60)
+            self.logger.info("ADJACENT ANGLE COMPARISONS")
+            self.logger.info("=" * 60)
+            df_adjacent = analyzer.compute_adjacent_differences()
+
+            # Show fine-grained adjacent comparisons (delta < 1 degree)
+            if not df_adjacent.empty:
+                fine_steps = df_adjacent[df_adjacent['delta_deg'] < 1.0]
+                if not fine_steps.empty:
+                    self.logger.info("\nFine steps (< 1 degree apart):")
+                    for _, row in fine_steps.iterrows():
+                        self.logger.info(
+                            f"  {row['angle1']:.2f} -> {row['angle2']:.2f} "
+                            f"(delta={row['delta_deg']:.2f}): "
+                            f"MAE={row['mae']:.2f}, {row['pct_change']:.3f}% change, "
+                            f"intensity {row['median_intensity_1']:.0f} -> {row['median_intensity_2']:.0f}"
+                        )
+
+            # Compute standard differences for comparison (optional)
+            self.logger.info("\nComputing standard reference differences...")
+            df_differences = analyzer.compute_image_differences(reference_angle=reference_angle)
 
             # Skip birefringence analysis for deviation test (needs specific angle pairs)
             import pandas as pd
             df_birefringence = pd.DataFrame()
+
+            # Save detailed results to CSV
+            if not df_adjacent.empty:
+                csv_path = self.output_dir / "adjacent_differences.csv"
+                df_adjacent.to_csv(csv_path, index=False)
+                self.logger.info(f"\nSaved adjacent differences to: {csv_path}")
 
             # Generate visualizations
             self.logger.info("Generating visualizations...")

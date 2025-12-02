@@ -266,11 +266,138 @@ class PPMRotationAnalyzer:
                 'ssim': ssim,
                 'psnr': psnr,
                 'correlation': correlation,
-                'max_pixel_diff': np.max(np.abs(img - ref_image)),
+                'max_pixel_diff': float(np.max(np.abs(img - ref_image))),
                 'std_diff': np.std(img - ref_image)
             })
 
         return pd.DataFrame(results)
+
+    def compute_adjacent_differences(self) -> pd.DataFrame:
+        """
+        Compare each angle to its immediate neighbors to measure fine sensitivity.
+
+        This answers: "How much does the image change between 7.00 and 7.05 degrees?"
+
+        Returns:
+            DataFrame with columns: angle1, angle2, delta_deg, mae, pct_change, ssim
+        """
+        results = []
+        sorted_angles = sorted(self.images.keys())
+
+        print(f"\nComputing adjacent angle differences for {len(sorted_angles)} angles...")
+
+        for i in range(len(sorted_angles) - 1):
+            angle1 = sorted_angles[i]
+            angle2 = sorted_angles[i + 1]
+            delta = angle2 - angle1
+
+            img1 = self.images[angle1]
+            img2 = self.images[angle2]
+
+            # Compute metrics
+            mae = float(np.mean(np.abs(img2 - img1)))
+            img_range = max(img1.max() - img1.min(), 1)
+            pct_change = (mae / img_range) * 100
+
+            # SSIM for structural similarity
+            try:
+                ssim = metrics.structural_similarity(img1, img2, data_range=img1.max()-img1.min())
+            except Exception:
+                ssim = np.nan
+
+            results.append({
+                'angle1': angle1,
+                'angle2': angle2,
+                'delta_deg': delta,
+                'mae': mae,
+                'pct_change': pct_change,
+                'ssim': ssim,
+                'median_intensity_1': float(np.median(img1)),
+                'median_intensity_2': float(np.median(img2)),
+                'intensity_change': float(np.median(img2) - np.median(img1))
+            })
+
+        return pd.DataFrame(results)
+
+    def analyze_fine_sensitivity(self, base_angles: List[float] = None) -> Dict:
+        """
+        Analyze sensitivity to fine angular changes around specific base angles.
+
+        Groups angles by proximity to base angles (e.g., 7, 45) and computes
+        statistics for fine deviations within each group.
+
+        Args:
+            base_angles: List of nominal angles to analyze (default: [7, 45])
+
+        Returns:
+            Dictionary with sensitivity statistics per base angle
+        """
+        if base_angles is None:
+            base_angles = [7, 45]
+
+        results = {}
+        sorted_angles = sorted(self.images.keys())
+
+        for base in base_angles:
+            # Find angles within +/- 2 degrees of base
+            nearby = [a for a in sorted_angles if abs(a - base) <= 2.0]
+
+            if len(nearby) < 2:
+                continue
+
+            print(f"\n=== Fine sensitivity analysis around {base} deg ===")
+            print(f"Found {len(nearby)} angles: {[f'{a:.2f}' for a in nearby]}")
+
+            # Compare each angle to the base angle (or nearest to base)
+            base_actual = min(nearby, key=lambda x: abs(x - base))
+            if base_actual not in self.images:
+                continue
+
+            base_img = self.images[base_actual]
+            group_results = []
+
+            for angle in nearby:
+                if angle == base_actual:
+                    continue
+
+                img = self.images[angle]
+                deviation = angle - base_actual
+
+                mae = float(np.mean(np.abs(img - base_img)))
+                img_range = max(base_img.max() - base_img.min(), 1)
+                pct_change = (mae / img_range) * 100
+
+                group_results.append({
+                    'deviation': deviation,
+                    'angle': angle,
+                    'mae': mae,
+                    'pct_change': pct_change
+                })
+
+                print(f"  {base_actual:.2f} -> {angle:.2f} (delta={deviation:+.2f}): "
+                      f"MAE={mae:.2f}, {pct_change:.3f}% change")
+
+            if group_results:
+                # Compute sensitivity rate (% change per degree)
+                deviations = [abs(r['deviation']) for r in group_results]
+                pct_changes = [r['pct_change'] for r in group_results]
+
+                # Linear fit for sensitivity rate
+                if len(deviations) > 1:
+                    slope = np.polyfit(deviations, pct_changes, 1)[0]
+                else:
+                    slope = pct_changes[0] / deviations[0] if deviations[0] != 0 else 0
+
+                results[base] = {
+                    'base_angle': base_actual,
+                    'n_samples': len(group_results),
+                    'sensitivity_pct_per_deg': slope,
+                    'details': group_results
+                }
+
+                print(f"  --> Sensitivity: ~{slope:.2f}% intensity change per degree")
+
+        return results
 
     def compute_birefringence(self, angles: List[float] = None) -> Tuple[np.ndarray, np.ndarray]:
         """
