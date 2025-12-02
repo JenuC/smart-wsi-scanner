@@ -109,10 +109,10 @@ class PycromanagerHardware(MicroscopeHardware):
                     self.settings.get("id_stage", {}).get(r_device_name, {}).get("device")
                 )
                 if not self.rotation_device:
-                    # Fallback to looking for r_stage in stage config
-                    self.rotation_device = self.settings.get("stage", {}).get("r_stage")
-                if not self.rotation_device:
-                    raise ValueError("No rotation stage device found in configuration")
+                    raise ValueError(
+                        f"No rotation stage device found in configuration. "
+                        f"Expected device '{r_device_name}' in id_stage section."
+                    )
                 try:
                     _ = self._ppm_get_psgticks()  # initialize psg_angle
                     logger.info("PPM-specific methods initialized")

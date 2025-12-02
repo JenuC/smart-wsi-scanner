@@ -169,11 +169,11 @@ def parse_angles_exposures(angles_str, exposures_str=None) -> Tuple[List[float],
 
 
 def parse_acquisition_message(message: str) -> dict:
-    """Parse acquisition message supporting both legacy and new flag-based formats."""
+    """Parse acquisition message in flag-based format."""
     # Remove END_MARKER if present
     message = message.replace(" END_MARKER", "").replace("END_MARKER", "").strip()
 
-    # Check if it's flag-based format
+    # Parse flag-based format
     if "--" in message:
         # Parse flag-based format
         params = {}
@@ -283,8 +283,7 @@ def parse_acquisition_message(message: str) -> dict:
 
         return params
 
-    # Legacy format not implemented here
-    raise ValueError("Unsupported acquisition message format")
+    raise ValueError("Invalid acquisition message format - must use flag-based format with '--' parameters")
 
 
 def get_angles_wb_from_settings(settings: Dict[str, Any]) -> Dict[float, List[float]]:
@@ -437,12 +436,24 @@ def _acquisition_workflow(
                 background_dir = Path(params["background_folder"])
                 logger.info(f"Using background folder from message: {background_dir}")
             else:
-                # Priority 2: YAML configuration
-                modalities = ppm_settings.get("modalities", {})
-                ppm_config = modalities.get("ppm", {})
-                bc_settings = ppm_config.get("background_correction", {})
+                # Priority 2: YAML configuration from imageprocessing config file
+                # Try to load imageprocessing config (e.g., imageprocessing_PPM.yml)
+                config_path = Path(params["yaml_file_path"])
+                imageprocessing_path = config_path.parent / f"imageprocessing_{config_path.stem.replace('config_', '')}.yml"
 
-                if bc_settings.get("enabled") and bc_settings.get("base_folder"):
+                bc_settings = None
+                if imageprocessing_path.exists():
+                    try:
+                        imageprocessing_config = config_manager.load_config_file(str(imageprocessing_path))
+                        bc_config = imageprocessing_config.get("background_correction", {})
+                        bc_settings = bc_config.get(modality, {})
+                        logger.info(f"Loaded background correction settings from: {imageprocessing_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load imageprocessing config: {e}")
+                else:
+                    logger.warning(f"Imageprocessing config not found at: {imageprocessing_path}")
+
+                if bc_settings and bc_settings.get("enabled") and bc_settings.get("base_folder"):
                     # For YAML config, construct path with modality subdirectory
                     background_dir = Path(bc_settings["base_folder"]) / modality
                     logger.info(f"Using background folder from YAML config: {background_dir}")
@@ -1309,6 +1320,156 @@ def acquire_background_with_target_intensity(
     return last_image, last_exposure
 
 
+def acquire_background_with_biref_matching(
+    hardware: PycromanagerHardware,
+    reference_image: np.ndarray,
+    tolerance: float = 5.0,
+    initial_exposure_ms: float = 100.0,
+    max_iterations: int = 10,
+    logger=None,
+) -> Tuple[np.ndarray, float, float]:
+    """
+    Acquire background image optimized to minimize birefringence against reference.
+
+    Instead of matching overall intensity, this directly minimizes the
+    birefringence metric (sum of absolute channel differences) against
+    a reference image (typically the positive angle background).
+
+    This ensures that when birefringence is calculated as:
+        |R_pos - R_neg| + |G_pos - G_neg| + |B_pos - B_neg|
+    the result is minimized for background regions.
+
+    Args:
+        hardware: Microscope hardware interface
+        reference_image: Reference image to match against (e.g., +7 deg background)
+        tolerance: Target mean birefringence value (default 5.0, ideal is 0)
+        initial_exposure_ms: Starting exposure time in milliseconds
+        max_iterations: Maximum adjustment iterations
+        logger: Logger instance for tracking convergence
+
+    Returns:
+        Tuple of (image, final_exposure_ms, mean_biref)
+            image: Acquired image that minimizes birefringence
+            final_exposure_ms: Final exposure time used
+            mean_biref: Achieved mean birefringence value
+
+    Raises:
+        RuntimeError: If image acquisition fails
+    """
+    MIN_EXPOSURE_MS = 0.0001
+    MAX_EXPOSURE_MS = 5000.0
+
+    current_exposure = max(MIN_EXPOSURE_MS, min(MAX_EXPOSURE_MS, initial_exposure_ms))
+    hardware.set_exposure(current_exposure)
+
+    # Convert reference to int16 for signed arithmetic
+    ref_i16 = reference_image.astype(np.int16)
+    ref_mean = float(np.mean(reference_image))
+
+    if logger:
+        logger.info(
+            f"Starting biref-matched exposure: target_biref<={tolerance:.1f}, "
+            f"ref_mean={ref_mean:.1f}, initial_exposure={current_exposure:.1f}ms"
+        )
+
+    best_biref = float('inf')
+    best_image = None
+    best_exposure = current_exposure
+
+    for iteration in range(max_iterations):
+        image, metadata = hardware.snap_image(debayering=True)
+
+        if image is None:
+            raise RuntimeError(f"Failed to acquire image at iteration {iteration}")
+
+        img_i16 = image.astype(np.int16)
+
+        # Calculate birefringence metric (same as ppm_angle_difference)
+        # This is: |R_ref - R_img| + |G_ref - G_img| + |B_ref - B_img| per pixel
+        abs_diff = np.abs(ref_i16 - img_i16)
+        biref_per_pixel = np.sum(abs_diff, axis=2)
+        mean_biref = float(np.mean(biref_per_pixel))
+
+        # Calculate signed mean difference to determine adjustment direction
+        img_mean = float(np.mean(image))
+        signed_diff = ref_mean - img_mean
+
+        # Track best result
+        if mean_biref < best_biref:
+            best_biref = mean_biref
+            best_image = image.copy()
+            best_exposure = current_exposure
+
+        if logger:
+            logger.info(
+                f"  Iteration {iteration + 1}/{max_iterations}: "
+                f"biref={mean_biref:.1f}, img_mean={img_mean:.1f}, "
+                f"signed_diff={signed_diff:+.1f}, exposure={current_exposure:.1f}ms"
+            )
+
+        # Check convergence
+        if mean_biref <= tolerance:
+            if logger:
+                logger.info(
+                    f"Converged! Final biref={mean_biref:.1f}, "
+                    f"exposure={current_exposure:.1f}ms, iterations={iteration + 1}"
+                )
+            return image, current_exposure, mean_biref
+
+        # Check if we can improve further with exposure adjustment
+        # If images have similar overall intensity but high biref, it means
+        # per-channel ratios differ - exposure alone cannot fix this
+        if abs(signed_diff) < 2.0 and iteration > 0:
+            if logger:
+                logger.warning(
+                    f"    Images have similar intensity (diff={signed_diff:+.1f}) "
+                    f"but biref={mean_biref:.1f}. Per-channel differences may not be "
+                    f"correctable by exposure adjustment alone."
+                )
+            # Continue trying a few more iterations in case we can improve
+            if iteration >= 3:
+                break
+
+        # Proportional adjustment based on mean intensity difference
+        if img_mean >= 254.0:
+            # Image saturated - decrease aggressively
+            new_exposure = max(current_exposure * 0.5, MIN_EXPOSURE_MS)
+            if logger:
+                logger.warning(
+                    f"    Image saturated, halving exposure to {new_exposure:.1f}ms"
+                )
+        elif img_mean > 0:
+            # Adjust to match reference intensity
+            adjustment_ratio = ref_mean / img_mean
+            new_exposure = current_exposure * adjustment_ratio
+            new_exposure = max(MIN_EXPOSURE_MS, min(MAX_EXPOSURE_MS, new_exposure))
+
+            if logger:
+                logger.info(
+                    f"    Adjusting: {current_exposure:.1f}ms -> {new_exposure:.1f}ms "
+                    f"(ratio={adjustment_ratio:.3f})"
+                )
+        else:
+            # Image completely black
+            new_exposure = min(current_exposure * 2.0, MAX_EXPOSURE_MS)
+            if logger:
+                logger.warning(
+                    f"    Image black, doubling exposure to {new_exposure:.1f}ms"
+                )
+
+        current_exposure = new_exposure
+        hardware.set_exposure(current_exposure)
+
+    # Return best result found
+    if logger:
+        logger.info(
+            f"Max iterations reached. Using best result: "
+            f"biref={best_biref:.1f}, exposure={best_exposure:.1f}ms"
+        )
+
+    return best_image, best_exposure, best_biref
+
+
 def simple_background_collection(
     yaml_file_path: str,
     output_folder_path: str,
@@ -1398,79 +1559,112 @@ def simple_background_collection(
         # Track final exposures for each angle
         final_exposures = {}
 
-        # Track actual intensities for birefringence pair matching
+        # Track reference images for birefringence pair matching
         # When acquiring paired polarization angles (+7/-7 or +5/-5), the negative
-        # angle should target the ACTUAL intensity achieved by the positive angle,
-        # not a fixed value. This ensures backgrounds match through exposure adjustment.
-        biref_pair_intensities = {}  # Maps positive angle -> actual intensity achieved
+        # angle should minimize birefringence against the positive angle's IMAGE,
+        # not just match intensity. This uses the same metric as biref calculation:
+        # sum(|R_pos - R_neg| + |G_pos - G_neg| + |B_pos - B_neg|)
+        biref_pair_references = {}  # Maps positive angle -> reference image
 
         # Acquire background for each angle
         for angle_idx, angle in enumerate(angles):
-            logger.info(f"Acquiring background {angle_idx + 1}/{total_images} for angle {angle}°")
+            logger.info(f"Acquiring background {angle_idx + 1}/{total_images} for angle {angle}")
 
             # Set rotation angle if supported
             if hasattr(hardware, "set_psg_ticks"):
                 hardware.set_psg_ticks(
                     angle  # , is_sequence_start=True
                 )  # Each background is independent
-                logger.info(f"Set angle to {angle}°")
-
-            # Get target intensity for this modality/angle
-            # For negative angles, check if we have the paired positive angle's actual intensity
-            paired_positive = abs(angle)  # e.g., -7 pairs with 7
-            if angle < 0 and angle != -90:  # Negative polarization angle
-                if paired_positive in biref_pair_intensities:
-                    # Use the actual intensity from the positive angle as our target
-                    target_intensity = biref_pair_intensities[paired_positive]
-                    logger.info(
-                        f"Biref pair matching: using +{paired_positive} actual intensity "
-                        f"({target_intensity:.1f}) as target for {angle}"
-                    )
-                else:
-                    # Positive angle hasn't been acquired yet - use default but warn
-                    target_intensity = get_target_intensity_for_background(modality, angle)
-                    logger.warning(
-                        f"Biref pair matching: +{paired_positive} not yet acquired. "
-                        f"For best results, acquire positive angles before negative. "
-                        f"Using default target: {target_intensity:.1f}"
-                    )
-            else:
-                target_intensity = get_target_intensity_for_background(modality, angle)
-            logger.info(f"Target intensity: {target_intensity:.1f}")
+                logger.info(f"Set angle to {angle}")
 
             # Use exposure from QuPath as initial value for adaptive exposure
-            # This is typically based on modality defaults and provides a good starting point
             initial_exposure_ms = exposures[angle_idx] if angle_idx < len(exposures) else 100.0
             logger.info(f"Initial exposure from QuPath: {initial_exposure_ms:.2f}ms")
 
-            # Acquire with adaptive exposure to reach target intensity
-            try:
-                image, final_exposure = acquire_background_with_target_intensity(
-                    hardware=hardware,
-                    target_intensity=target_intensity,
-                    tolerance=2.5,
-                    initial_exposure_ms=initial_exposure_ms,
-                    max_iterations=10,
-                    logger=logger,
-                )
-                actual_intensity = float(np.median(image))
-                logger.info(
-                    f"Acquired background: shape={image.shape}, median={actual_intensity:.1f}, "
-                    f"final_exposure={final_exposure:.1f}ms"
-                )
-                # Store final exposure for this angle
-                final_exposures[angle] = final_exposure
-
-                # Store actual intensity for positive angles (used as target for paired negative)
-                # This ensures +7/-7 or +5/-5 backgrounds match through exposure adjustment
-                if angle > 0 and angle != 90:  # Positive polarization angles (not brightfield)
-                    biref_pair_intensities[angle] = actual_intensity
+            # For negative polarization angles, use biref-matching against positive angle
+            paired_positive = abs(angle)  # e.g., -7 pairs with 7
+            if angle < 0 and angle != -90:  # Negative polarization angle (not -90 brightfield)
+                if paired_positive in biref_pair_references:
+                    # Use biref-matching: minimize sum of abs channel differences
+                    reference_image = biref_pair_references[paired_positive]
                     logger.info(
-                        f"Stored +{angle} intensity ({actual_intensity:.1f}) for birefringence pair matching"
+                        f"Biref pair matching: minimizing biref metric against +{paired_positive} reference"
                     )
-            except RuntimeError as e:
-                logger.error(f"Failed to acquire background at angle {angle}°: {e}")
-                continue
+                    try:
+                        image, final_exposure, achieved_biref = acquire_background_with_biref_matching(
+                            hardware=hardware,
+                            reference_image=reference_image,
+                            tolerance=5.0,  # Target mean biref <= 5
+                            initial_exposure_ms=initial_exposure_ms,
+                            max_iterations=10,
+                            logger=logger,
+                        )
+                        logger.info(
+                            f"Acquired background: shape={image.shape}, "
+                            f"achieved_biref={achieved_biref:.1f}, "
+                            f"final_exposure={final_exposure:.1f}ms"
+                        )
+                        final_exposures[angle] = final_exposure
+                    except RuntimeError as e:
+                        logger.error(f"Failed to acquire background at angle {angle}: {e}")
+                        continue
+                else:
+                    # Positive angle hasn't been acquired yet - fall back to intensity matching
+                    logger.warning(
+                        f"Biref pair matching: +{paired_positive} not yet acquired. "
+                        f"For best results, acquire positive angles before negative. "
+                        f"Falling back to intensity-based matching."
+                    )
+                    target_intensity = get_target_intensity_for_background(modality, angle)
+                    try:
+                        image, final_exposure = acquire_background_with_target_intensity(
+                            hardware=hardware,
+                            target_intensity=target_intensity,
+                            tolerance=2.5,
+                            initial_exposure_ms=initial_exposure_ms,
+                            max_iterations=10,
+                            logger=logger,
+                        )
+                        logger.info(
+                            f"Acquired background: shape={image.shape}, "
+                            f"median={float(np.median(image)):.1f}, "
+                            f"final_exposure={final_exposure:.1f}ms"
+                        )
+                        final_exposures[angle] = final_exposure
+                    except RuntimeError as e:
+                        logger.error(f"Failed to acquire background at angle {angle}: {e}")
+                        continue
+            else:
+                # Non-biref angles (0, 90, positive angles): use standard intensity matching
+                target_intensity = get_target_intensity_for_background(modality, angle)
+                logger.info(f"Target intensity: {target_intensity:.1f}")
+
+                try:
+                    image, final_exposure = acquire_background_with_target_intensity(
+                        hardware=hardware,
+                        target_intensity=target_intensity,
+                        tolerance=2.5,
+                        initial_exposure_ms=initial_exposure_ms,
+                        max_iterations=10,
+                        logger=logger,
+                    )
+                    actual_intensity = float(np.median(image))
+                    logger.info(
+                        f"Acquired background: shape={image.shape}, median={actual_intensity:.1f}, "
+                        f"final_exposure={final_exposure:.1f}ms"
+                    )
+                    final_exposures[angle] = final_exposure
+
+                    # Store reference image for positive polarization angles
+                    # This will be used by paired negative angles for biref matching
+                    if angle > 0 and angle != 90:  # Positive polarization angles (not brightfield)
+                        biref_pair_references[angle] = image.copy()
+                        logger.info(
+                            f"Stored +{angle} image as reference for birefringence pair matching"
+                        )
+                except RuntimeError as e:
+                    logger.error(f"Failed to acquire background at angle {angle}: {e}")
+                    continue
 
             # Save background image using new format: angle.tif (not in subdirectory)
             background_path = output_path / f"{angle}.tif"
@@ -1567,6 +1761,10 @@ def background_acquisition_workflow(
         # Track final exposures for each angle
         final_exposures = {}
 
+        # Track reference images for birefringence pair matching
+        # Uses the same metric as biref calculation: sum(|R_pos - R_neg| + ...)
+        biref_pair_references = {}  # Maps positive angle -> reference image
+
         # Acquire background for each angle
         for angle_idx, angle in enumerate(angles):
             # Create angle subdirectory
@@ -1578,36 +1776,91 @@ def background_acquisition_workflow(
                 hardware.set_psg_ticks(
                     angle  # , is_sequence_start=True
                 )  # Each background is independent
-                logger.info(f"Set angle to {angle}°")
-
-            # Get target intensity for this modality/angle
-            target_intensity = get_target_intensity_for_background(modality, angle)
-            logger.info(f"Target intensity: {target_intensity:.1f}")
+                logger.info(f"Set angle to {angle}")
 
             # Use exposure from QuPath as initial value for adaptive exposure
-            # This is typically based on modality defaults and provides a good starting point
             initial_exposure_ms = exposures[angle_idx] if angle_idx < len(exposures) else 100.0
             logger.info(f"Initial exposure from QuPath: {initial_exposure_ms:.2f}ms")
 
-            # Acquire with adaptive exposure to reach target intensity
-            try:
-                image, final_exposure = acquire_background_with_target_intensity(
-                    hardware=hardware,
-                    target_intensity=target_intensity,
-                    tolerance=2.5,
-                    initial_exposure_ms=initial_exposure_ms,
-                    max_iterations=10,
-                    logger=logger,
-                )
-                logger.info(
-                    f"Acquired background: median={float(np.median(image)):.1f}, "
-                    f"final_exposure={final_exposure:.1f}ms"
-                )
-                # Store final exposure for this angle
-                final_exposures[angle] = final_exposure
-            except RuntimeError as e:
-                logger.error(f"Failed to acquire background at angle {angle}°: {e}")
-                continue
+            # For negative polarization angles, use biref-matching against positive angle
+            paired_positive = abs(angle)  # e.g., -7 pairs with 7
+            if angle < 0 and angle != -90:  # Negative polarization angle
+                if paired_positive in biref_pair_references:
+                    # Use biref-matching: minimize sum of abs channel differences
+                    reference_image = biref_pair_references[paired_positive]
+                    logger.info(
+                        f"Biref pair matching: minimizing biref metric against +{paired_positive} reference"
+                    )
+                    try:
+                        image, final_exposure, achieved_biref = acquire_background_with_biref_matching(
+                            hardware=hardware,
+                            reference_image=reference_image,
+                            tolerance=5.0,
+                            initial_exposure_ms=initial_exposure_ms,
+                            max_iterations=10,
+                            logger=logger,
+                        )
+                        logger.info(
+                            f"Acquired background: achieved_biref={achieved_biref:.1f}, "
+                            f"final_exposure={final_exposure:.1f}ms"
+                        )
+                        final_exposures[angle] = final_exposure
+                    except RuntimeError as e:
+                        logger.error(f"Failed to acquire background at angle {angle}: {e}")
+                        continue
+                else:
+                    # Positive angle not yet acquired - fall back to intensity matching
+                    logger.warning(
+                        f"Biref pair matching: +{paired_positive} not yet acquired. "
+                        f"Falling back to intensity-based matching."
+                    )
+                    target_intensity = get_target_intensity_for_background(modality, angle)
+                    try:
+                        image, final_exposure = acquire_background_with_target_intensity(
+                            hardware=hardware,
+                            target_intensity=target_intensity,
+                            tolerance=2.5,
+                            initial_exposure_ms=initial_exposure_ms,
+                            max_iterations=10,
+                            logger=logger,
+                        )
+                        logger.info(
+                            f"Acquired background: median={float(np.median(image)):.1f}, "
+                            f"final_exposure={final_exposure:.1f}ms"
+                        )
+                        final_exposures[angle] = final_exposure
+                    except RuntimeError as e:
+                        logger.error(f"Failed to acquire background at angle {angle}: {e}")
+                        continue
+            else:
+                # Non-biref angles: use standard intensity matching
+                target_intensity = get_target_intensity_for_background(modality, angle)
+                logger.info(f"Target intensity: {target_intensity:.1f}")
+
+                try:
+                    image, final_exposure = acquire_background_with_target_intensity(
+                        hardware=hardware,
+                        target_intensity=target_intensity,
+                        tolerance=2.5,
+                        initial_exposure_ms=initial_exposure_ms,
+                        max_iterations=10,
+                        logger=logger,
+                    )
+                    logger.info(
+                        f"Acquired background: median={float(np.median(image)):.1f}, "
+                        f"final_exposure={final_exposure:.1f}ms"
+                    )
+                    final_exposures[angle] = final_exposure
+
+                    # Store reference for positive polarization angles
+                    if angle > 0 and angle != 90:
+                        biref_pair_references[angle] = image.copy()
+                        logger.info(
+                            f"Stored +{angle} image as reference for birefringence pair matching"
+                        )
+                except RuntimeError as e:
+                    logger.error(f"Failed to acquire background at angle {angle}: {e}")
+                    continue
 
             # Save background image
             background_path = angle_dir / "background.tif"

@@ -150,7 +150,7 @@ class ConfigManager:
         if not config:
             return None
 
-        acq_profiles = config.get("acq_profiles_new", {})
+        acq_profiles = config.get("acq_profiles", {})
         defaults = acq_profiles.get("defaults", [])
         profiles = acq_profiles.get("profiles", [])
 
@@ -168,14 +168,13 @@ class ConfigManager:
                 and profile.get("objective") == objective
                 and profile.get("detector") == detector
             ):
-                # Merge with defaults
-                profile_settings = deepcopy(profile.get("settings", {}))
-                merged = self._merge_settings(default_settings, profile_settings)
+                # NOTE: Settings (exposures, gains, white_balance) have been moved to imageprocessing config
+                # Profiles now only contain modality/objective/detector identifiers
+                # Return the profile identifiers without settings
                 return {
                     "modality": modality,
                     "objective": objective,
                     "detector": detector,
-                    "settings": merged,
                 }
 
         return None
@@ -220,7 +219,7 @@ class ConfigManager:
         if not config:
             return None
 
-        acq_profiles = config.get("acq_profiles_new", {})
+        acq_profiles = config.get("acq_profiles", {})
         defaults = acq_profiles.get("defaults", [])
 
         for default in defaults:
@@ -236,6 +235,8 @@ class ConfigManager:
         """
         Get background correction settings for a modality.
 
+        Background correction settings are now stored in imageprocessing_PPM.yml.
+
         Args:
             modality: Imaging modality
             config_name: Configuration name (uses current if None)
@@ -243,13 +244,48 @@ class ConfigManager:
         Returns:
             Background correction settings or None
         """
-        config = self.get_config(config_name)
-        if not config:
-            return None
+        if config_name:
+            # Derive imageprocessing config name from main config name
+            # e.g., "config_PPM" -> "imageprocessing_PPM"
+            imageprocessing_name = config_name.replace("config_", "imageprocessing_")
+            imageprocessing_config = self.get_config(imageprocessing_name)
 
-        modalities = config.get("modalities", {})
-        modality_config = modalities.get(modality, {})
-        return modality_config.get("background_correction")
+            if imageprocessing_config:
+                bg_correction = imageprocessing_config.get("background_correction", {})
+                return bg_correction.get(modality)
+
+        return None
+
+    def get_imaging_profile(
+        self, modality: str, objective: str, detector: str, config_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get imaging profile settings (white_balance, exposures_ms, gains) from imageprocessing config.
+
+        These settings were moved from acq_profiles to imageprocessing_PPM.yml.
+
+        Args:
+            modality: Imaging modality (e.g., 'ppm', 'brightfield')
+            objective: Objective lens identifier
+            detector: Detector identifier
+            config_name: Configuration name (uses current if None)
+
+        Returns:
+            Dictionary with imaging settings or None if not found
+        """
+        if config_name:
+            # Derive imageprocessing config name from main config name
+            # e.g., "config_PPM" -> "imageprocessing_PPM"
+            imageprocessing_name = config_name.replace("config_", "imageprocessing_")
+            imageprocessing_config = self.get_config(imageprocessing_name)
+
+            if imageprocessing_config:
+                imaging_profiles = imageprocessing_config.get("imaging_profiles", {})
+                modality_profiles = imaging_profiles.get(modality, {})
+                objective_profiles = modality_profiles.get(objective, {})
+                return objective_profiles.get(detector)
+
+        return None
 
     def get_rotation_angles(
         self, config_name: Optional[str] = None
@@ -275,7 +311,7 @@ class ConfigManager:
         errors = []
 
         # Check required top-level keys
-        required_keys = ["microscope", "modalities", "acq_profiles_new", "stage"]
+        required_keys = ["microscope", "modalities", "acq_profiles", "stage"]
         for key in required_keys:
             if key not in config:
                 errors.append(f"Missing required key: {key}")
@@ -295,10 +331,10 @@ class ConfigManager:
                 errors.append("'modalities' must be a dictionary")
 
         # Validate acquisition profiles
-        if "acq_profiles_new" in config:
-            acq_profiles = config["acq_profiles_new"]
+        if "acq_profiles" in config:
+            acq_profiles = config["acq_profiles"]
             if not isinstance(acq_profiles, dict):
-                errors.append("'acq_profiles_new' must be a dictionary")
+                errors.append("'acq_profiles' must be a dictionary")
             else:
                 if "defaults" in acq_profiles and not isinstance(acq_profiles["defaults"], list):
                     errors.append("'defaults' must be a list")
@@ -327,7 +363,7 @@ class ConfigManager:
                 "modality": None,
             },
             "modalities": {},
-            "acq_profiles_new": {"defaults": [], "profiles": []},
+            "acq_profiles": {"defaults": [], "profiles": []},
             "stage": {
                 "stage_id": "",
                 "limits": {
