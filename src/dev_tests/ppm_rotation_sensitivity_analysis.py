@@ -675,14 +675,68 @@ class PPMRotationAnalyzer:
         plt.savefig(self.output_dir / 'sensitivity_analysis.png', dpi=150)
         plt.close()  # Don't block - file is already saved
 
+    def compute_birefringence_hue_shift(self, angle1: float, angle2: float) -> Dict:
+        """
+        Compute birefringence-related hue shift between two angles.
+
+        For PPM, birefringence is computed from paired angles (+/- from 45 deg).
+        This measures how much the "hue" (orientation/phase) changes.
+
+        Args:
+            angle1: First angle
+            angle2: Second angle (typically angle1's pair or small deviation)
+
+        Returns:
+            Dict with hue shift metrics
+        """
+        if angle1 not in self.images or angle2 not in self.images:
+            return {}
+
+        img1 = self.images[angle1]
+        img2 = self.images[angle2]
+
+        # Compute phase difference (simplified birefringence proxy)
+        # In full PPM, this would use Stokes parameters
+        diff = img2.astype(np.float64) - img1.astype(np.float64)
+
+        # Find background level using mode (most common value)
+        # Use histogram to find mode
+        hist, bin_edges = np.histogram(img1.flatten(), bins=256)
+        mode_idx = np.argmax(hist)
+        background_level = (bin_edges[mode_idx] + bin_edges[mode_idx + 1]) / 2
+
+        # Mask for pixels above background
+        above_bg_mask = img1 > (background_level + 10)  # 10 units above mode
+
+        if np.sum(above_bg_mask) == 0:
+            return {'error': 'No pixels above background'}
+
+        # Compute statistics for pixels above background
+        diff_above_bg = diff[above_bg_mask]
+
+        return {
+            'background_mode': float(background_level),
+            'n_pixels_above_bg': int(np.sum(above_bg_mask)),
+            'pct_pixels_above_bg': float(np.sum(above_bg_mask) / above_bg_mask.size * 100),
+            'mean_diff_above_bg': float(np.mean(diff_above_bg)),
+            'std_diff_above_bg': float(np.std(diff_above_bg)),
+            'median_diff_above_bg': float(np.median(diff_above_bg)),
+            'mean_intensity_above_bg_1': float(np.mean(img1[above_bg_mask])),
+            'mean_intensity_above_bg_2': float(np.mean(img2[above_bg_mask])),
+        }
+
     def generate_report(self, df_differences: pd.DataFrame,
-                       df_birefringence: pd.DataFrame):
+                       df_birefringence: pd.DataFrame,
+                       df_adjacent: pd.DataFrame = None,
+                       fine_sensitivity: Dict = None):
         """
         Generate a comprehensive report of the analysis.
 
         Args:
             df_differences: DataFrame from compute_image_differences
             df_birefringence: DataFrame from analyze_birefringence_sensitivity
+            df_adjacent: DataFrame from compute_adjacent_differences
+            fine_sensitivity: Dict from analyze_fine_sensitivity
         """
         report = {
             'timestamp': datetime.now().isoformat(),
@@ -693,79 +747,198 @@ class PPMRotationAnalyzer:
             'summary': {}
         }
 
-        # Summarize image difference sensitivity
-        if not df_differences.empty:
-            report['summary']['image_differences'] = {
-                'correlation_vs_angle': {
-                    str(row['angular_difference']): row['correlation']
-                    for _, row in df_differences.iterrows()
-                },
-                'ssim_vs_angle': {
-                    str(row['angular_difference']): row['ssim']
-                    for _, row in df_differences.iterrows()
-                },
-                'critical_angle': float(df_differences.loc[
-                    df_differences['correlation'] < 0.95
-                ]['angular_difference'].min()) if any(df_differences['correlation'] < 0.95) else None
-            }
-
-        # Summarize birefringence sensitivity
-        if not df_birefringence.empty:
-            report['summary']['birefringence_sensitivity'] = {
-                'max_retardance_error_per_degree': float(
-                    df_birefringence['mean_retardance_error'].max() /
-                    df_birefringence['deviation'].max()
-                ),
-                'max_orientation_error_per_degree': float(
-                    df_birefringence['mean_orientation_error_deg'].max() /
-                    df_birefringence['deviation'].max()
-                ),
-                'critical_deviation_retardance': float(
-                    df_birefringence[
-                        df_birefringence['mean_retardance_error'] > 0.01
-                    ]['deviation'].min()
-                ) if any(df_birefringence['mean_retardance_error'] > 0.01) else None,
-                'critical_deviation_orientation': float(
-                    df_birefringence[
-                        df_birefringence['mean_orientation_error_deg'] > 1.0
-                    ]['deviation'].min()
-                ) if any(df_birefringence['mean_orientation_error_deg'] > 1.0) else None
-            }
-
         # Save detailed DataFrames
-        df_differences.to_csv(self.output_dir / 'image_differences.csv', index=False)
-        df_birefringence.to_csv(self.output_dir / 'birefringence_sensitivity.csv', index=False)
+        if df_differences is not None and not df_differences.empty:
+            df_differences.to_csv(self.output_dir / 'image_differences.csv', index=False)
+        if df_birefringence is not None and not df_birefringence.empty:
+            df_birefringence.to_csv(self.output_dir / 'birefringence_sensitivity.csv', index=False)
 
         # Save JSON report
         with open(self.output_dir / 'analysis_report.json', 'w') as f:
             json.dump(report, f, indent=2, default=str)
 
-        # Generate text summary
+        # Generate comprehensive text summary
         with open(self.output_dir / 'summary.txt', 'w') as f:
-            f.write("PPM Rotation Sensitivity Analysis Summary\n")
-            f.write("=" * 50 + "\n\n")
+            f.write("=" * 70 + "\n")
+            f.write("PPM ROTATION SENSITIVITY ANALYSIS SUMMARY\n")
+            f.write("=" * 70 + "\n\n")
             f.write(f"Analysis Date: {report['timestamp']}\n")
             f.write(f"Images Analyzed: {report['n_images_loaded']}\n")
-            f.write(f"Available Angles: {report['angles_available']}\n\n")
+            f.write(f"Image Shape: {self.image_shape}\n\n")
 
-            if 'image_differences' in report['summary']:
-                f.write("Image Quality Metrics:\n")
-                f.write("-" * 30 + "\n")
-                crit = report['summary']['image_differences'].get('critical_angle')
-                if crit:
-                    f.write(f"Critical angle (correlation < 0.95): {crit} degrees\n")
+            # ============================================================
+            # SECTION 1: Fine Angular Sensitivity Around Base Angles
+            # ============================================================
+            f.write("=" * 70 + "\n")
+            f.write("1. FINE ANGULAR SENSITIVITY\n")
+            f.write("   (Intensity change for small deviations from base angles)\n")
+            f.write("=" * 70 + "\n\n")
+
+            if fine_sensitivity:
+                for base_angle, data in fine_sensitivity.items():
+                    f.write(f"Base Angle: {data['base_angle']:.2f} deg\n")
+                    f.write("-" * 50 + "\n")
+                    f.write(f"  Samples: {data['n_samples']}\n")
+                    f.write(f"  Sensitivity: {data['sensitivity_pct_per_deg']:.3f}% intensity change per degree\n\n")
+
+                    # Table of deviations
+                    f.write("  Deviation (deg)  |  Intensity Change (%)\n")
+                    f.write("  " + "-" * 45 + "\n")
+
+                    # Sort by absolute deviation
+                    sorted_details = sorted(data['details'], key=lambda x: abs(x['deviation']))
+                    for item in sorted_details:
+                        dev = item['deviation']
+                        pct = item['pct_change']
+                        f.write(f"  {dev:+7.2f}          |  {pct:8.4f}%\n")
+                    f.write("\n")
+            else:
+                f.write("  No fine sensitivity data available.\n\n")
+
+            # ============================================================
+            # SECTION 2: Standard Deviation at Various Angular Steps
+            # ============================================================
+            f.write("=" * 70 + "\n")
+            f.write("2. INTENSITY VARIABILITY BY ANGULAR STEP SIZE\n")
+            f.write("   (Standard deviation of intensity differences)\n")
+            f.write("=" * 70 + "\n\n")
+
+            if df_adjacent is not None and not df_adjacent.empty:
+                # Group by approximate step size
+                step_groups = {
+                    '0.05 deg': df_adjacent[df_adjacent['delta_deg'] <= 0.06],
+                    '0.10 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.06) & (df_adjacent['delta_deg'] <= 0.15)],
+                    '0.20 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.15) & (df_adjacent['delta_deg'] <= 0.25)],
+                    '0.30 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.25) & (df_adjacent['delta_deg'] <= 0.40)],
+                    '0.50 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.40) & (df_adjacent['delta_deg'] <= 0.60)],
+                    '1.00 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.60) & (df_adjacent['delta_deg'] <= 1.5)],
+                    '7.00 deg': df_adjacent[(df_adjacent['delta_deg'] > 6.0) & (df_adjacent['delta_deg'] <= 8.0)],
+                }
+
+                f.write("  Step Size  |  Mean MAE  |  Std MAE  |  Mean % Change  |  N samples\n")
+                f.write("  " + "-" * 65 + "\n")
+
+                for step_name, group in step_groups.items():
+                    if len(group) > 0:
+                        mean_mae = group['mae'].mean()
+                        std_mae = group['mae'].std() if len(group) > 1 else 0
+                        mean_pct = group['pct_change'].mean()
+                        n = len(group)
+                        f.write(f"  {step_name:9s}  |  {mean_mae:8.2f}  |  {std_mae:7.2f}  |  {mean_pct:13.4f}%  |  {n:3d}\n")
+
+                f.write("\n")
+            else:
+                f.write("  No adjacent difference data available.\n\n")
+
+            # ============================================================
+            # SECTION 3: Intensity Comparison - Small vs Large Deviations
+            # ============================================================
+            f.write("=" * 70 + "\n")
+            f.write("3. INTENSITY CHANGE: SMALL DEVIATIONS vs LARGE BASELINE SHIFT\n")
+            f.write("   (Comparing fine steps to standard angle steps)\n")
+            f.write("=" * 70 + "\n\n")
+
+            # Find reference pairs for comparison
+            sorted_angles = sorted(self.images.keys())
+
+            # Look for 7 degree and nearby fine steps
+            angles_near_7 = [a for a in sorted_angles if 6.0 <= a <= 8.0]
+            angles_near_0 = [a for a in sorted_angles if -0.5 <= a <= 0.5]
+
+            if angles_near_7 and len(angles_near_7) > 1:
+                base_7 = min(angles_near_7, key=lambda x: abs(x - 7.0))
+                f.write(f"  Reference angle: {base_7:.2f} deg\n\n")
+
+                # Small deviations from 7
+                f.write("  Small deviations from reference:\n")
+                f.write("  " + "-" * 50 + "\n")
+                for angle in sorted(angles_near_7):
+                    if angle != base_7:
+                        dev = angle - base_7
+                        img_ref = self.images[base_7]
+                        img_comp = self.images[angle]
+                        mae = float(np.mean(np.abs(img_comp - img_ref)))
+                        img_range = max(img_ref.max() - img_ref.min(), 1)
+                        pct = (mae / img_range) * 100
+                        f.write(f"    {base_7:.2f} -> {angle:.2f} (delta={dev:+.2f}): {pct:.4f}% change\n")
+
+                # Large baseline shift (7 vs 0)
+                if angles_near_0:
+                    base_0 = min(angles_near_0, key=lambda x: abs(x))
+                    f.write(f"\n  Large baseline shift ({base_7:.2f} vs {base_0:.2f}):\n")
+                    f.write("  " + "-" * 50 + "\n")
+                    img_ref = self.images[base_7]
+                    img_0 = self.images[base_0]
+                    mae = float(np.mean(np.abs(img_0 - img_ref)))
+                    img_range = max(img_ref.max() - img_ref.min(), 1)
+                    pct = (mae / img_range) * 100
+                    f.write(f"    {base_7:.2f} -> {base_0:.2f} (delta={base_0 - base_7:.2f}): {pct:.4f}% change\n")
+
                 f.write("\n")
 
-            if 'birefringence_sensitivity' in report['summary']:
-                f.write("Birefringence Sensitivity:\n")
-                f.write("-" * 30 + "\n")
-                bs = report['summary']['birefringence_sensitivity']
-                f.write(f"Max retardance error per degree: {bs['max_retardance_error_per_degree']:.4f}\n")
-                f.write(f"Max orientation error per degree: {bs['max_orientation_error_per_degree']:.2f} deg\n")
-                if bs.get('critical_deviation_retardance'):
-                    f.write(f"Critical deviation for retardance: {bs['critical_deviation_retardance']:.2f} deg\n")
-                if bs.get('critical_deviation_orientation'):
-                    f.write(f"Critical deviation for orientation: {bs['critical_deviation_orientation']:.2f} deg\n")
+            # ============================================================
+            # SECTION 4: Birefringence Hue Analysis
+            # ============================================================
+            f.write("=" * 70 + "\n")
+            f.write("4. BIREFRINGENCE HUE ANALYSIS\n")
+            f.write("   (Intensity difference for pixels above background mode)\n")
+            f.write("=" * 70 + "\n\n")
+
+            # Analyze hue shift for key angle pairs
+            # For PPM, birefringence typically uses +/- angles from 45 or paired angles
+            angles_near_45 = [a for a in sorted_angles if 44.0 <= a <= 46.0]
+
+            if len(angles_near_45) >= 2:
+                base_45 = min(angles_near_45, key=lambda x: abs(x - 45.0))
+                f.write(f"  Base angle for hue analysis: {base_45:.2f} deg\n\n")
+
+                f.write("  Angle Pair          |  Background  |  Mean Diff  |  Std Diff  |  Pixels > BG\n")
+                f.write("  " + "-" * 75 + "\n")
+
+                for angle in sorted(angles_near_45):
+                    if angle != base_45:
+                        hue_data = self.compute_birefringence_hue_shift(base_45, angle)
+                        if hue_data and 'error' not in hue_data:
+                            f.write(f"  {base_45:.2f} -> {angle:.2f}  |  "
+                                   f"{hue_data['background_mode']:10.1f}  |  "
+                                   f"{hue_data['mean_diff_above_bg']:9.2f}  |  "
+                                   f"{hue_data['std_diff_above_bg']:8.2f}  |  "
+                                   f"{hue_data['pct_pixels_above_bg']:6.1f}%\n")
+
+                # Also compare to a distant angle if available
+                if angles_near_7:
+                    base_7 = min(angles_near_7, key=lambda x: abs(x - 7.0))
+                    f.write(f"\n  Comparison to distant angle ({base_45:.2f} vs {base_7:.2f}):\n")
+                    f.write("  " + "-" * 50 + "\n")
+                    hue_data = self.compute_birefringence_hue_shift(base_45, base_7)
+                    if hue_data and 'error' not in hue_data:
+                        f.write(f"    Background mode: {hue_data['background_mode']:.1f}\n")
+                        f.write(f"    Mean diff (above BG): {hue_data['mean_diff_above_bg']:.2f}\n")
+                        f.write(f"    Std diff (above BG): {hue_data['std_diff_above_bg']:.2f}\n")
+                        f.write(f"    Pixels above BG: {hue_data['pct_pixels_above_bg']:.1f}%\n")
+
+                f.write("\n")
+            else:
+                f.write("  Insufficient angles near 45 deg for hue analysis.\n\n")
+
+            # ============================================================
+            # SECTION 5: Key Findings Summary
+            # ============================================================
+            f.write("=" * 70 + "\n")
+            f.write("5. KEY FINDINGS\n")
+            f.write("=" * 70 + "\n\n")
+
+            if fine_sensitivity:
+                for base_angle, data in fine_sensitivity.items():
+                    sens = data['sensitivity_pct_per_deg']
+                    f.write(f"  - At {data['base_angle']:.0f} deg: {sens:.3f}% intensity change per degree\n")
+                    f.write(f"    -> 0.05 deg error causes ~{sens * 0.05:.4f}% intensity change\n")
+                    f.write(f"    -> 0.10 deg error causes ~{sens * 0.10:.4f}% intensity change\n")
+                    f.write(f"    -> 1.00 deg error causes ~{sens * 1.00:.3f}% intensity change\n\n")
+
+            f.write("=" * 70 + "\n")
+            f.write("END OF REPORT\n")
+            f.write("=" * 70 + "\n")
 
         print(f"\nAnalysis complete. Results saved to: {self.output_dir}")
         return report

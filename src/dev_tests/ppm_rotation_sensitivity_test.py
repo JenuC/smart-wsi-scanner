@@ -566,9 +566,14 @@ class PPMRotationSensitivityTester:
             self.logger.info("Generating visualizations...")
             analyzer.visualize_difference_maps(reference_angle=reference_angle)
 
-            # Generate report
+            # Generate report with all collected data
             self.logger.info("Generating analysis report...")
-            report = analyzer.generate_report(df_differences, df_birefringence)
+            report = analyzer.generate_report(
+                df_differences=df_differences,
+                df_birefringence=df_birefringence,
+                df_adjacent=df_adjacent,
+                fine_sensitivity=fine_sensitivity
+            )
 
             self.test_results['analysis'] = report
             return report
