@@ -98,10 +98,9 @@ class PPMRotationAnalyzer:
 
     def load_deviation_images(self) -> Dict[float, np.ndarray]:
         """
-        Load PPM deviation test images. Supports two naming conventions:
+        Load PPM deviation test images in BGACQUIRE format: {angle}.tif (e.g., 45.05.tif, 44.0.tif)
 
-        1. BGACQUIRE format: {angle}.tif (e.g., 45.05.tif, 44.0.tif)
-        2. Legacy format: deviation_{base}deg_{plus|minus}_{deviation}.tif
+        This is the format used by qp_acquisition.simple_background_collection().
 
         Returns:
             Dictionary mapping actual angles to image arrays
@@ -109,8 +108,7 @@ class PPMRotationAnalyzer:
         import re
         print("Loading PPM deviation images...")
 
-        # First, try BGACQUIRE format: {angle}.tif (e.g., 45.05.tif)
-        # This is what qp_acquisition.simple_background_collection() saves
+        # Load BGACQUIRE format: {angle}.tif (e.g., 45.05.tif)
         angle_pattern = re.compile(r'^(-?\d+\.?\d*)\.tif$', re.IGNORECASE)
 
         for file_path in self.base_path.glob("*.tif"):
@@ -129,32 +127,6 @@ class PPMRotationAnalyzer:
                         print(f"  Loaded {angle:.2f} deg image: {file_path.name}")
                 except ValueError:
                     pass  # Not a valid angle filename
-
-        # If no BGACQUIRE format files found, try legacy format
-        if not self.images:
-            legacy_pattern = re.compile(r'deviation_(\d+)deg_(plus|minus)_(\d+\.?\d*)\.(tif|tiff)', re.IGNORECASE)
-
-            for file_path in self.base_path.glob("deviation_*.tif"):
-                match = legacy_pattern.match(file_path.name)
-                if match:
-                    base_angle = float(match.group(1))
-                    direction = match.group(2)
-                    deviation = float(match.group(3))
-
-                    if direction == 'plus':
-                        actual_angle = base_angle + deviation
-                    else:
-                        actual_angle = base_angle - deviation
-
-                    img = cv2.imread(str(file_path), cv2.IMREAD_UNCHANGED)
-                    if img is not None:
-                        img = img.astype(np.float32)
-                        if len(img.shape) == 3:
-                            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                        self.images[actual_angle] = img
-                        if self.image_shape is None:
-                            self.image_shape = img.shape
-                        print(f"  Loaded {actual_angle:.2f} deg image: {file_path.name}")
 
         print(f"Loaded {len(self.images)} deviation images")
         return self.images
@@ -570,7 +542,7 @@ class PPMRotationAnalyzer:
         plt.suptitle(f'PPM Image Differences (Reference: {reference_angle} degrees)', fontsize=14)
         plt.tight_layout()
         plt.savefig(self.output_dir / f'difference_maps_ref{reference_angle}.png', dpi=150)
-        plt.show()
+        plt.close()  # Don't block - file is already saved
 
     def visualize_birefringence_comparison(self, angle_sets: List[List[float]] = None):
         """
@@ -611,7 +583,7 @@ class PPMRotationAnalyzer:
         plt.suptitle('Birefringence Analysis Comparison', fontsize=14)
         plt.tight_layout()
         plt.savefig(self.output_dir / 'birefringence_comparison.png', dpi=150)
-        plt.show()
+        plt.close()  # Don't block - file is already saved
 
     def generate_sensitivity_plots(self, df_differences: pd.DataFrame,
                                   df_birefringence: pd.DataFrame):
@@ -701,7 +673,7 @@ class PPMRotationAnalyzer:
         plt.suptitle('PPM Rotation Sensitivity Analysis', fontsize=16)
         plt.tight_layout()
         plt.savefig(self.output_dir / 'sensitivity_analysis.png', dpi=150)
-        plt.show()
+        plt.close()  # Don't block - file is already saved
 
     def generate_report(self, df_differences: pd.DataFrame,
                        df_birefringence: pd.DataFrame):
