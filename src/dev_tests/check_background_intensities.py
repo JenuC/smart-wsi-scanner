@@ -71,19 +71,28 @@ def check_backgrounds(background_dir: pathlib.Path):
         print(f"Difference: {abs(pos_img.mean() - neg_img.mean()):.1f}")
 
         # Calculate what the birefringence background would be
+        # Using same formula as ppm_angle_difference: |R1-R2| + |G1-G2| + |B1-B2|
         diff = np.abs(pos_img.astype(np.int16) - neg_img.astype(np.int16))
         if len(diff.shape) == 3:
-            biref_sim = np.sum(diff, axis=2)
+            biref_sim = np.sum(diff, axis=2)  # Sum across RGB channels
         else:
             biref_sim = diff
 
-        print(f"\nSimulated birefringence background mean: {biref_sim.mean():.1f}")
-        print(f"Simulated birefringence background range: [{biref_sim.min()}, {biref_sim.max()}]")
+        print(f"\nSimulated birefringence background:")
+        print(f"  Mean: {biref_sim.mean():.1f} (ideal: < 5)")
+        print(f"  Range: [{biref_sim.min()}, {biref_sim.max()}]")
 
-        if biref_sim.mean() > 20:
-            print(f"\nWARNING: Birefringence background mean ({biref_sim.mean():.1f}) is too high!")
-            print(f"Expected: Close to 0 (black background)")
-            print(f"This indicates +7 and -7 backgrounds have different intensities")
+        # Also show per-channel differences to diagnose the source
+        if len(pos_img.shape) == 3 and pos_img.shape[2] >= 3:
+            r_diff = np.mean(np.abs(pos_img[:,:,0].astype(np.int16) - neg_img[:,:,0].astype(np.int16)))
+            g_diff = np.mean(np.abs(pos_img[:,:,1].astype(np.int16) - neg_img[:,:,1].astype(np.int16)))
+            b_diff = np.mean(np.abs(pos_img[:,:,2].astype(np.int16) - neg_img[:,:,2].astype(np.int16)))
+            print(f"  Per-channel mean |diff|: R={r_diff:.1f}, G={g_diff:.1f}, B={b_diff:.1f}")
+
+        if biref_sim.mean() > 10:
+            print(f"\nWARNING: Birefringence background mean ({biref_sim.mean():.1f}) is high!")
+            print(f"Expected: < 5 for well-matched backgrounds")
+            print(f"Note: Background collection should now use biref-matching to minimize this.")
     else:
         print(f"\nCould not find both +7 and -7 backgrounds for comparison")
         if pos_path:
