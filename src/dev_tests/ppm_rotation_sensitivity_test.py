@@ -582,18 +582,41 @@ class PPMRotationSensitivityTester:
             self.logger.info(f"Position: {actual:.4f} deg (target: {angle})")
 
             # Acquire multiple image pairs WITHOUT moving
+            # NOTE: BGACQUIRE saves files as {angle}.tif, so we must rename after each
+            # acquisition to prevent overwriting when acquiring multiple images at same angle
             pairs = []
             for i in range(n_repeats):
                 self.logger.info(f"  Pair {i+1}/{n_repeats}: Acquiring image A...")
 
-                # Image A
+                # Image A - BGACQUIRE will save as {angle}.tif
+                temp_name = f"{angle}.tif"
                 save_name_a = f"baseline_{angle:.1f}deg_pair{i+1}_A.tif"
-                path_a = self.acquire_at_angle(angle, save_name_a, exposure_ms=exposure)
+                self.acquire_at_angle(angle, temp_name, exposure_ms=exposure)
+
+                # Rename immediately to prevent overwrite
+                src_path = self.output_dir / temp_name
+                path_a = self.output_dir / save_name_a
+                if src_path.exists():
+                    src_path.rename(path_a)
+                    self.logger.info(f"    Renamed {temp_name} -> {save_name_a}")
+                else:
+                    self.logger.warning(f"    Source file not found: {src_path}")
+                    path_a = None
 
                 # DO NOT MOVE - acquire image B at same position
                 self.logger.info(f"  Pair {i+1}/{n_repeats}: Acquiring image B (NO rotation)...")
                 save_name_b = f"baseline_{angle:.1f}deg_pair{i+1}_B.tif"
-                path_b = self.acquire_at_angle(angle, save_name_b, exposure_ms=exposure)
+                self.acquire_at_angle(angle, temp_name, exposure_ms=exposure)
+
+                # Rename immediately
+                src_path = self.output_dir / temp_name
+                path_b = self.output_dir / save_name_b
+                if src_path.exists():
+                    src_path.rename(path_b)
+                    self.logger.info(f"    Renamed {temp_name} -> {save_name_b}")
+                else:
+                    self.logger.warning(f"    Source file not found: {src_path}")
+                    path_b = None
 
                 if path_a and path_b:
                     pairs.append({
