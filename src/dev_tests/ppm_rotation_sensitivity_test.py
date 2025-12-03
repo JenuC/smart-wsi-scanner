@@ -538,25 +538,38 @@ class PPMRotationSensitivityTester:
         return acquired
 
     def run_repeatability_test(self, test_angle: float = 7.0,
-                              n_repeats: int = 10) -> List[Dict]:
+                              n_repeats: int = 10,
+                              include_large_movements: bool = True) -> List[Dict]:
         """
-        Test mechanical repeatability at a single angle.
+        Test mechanical repeatability with both small and large movements.
+
+        Tests both small angular movements (e.g., 0 -> 7 deg) and large movements
+        (e.g., 0 -> 90 deg, 90 -> 7 deg) to characterize positioning accuracy
+        across the full range of operation.
 
         Args:
-            test_angle: Angle to test repeatedly
-            n_repeats: Number of repetitions
+            test_angle: Primary angle to test repeatedly
+            n_repeats: Number of repetitions for each movement type
+            include_large_movements: If True, also test 90+ degree movements
 
         Returns:
             List of measurement dictionaries
         """
         self.logger.info("=" * 60)
         self.logger.info(f"REPEATABILITY TEST: {test_angle} degrees x {n_repeats}")
+        if include_large_movements:
+            self.logger.info("Including large movement tests (90+ degrees)")
         self.logger.info("=" * 60)
 
-        measurements = []
+        all_measurements = []
+
+        # ========== SMALL MOVEMENT TEST (0 -> test_angle) ==========
+        self.logger.info("-" * 40)
+        self.logger.info(f"SMALL MOVEMENTS: 0 -> {test_angle} deg ({test_angle} deg travel)")
+        self.logger.info("-" * 40)
 
         for i in range(n_repeats):
-            self.logger.info(f"Repetition {i+1}/{n_repeats}")
+            self.logger.info(f"Small movement {i+1}/{n_repeats}")
 
             # Move away first to test return accuracy
             if i > 0:
@@ -573,36 +586,196 @@ class PPMRotationSensitivityTester:
 
             measurement = {
                 'repetition': i + 1,
+                'test_type': 'small_movement',
+                'from_angle': 0,
                 'set_angle': test_angle,
+                'travel_deg': test_angle,
                 'read_angle': actual,
                 'error': error,
                 'timestamp': datetime.now().isoformat()
             }
-            measurements.append(measurement)
+            all_measurements.append(measurement)
 
-            self.logger.info(f"  Set: {test_angle:.3f}, Read: {actual:.3f}, Error: {error:.3f}")
+            self.logger.info(f"  Set: {test_angle:.3f}, Read: {actual:.3f}, Error: {error:.4f}")
 
-        # Calculate statistics
-        errors = [m['error'] for m in measurements]
-        stats = {
-            'mean_error': np.mean(errors),
-            'std_error': np.std(errors),
-            'max_error': np.max(np.abs(errors)),
-            'repeatability_2sigma': 2 * np.std(errors)
+        # ========== LARGE MOVEMENT TESTS ==========
+        if include_large_movements:
+            # Test 1: 0 -> 90 degrees (large movement to uncrossed)
+            self.logger.info("-" * 40)
+            self.logger.info("LARGE MOVEMENTS: 0 -> 90 deg (90 deg travel)")
+            self.logger.info("-" * 40)
+
+            for i in range(n_repeats):
+                self.logger.info(f"Large movement (0->90) {i+1}/{n_repeats}")
+
+                # Return to 0
+                self.client.test_move_rotation(0)
+                time.sleep(1)
+
+                # Move to 90 degrees
+                self.client.test_move_rotation(90)
+                time.sleep(0.5)
+
+                actual = self.client.test_get_rotation()
+                error = actual - 90
+
+                measurement = {
+                    'repetition': i + 1,
+                    'test_type': 'large_movement_0_to_90',
+                    'from_angle': 0,
+                    'set_angle': 90,
+                    'travel_deg': 90,
+                    'read_angle': actual,
+                    'error': error,
+                    'timestamp': datetime.now().isoformat()
+                }
+                all_measurements.append(measurement)
+
+                self.logger.info(f"  Set: 90.000, Read: {actual:.3f}, Error: {error:.4f}")
+
+            # Test 2: 90 -> test_angle (large movement back)
+            self.logger.info("-" * 40)
+            self.logger.info(f"LARGE MOVEMENTS: 90 -> {test_angle} deg ({90 - test_angle} deg travel)")
+            self.logger.info("-" * 40)
+
+            for i in range(n_repeats):
+                self.logger.info(f"Large movement (90->{test_angle}) {i+1}/{n_repeats}")
+
+                # Move to 90 first
+                self.client.test_move_rotation(90)
+                time.sleep(1)
+
+                # Move to test angle
+                self.client.test_move_rotation(test_angle)
+                time.sleep(0.5)
+
+                actual = self.client.test_get_rotation()
+                error = actual - test_angle
+
+                measurement = {
+                    'repetition': i + 1,
+                    'test_type': 'large_movement_90_to_target',
+                    'from_angle': 90,
+                    'set_angle': test_angle,
+                    'travel_deg': 90 - test_angle,
+                    'read_angle': actual,
+                    'error': error,
+                    'timestamp': datetime.now().isoformat()
+                }
+                all_measurements.append(measurement)
+
+                self.logger.info(f"  Set: {test_angle:.3f}, Read: {actual:.3f}, Error: {error:.4f}")
+
+            # Test 3: Full range 0 -> 90 -> 0 (bidirectional)
+            self.logger.info("-" * 40)
+            self.logger.info("BIDIRECTIONAL: 0 -> 90 -> 0 (hysteresis test)")
+            self.logger.info("-" * 40)
+
+            for i in range(n_repeats):
+                self.logger.info(f"Bidirectional {i+1}/{n_repeats}")
+
+                # Start at 0
+                self.client.test_move_rotation(0)
+                time.sleep(0.5)
+                start_pos = self.client.test_get_rotation()
+
+                # Move to 90
+                self.client.test_move_rotation(90)
+                time.sleep(0.5)
+                mid_pos = self.client.test_get_rotation()
+
+                # Return to 0
+                self.client.test_move_rotation(0)
+                time.sleep(0.5)
+                end_pos = self.client.test_get_rotation()
+
+                hysteresis = end_pos - start_pos
+
+                measurement = {
+                    'repetition': i + 1,
+                    'test_type': 'bidirectional_hysteresis',
+                    'start_angle': start_pos,
+                    'mid_angle': mid_pos,
+                    'end_angle': end_pos,
+                    'travel_deg': 180,  # Total travel: 0->90->0
+                    'hysteresis': hysteresis,
+                    'timestamp': datetime.now().isoformat()
+                }
+                all_measurements.append(measurement)
+
+                self.logger.info(f"  Start: {start_pos:.4f}, Mid: {mid_pos:.3f}, End: {end_pos:.4f}")
+                self.logger.info(f"  Hysteresis: {hysteresis:.4f} deg")
+
+        # ========== CALCULATE STATISTICS BY TEST TYPE ==========
+        self.logger.info("=" * 60)
+        self.logger.info("REPEATABILITY STATISTICS BY TEST TYPE")
+        self.logger.info("=" * 60)
+
+        stats_by_type = {}
+
+        # Group measurements by test type
+        test_types = set(m.get('test_type', 'unknown') for m in all_measurements)
+
+        for test_type in test_types:
+            type_measurements = [m for m in all_measurements if m.get('test_type') == test_type]
+
+            if test_type == 'bidirectional_hysteresis':
+                # Special handling for hysteresis test
+                hysteresis_values = [m['hysteresis'] for m in type_measurements]
+                stats_by_type[test_type] = {
+                    'n_measurements': len(type_measurements),
+                    'mean_hysteresis': float(np.mean(hysteresis_values)),
+                    'max_hysteresis': float(np.max(np.abs(hysteresis_values))),
+                    'std_hysteresis': float(np.std(hysteresis_values))
+                }
+                self.logger.info(f"\n{test_type}:")
+                self.logger.info(f"  N measurements: {stats_by_type[test_type]['n_measurements']}")
+                self.logger.info(f"  Mean hysteresis: {stats_by_type[test_type]['mean_hysteresis']:.4f} deg")
+                self.logger.info(f"  Max hysteresis: {stats_by_type[test_type]['max_hysteresis']:.4f} deg")
+            else:
+                # Standard error statistics
+                errors = [m['error'] for m in type_measurements]
+                travel = type_measurements[0].get('travel_deg', 0) if type_measurements else 0
+
+                stats_by_type[test_type] = {
+                    'n_measurements': len(type_measurements),
+                    'travel_deg': travel,
+                    'mean_error': float(np.mean(errors)),
+                    'std_error': float(np.std(errors)),
+                    'max_error': float(np.max(np.abs(errors))),
+                    'repeatability_2sigma': float(2 * np.std(errors))
+                }
+                self.logger.info(f"\n{test_type} ({travel} deg travel):")
+                self.logger.info(f"  N measurements: {stats_by_type[test_type]['n_measurements']}")
+                self.logger.info(f"  Mean error: {stats_by_type[test_type]['mean_error']:.4f} deg")
+                self.logger.info(f"  Std deviation: {stats_by_type[test_type]['std_error']:.4f} deg")
+                self.logger.info(f"  Max error: {stats_by_type[test_type]['max_error']:.4f} deg")
+                self.logger.info(f"  2-sigma repeatability: {stats_by_type[test_type]['repeatability_2sigma']:.4f} deg")
+
+        # Overall statistics (all non-hysteresis measurements)
+        all_errors = [m['error'] for m in all_measurements if 'error' in m]
+        overall_stats = {
+            'total_measurements': len(all_measurements),
+            'mean_error': float(np.mean(all_errors)) if all_errors else 0,
+            'std_error': float(np.std(all_errors)) if all_errors else 0,
+            'max_error': float(np.max(np.abs(all_errors))) if all_errors else 0,
+            'repeatability_2sigma': float(2 * np.std(all_errors)) if all_errors else 0
         }
 
-        self.logger.info(f"Repeatability Statistics:")
-        self.logger.info(f"  Mean error: {stats['mean_error']:.4f} degrees")
-        self.logger.info(f"  Std deviation: {stats['std_error']:.4f} degrees")
-        self.logger.info(f"  Max error: {stats['max_error']:.4f} degrees")
-        self.logger.info(f"  2-sigma repeatability: {stats['repeatability_2sigma']:.4f} degrees")
+        self.logger.info("\n" + "=" * 40)
+        self.logger.info("OVERALL REPEATABILITY (all movement types):")
+        self.logger.info(f"  Total measurements: {overall_stats['total_measurements']}")
+        self.logger.info(f"  Mean error: {overall_stats['mean_error']:.4f} deg")
+        self.logger.info(f"  Max error: {overall_stats['max_error']:.4f} deg")
+        self.logger.info(f"  2-sigma repeatability: {overall_stats['repeatability_2sigma']:.4f} deg")
 
         self.test_results['repeatability'] = {
-            'measurements': measurements,
-            'statistics': stats
+            'measurements': all_measurements,
+            'statistics_by_type': stats_by_type,
+            'overall_statistics': overall_stats
         }
 
-        return measurements
+        return all_measurements
 
     def run_polarizer_calibration_comparison(self) -> Dict:
         """
@@ -766,9 +939,12 @@ class PPMRotationSensitivityTester:
                 }
             elif test_name.startswith('deviation_'):
                 if results:
+                    # Filter to numeric keys only (exclude reference image string keys)
+                    numeric_angles = [k for k in results.keys() if isinstance(k, (int, float))]
                     summary['results'][test_name] = {
                         'images_acquired': len(results),
-                        'angle_range': [min(results.keys()), max(results.keys())]
+                        'angle_range': [min(numeric_angles), max(numeric_angles)] if numeric_angles else [],
+                        'reference_images': [k for k in results.keys() if isinstance(k, str)]
                     }
                 else:
                     summary['results'][test_name] = {
@@ -777,7 +953,11 @@ class PPMRotationSensitivityTester:
                         'error': 'No images acquired - acquisition may have timed out'
                     }
             elif test_name == 'repeatability':
-                summary['results'][test_name] = results.get('statistics', {})
+                # Include both overall and per-type statistics
+                summary['results'][test_name] = {
+                    'overall': results.get('overall_statistics', {}),
+                    'by_type': results.get('statistics_by_type', {})
+                }
             elif test_name == 'analysis':
                 summary['results'][test_name] = results.get('summary', {})
 
@@ -800,16 +980,36 @@ class PPMRotationSensitivityTester:
                 f.write(f"  - {test}\n")
 
             if 'repeatability' in self.test_results:
-                stats = self.test_results['repeatability'].get('statistics', {})
-                if stats:
-                    f.write(f"\nMECHANICAL REPEATABILITY:\n")
+                overall = self.test_results['repeatability'].get('overall_statistics', {})
+                by_type = self.test_results['repeatability'].get('statistics_by_type', {})
+
+                f.write(f"\nMECHANICAL REPEATABILITY:\n")
+                f.write("=" * 50 + "\n")
+
+                if overall:
+                    f.write(f"\nOVERALL (all movement types combined):\n")
                     f.write("-" * 40 + "\n")
-                    f.write(f"  Mean error: {stats.get('mean_error', 0):.4f} degrees\n")
-                    f.write(f"  2-sigma repeatability: {stats.get('repeatability_2sigma', 0):.4f} degrees\n")
-                    f.write(f"  Maximum error: {stats.get('max_error', 0):.4f} degrees\n")
-                else:
-                    f.write(f"\nMECHANICAL REPEATABILITY:\n")
+                    f.write(f"  Total measurements: {overall.get('total_measurements', 0)}\n")
+                    f.write(f"  Mean error: {overall.get('mean_error', 0):.4f} degrees\n")
+                    f.write(f"  2-sigma repeatability: {overall.get('repeatability_2sigma', 0):.4f} degrees\n")
+                    f.write(f"  Maximum error: {overall.get('max_error', 0):.4f} degrees\n")
+
+                if by_type:
+                    f.write(f"\nBY MOVEMENT TYPE:\n")
                     f.write("-" * 40 + "\n")
+                    for test_type, stats in by_type.items():
+                        if test_type == 'bidirectional_hysteresis':
+                            f.write(f"\n  {test_type} (180 deg total travel):\n")
+                            f.write(f"    Mean hysteresis: {stats.get('mean_hysteresis', 0):.4f} degrees\n")
+                            f.write(f"    Max hysteresis: {stats.get('max_hysteresis', 0):.4f} degrees\n")
+                        else:
+                            travel = stats.get('travel_deg', 0)
+                            f.write(f"\n  {test_type} ({travel} deg travel):\n")
+                            f.write(f"    Mean error: {stats.get('mean_error', 0):.4f} degrees\n")
+                            f.write(f"    2-sigma: {stats.get('repeatability_2sigma', 0):.4f} degrees\n")
+                            f.write(f"    Max error: {stats.get('max_error', 0):.4f} degrees\n")
+
+                if not overall and not by_type:
                     f.write(f"  Statistics not available\n")
 
             f.write(f"\nFull details in: {summary_file}\n")
