@@ -291,21 +291,117 @@ class PPMRotationAnalyzer:
 
         return pd.DataFrame(results)
 
+    def analyze_zero_rotation_baseline(self) -> pd.DataFrame:
+        """
+        Analyze zero-rotation baseline image pairs to establish measurement noise floor.
+
+        Looks for image pairs named baseline_*_A.tif and baseline_*_B.tif in the
+        base_path directory. These pairs were acquired at the SAME angle without
+        any rotation, so differences should be essentially 0%.
+
+        Returns:
+            DataFrame with baseline pair comparison metrics
+        """
+        results = []
+
+        # Find baseline image pairs
+        baseline_files = list(self.base_path.glob("baseline_*_A.tif"))
+
+        if not baseline_files:
+            print("No baseline image pairs found (baseline_*_A.tif)")
+            return pd.DataFrame()
+
+        print(f"\nAnalyzing {len(baseline_files)} zero-rotation baseline pairs...")
+
+        for file_a in baseline_files:
+            # Find matching B file
+            file_b = file_a.parent / file_a.name.replace("_A.tif", "_B.tif")
+
+            if not file_b.exists():
+                print(f"  Warning: Missing pair for {file_a.name}")
+                continue
+
+            # Load images
+            try:
+                img_a = io.imread(file_a)
+                img_b = io.imread(file_b)
+
+                # Convert to grayscale if RGB
+                if img_a.ndim == 3:
+                    img_a = np.mean(img_a, axis=2)
+                if img_b.ndim == 3:
+                    img_b = np.mean(img_b, axis=2)
+
+                # Ensure same type for comparison
+                img_a = img_a.astype(np.float64)
+                img_b = img_b.astype(np.float64)
+
+                # Compute metrics
+                mae = float(np.mean(np.abs(img_b - img_a)))
+                img_range = max(img_a.max() - img_a.min(), 1)
+                pct_change = (mae / img_range) * 100
+
+                # Compute median intensity change
+                median_a = float(np.median(img_a))
+                median_b = float(np.median(img_b))
+                median_pct_change = abs(median_b - median_a) / max(median_a, 1) * 100
+
+                # SSIM
+                try:
+                    ssim = metrics.structural_similarity(img_a, img_b, data_range=img_a.max()-img_a.min())
+                except Exception:
+                    ssim = np.nan
+
+                # Extract angle from filename (baseline_7.0deg_pair1_A.tif)
+                parts = file_a.stem.split("_")
+                angle = float(parts[1].replace("deg", ""))
+                pair_num = int(parts[2].replace("pair", ""))
+
+                results.append({
+                    'angle': angle,
+                    'pair': pair_num,
+                    'mae': mae,
+                    'pct_change': pct_change,
+                    'median_intensity_a': median_a,
+                    'median_intensity_b': median_b,
+                    'median_pct_change': median_pct_change,
+                    'ssim': ssim,
+                    'max_pixel_diff': float(np.max(np.abs(img_b - img_a))),
+                    'std_diff': float(np.std(img_b - img_a))
+                })
+
+                print(f"  {file_a.name}: {pct_change:.4f}% change (MAE={mae:.2f})")
+
+            except Exception as e:
+                print(f"  Error loading {file_a.name}: {e}")
+                continue
+
+        if results:
+            df = pd.DataFrame(results)
+            # Summary statistics
+            print(f"\n  BASELINE SUMMARY (expected: ~0% change):")
+            print(f"    Mean intensity change: {df['pct_change'].mean():.4f}%")
+            print(f"    Max intensity change: {df['pct_change'].max():.4f}%")
+            print(f"    Mean SSIM: {df['ssim'].mean():.6f}")
+            return df
+        else:
+            return pd.DataFrame()
+
     def analyze_fine_sensitivity(self, base_angles: List[float] = None) -> Dict:
         """
         Analyze sensitivity to fine angular changes around specific base angles.
 
-        Groups angles by proximity to base angles (e.g., 7, 45) and computes
+        Groups angles by proximity to base angles (e.g., 7, 0, -7, 90) and computes
         statistics for fine deviations within each group.
 
         Args:
-            base_angles: List of nominal angles to analyze (default: [7, 45])
+            base_angles: List of nominal angles to analyze (default: [7, 0, -7, 90])
 
         Returns:
             Dictionary with sensitivity statistics per base angle
         """
         if base_angles is None:
-            base_angles = [7, 45]
+            base_angles = [7, 0, -7, 90]
 
         results = {}
         sorted_angles = sorted(self.images.keys())
@@ -784,6 +880,50 @@ class PPMRotationAnalyzer:
             f.write(f"Image Shape: {self.image_shape}\n\n")
 
             # ============================================================
+            # SECTION 0: Zero-Rotation Baseline (Sanity Check)
+            # ============================================================
+            f.write("=" * 70 + "\n")
+            f.write("0. ZERO-ROTATION BASELINE (Measurement Noise Floor)\n")
+            f.write("   (Images acquired at SAME angle - should show ~0% difference)\n")
+            f.write("=" * 70 + "\n\n")
+
+            # Analyze baseline pairs
+            df_baseline = self.analyze_zero_rotation_baseline()
+            if not df_baseline.empty:
+                f.write(f"  Baseline pairs analyzed: {len(df_baseline)}\n\n")
+
+                # Group by angle
+                for angle in df_baseline['angle'].unique():
+                    angle_data = df_baseline[df_baseline['angle'] == angle]
+                    f.write(f"  Angle {angle:.1f} deg:\n")
+                    f.write(f"    Mean intensity change: {angle_data['pct_change'].mean():.4f}%\n")
+                    f.write(f"    Max intensity change: {angle_data['pct_change'].max():.4f}%\n")
+                    f.write(f"    Mean SSIM: {angle_data['ssim'].mean():.6f}\n")
+                    f.write(f"    Pairs: {len(angle_data)}\n\n")
+
+                # Overall summary
+                f.write(f"  OVERALL BASELINE:\n")
+                f.write(f"    Mean intensity change: {df_baseline['pct_change'].mean():.4f}%\n")
+                f.write(f"    Max intensity change: {df_baseline['pct_change'].max():.4f}%\n")
+                f.write(f"    Mean SSIM: {df_baseline['ssim'].mean():.6f}\n\n")
+
+                # Interpretation
+                mean_baseline = df_baseline['pct_change'].mean()
+                if mean_baseline < 0.1:
+                    f.write(f"  --> GOOD: Baseline noise is low ({mean_baseline:.4f}%)\n")
+                    f.write(f"      Measurement methodology is valid.\n\n")
+                elif mean_baseline < 1.0:
+                    f.write(f"  --> WARNING: Baseline noise is moderate ({mean_baseline:.4f}%)\n")
+                    f.write(f"      Consider this when interpreting small deviations.\n\n")
+                else:
+                    f.write(f"  --> PROBLEM: Baseline noise is HIGH ({mean_baseline:.4f}%)\n")
+                    f.write(f"      This indicates a measurement problem, NOT rotation error!\n")
+                    f.write(f"      Check: camera noise, light fluctuation, or exposure drift.\n\n")
+            else:
+                f.write("  No baseline image pairs found.\n")
+                f.write("  Run zero-rotation baseline test to establish noise floor.\n\n")
+
+            # ============================================================
             # SECTION 1: Fine Angular Sensitivity Around Base Angles
             # ============================================================
             f.write("=" * 70 + "\n")
@@ -894,58 +1034,65 @@ class PPMRotationAnalyzer:
                 f.write("\n")
 
             # ============================================================
-            # SECTION 4: Birefringence Hue Analysis
+            # SECTION 4: Birefringence Hue Analysis (PPM Angles)
             # ============================================================
             f.write("=" * 70 + "\n")
-            f.write("4. BIREFRINGENCE HUE ANALYSIS\n")
+            f.write("4. BIREFRINGENCE HUE ANALYSIS (PPM Angles)\n")
             f.write("   (Intensity difference for pixels above background mode)\n")
             f.write("=" * 70 + "\n\n")
 
-            # Analyze hue shift for key angle pairs
-            # For PPM, birefringence typically uses +/- angles from 45 or paired angles
-            angles_near_45 = [a for a in sorted_angles if 44.0 <= a <= 46.0]
+            # Analyze hue shift for PPM-relevant angle groups: 7, -7, 0, 90
+            ppm_base_angles = [7, -7, 0, 90]
 
-            if len(angles_near_45) >= 2:
-                base_45 = min(angles_near_45, key=lambda x: abs(x - 45.0))
-                f.write(f"  Base angle for hue analysis: {base_45:.2f} deg\n\n")
+            for ppm_base in ppm_base_angles:
+                # Find angles near this PPM base angle
+                angles_near_base = [a for a in sorted_angles if abs(a - ppm_base) <= 2.0]
 
-                f.write("  Angle Pair          |  Background  |  Mean Diff  |  Std Diff  |  Pixels > BG\n")
-                f.write("  " + "-" * 75 + "\n")
-
-                hue_results_found = False
-                for angle in sorted(angles_near_45):
-                    if angle != base_45:
-                        hue_data = self.compute_birefringence_hue_shift(base_45, angle)
-                        if hue_data and 'error' not in hue_data:
-                            hue_results_found = True
-                            f.write(f"  {base_45:.2f} -> {angle:.2f}  |  "
-                                   f"{hue_data['background_mode']:10.1f}  |  "
-                                   f"{hue_data['mean_diff_above_bg']:9.2f}  |  "
-                                   f"{hue_data['std_diff_above_bg']:8.2f}  |  "
-                                   f"{hue_data['pct_pixels_above_bg']:6.1f}%\n")
-                        elif hue_data and 'error' in hue_data:
-                            f.write(f"  {base_45:.2f} -> {angle:.2f}  |  ERROR: {hue_data['error']}\n")
-
-                if not hue_results_found:
-                    f.write("  (No valid hue comparisons found)\n")
-
-                # Also compare to a distant angle if available
-                if angles_near_7:
-                    base_7 = min(angles_near_7, key=lambda x: abs(x - 7.0))
-                    f.write(f"\n  Comparison to distant angle ({base_45:.2f} vs {base_7:.2f}):\n")
+                if len(angles_near_base) >= 2:
+                    base_angle = min(angles_near_base, key=lambda x: abs(x - ppm_base))
+                    f.write(f"  PPM Base Angle: {ppm_base} deg (actual: {base_angle:.2f} deg)\n")
                     f.write("  " + "-" * 50 + "\n")
-                    hue_data = self.compute_birefringence_hue_shift(base_45, base_7)
+
+                    f.write("  Angle Pair          |  Background  |  Mean Diff  |  Std Diff  |  Pixels > BG\n")
+                    f.write("  " + "-" * 75 + "\n")
+
+                    hue_results_found = False
+                    for angle in sorted(angles_near_base):
+                        if angle != base_angle:
+                            hue_data = self.compute_birefringence_hue_shift(base_angle, angle)
+                            if hue_data and 'error' not in hue_data:
+                                hue_results_found = True
+                                f.write(f"  {base_angle:.2f} -> {angle:.2f}  |  "
+                                       f"{hue_data['background_mode']:10.1f}  |  "
+                                       f"{hue_data['mean_diff_above_bg']:9.2f}  |  "
+                                       f"{hue_data['std_diff_above_bg']:8.2f}  |  "
+                                       f"{hue_data['pct_pixels_above_bg']:6.1f}%\n")
+                            elif hue_data and 'error' in hue_data:
+                                f.write(f"  {base_angle:.2f} -> {angle:.2f}  |  ERROR: {hue_data['error']}\n")
+
+                    if not hue_results_found:
+                        f.write("  (No valid hue comparisons found)\n")
+
+                    f.write("\n")
+
+            # Cross-angle comparison: 7 vs -7 (should show birefringence signal)
+            if angles_near_7:
+                base_pos7 = min(angles_near_7, key=lambda x: abs(x - 7.0))
+                angles_near_neg7 = [a for a in sorted_angles if abs(a - (-7.0)) <= 1.0]
+                if angles_near_neg7:
+                    base_neg7 = min(angles_near_neg7, key=lambda x: abs(x - (-7.0)))
+                    f.write(f"  Cross-angle comparison (+7 vs -7 deg):\n")
+                    f.write("  " + "-" * 50 + "\n")
+                    hue_data = self.compute_birefringence_hue_shift(base_pos7, base_neg7)
                     if hue_data and 'error' not in hue_data:
+                        f.write(f"    {base_pos7:.2f} deg vs {base_neg7:.2f} deg\n")
                         f.write(f"    Background mode: {hue_data['background_mode']:.1f}\n")
                         f.write(f"    Mean diff (above BG): {hue_data['mean_diff_above_bg']:.2f}\n")
                         f.write(f"    Std diff (above BG): {hue_data['std_diff_above_bg']:.2f}\n")
                         f.write(f"    Pixels above BG: {hue_data['pct_pixels_above_bg']:.1f}%\n")
                     elif hue_data and 'error' in hue_data:
                         f.write(f"    ERROR: {hue_data['error']}\n")
-
-                f.write("\n")
-            else:
-                f.write("  Insufficient angles near 45 deg for hue analysis.\n\n")
+                    f.write("\n")
 
             # ============================================================
             # SECTION 5: Key Findings Summary

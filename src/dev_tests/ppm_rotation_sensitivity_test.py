@@ -537,6 +537,87 @@ class PPMRotationSensitivityTester:
         self.test_results[f'deviation_{base_angle}deg'] = acquired
         return acquired
 
+    def run_zero_rotation_baseline_test(self, test_angles: List[float] = None,
+                                        n_repeats: int = 3) -> Dict:
+        """
+        Baseline test: acquire multiple images at the SAME angle WITHOUT rotation.
+
+        This test validates the measurement methodology by comparing images taken
+        at the same angle. The intensity difference should be essentially 0%.
+        If we see significant differences here, there's a problem with the
+        measurement approach, not the rotation precision.
+
+        Args:
+            test_angles: Angles to test (default: [7, 0, 90])
+            n_repeats: Number of image pairs to acquire at each angle
+
+        Returns:
+            Dictionary with baseline measurements
+        """
+        if test_angles is None:
+            test_angles = [7.0, 0.0, 90.0]
+
+        self.logger.info("=" * 60)
+        self.logger.info("ZERO-ROTATION BASELINE TEST")
+        self.logger.info("(Comparing images at SAME angle - should show ~0% difference)")
+        self.logger.info("=" * 60)
+
+        baseline_results = {}
+
+        for angle in test_angles:
+            self.logger.info("-" * 40)
+            self.logger.info(f"Testing baseline at {angle} degrees")
+            self.logger.info("-" * 40)
+
+            # Get exposure for this angle
+            exposure = self.get_exposure_for_angle(angle)
+            self.logger.info(f"Using exposure: {exposure:.2f} ms")
+
+            # Move to angle once
+            self.client.test_move_rotation(angle)
+            time.sleep(0.5)
+
+            # Verify position
+            actual = self.client.test_get_rotation()
+            self.logger.info(f"Position: {actual:.4f} deg (target: {angle})")
+
+            # Acquire multiple image pairs WITHOUT moving
+            pairs = []
+            for i in range(n_repeats):
+                self.logger.info(f"  Pair {i+1}/{n_repeats}: Acquiring image A...")
+
+                # Image A
+                save_name_a = f"baseline_{angle:.1f}deg_pair{i+1}_A.tif"
+                path_a = self.acquire_at_angle(angle, save_name_a, exposure_ms=exposure)
+
+                # DO NOT MOVE - acquire image B at same position
+                self.logger.info(f"  Pair {i+1}/{n_repeats}: Acquiring image B (NO rotation)...")
+                save_name_b = f"baseline_{angle:.1f}deg_pair{i+1}_B.tif"
+                path_b = self.acquire_at_angle(angle, save_name_b, exposure_ms=exposure)
+
+                if path_a and path_b:
+                    pairs.append({
+                        'pair': i + 1,
+                        'angle': angle,
+                        'image_a': str(path_a),
+                        'image_b': str(path_b)
+                    })
+
+            baseline_results[angle] = {
+                'exposure_ms': exposure,
+                'pairs': pairs
+            }
+
+            self.logger.info(f"Acquired {len(pairs)} image pairs at {angle} deg")
+
+        self.test_results['zero_rotation_baseline'] = baseline_results
+        self.logger.info("=" * 60)
+        self.logger.info("Zero-rotation baseline test complete")
+        self.logger.info("Analyze these pairs to verify ~0% intensity difference")
+        self.logger.info("=" * 60)
+
+        return baseline_results
+
     def run_repeatability_test(self, test_angle: float = 7.0,
                               n_repeats: int = 10,
                               include_large_movements: bool = True) -> List[Dict]:
@@ -862,8 +943,19 @@ class PPMRotationSensitivityTester:
             self.logger.info("FINE ANGULAR SENSITIVITY ANALYSIS")
             self.logger.info("=" * 60)
 
-            # Analyze sensitivity around key angles (7 and 45 degrees)
-            fine_sensitivity = analyzer.analyze_fine_sensitivity(base_angles=[7, 45])
+            # Analyze sensitivity around PPM-relevant angles (7, 0, -7, 90 degrees)
+            fine_sensitivity = analyzer.analyze_fine_sensitivity(base_angles=[7, 0, -7, 90])
+
+            # Analyze zero-rotation baseline (should show ~0% change)
+            self.logger.info("\n" + "=" * 60)
+            self.logger.info("ZERO-ROTATION BASELINE ANALYSIS")
+            self.logger.info("(Images acquired WITHOUT rotation - should be ~0% difference)")
+            self.logger.info("=" * 60)
+            df_baseline = analyzer.analyze_zero_rotation_baseline()
+            if not df_baseline.empty:
+                baseline_csv = self.output_dir / "zero_rotation_baseline.csv"
+                df_baseline.to_csv(baseline_csv, index=False)
+                self.logger.info(f"Saved baseline analysis to: {baseline_csv}")
 
             # Also compute adjacent differences for the full picture
             self.logger.info("\n" + "=" * 60)
@@ -1034,8 +1126,11 @@ class PPMRotationSensitivityTester:
             # 2. Standard angles acquisition
             self.run_standard_angles_test()
 
-            # 3. Fine deviation tests at critical angles
-            for base_angle in [0, 7, 45]:
+            # 3. Zero-rotation baseline test (should show 0% change)
+            self.run_zero_rotation_baseline_test()
+
+            # 4. Fine deviation tests at PPM-relevant angles
+            for base_angle in [7, 0, -7, 90]:
                 self.run_fine_deviation_test(base_angle=base_angle)
 
             # 4. Optional: Polarizer calibration comparison
