@@ -55,6 +55,15 @@ class PPMRotationSensitivityTester:
     analyzes the impact on image quality and birefringence calculations.
     """
 
+    # Background correction exposures from calibration
+    # These are the exposures that achieve proper intensity at each angle
+    BACKGROUND_EXPOSURES_MS = {
+        -7.0: 21.1,
+        0.0: 92.16,
+        7.0: 22.63,
+        90.0: 0.57,
+    }
+
     def __init__(self,
                  config_yaml: str,
                  output_dir: str = None,
@@ -65,12 +74,18 @@ class PPMRotationSensitivityTester:
 
         Args:
             config_yaml: Path to microscope configuration YAML file
-            output_dir: Output directory for test results
+            output_dir: Output directory for test results (default: configurations/ppm_sensitivity_tests/)
             host: qp_server host address
             port: qp_server port
         """
         self.config_yaml = Path(config_yaml)
-        self.output_dir = Path(output_dir or f"ppm_sensitivity_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+
+        # Default output to configurations/ppm_sensitivity_tests/
+        if output_dir is None:
+            config_dir = Path(__file__).parent.parent / "smart_wsi_scanner" / "configurations"
+            self.output_dir = config_dir / "ppm_sensitivity_tests" / f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        else:
+            self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Initialize logging
@@ -147,51 +162,66 @@ class PPMRotationSensitivityTester:
 
         return exposures
 
-    def get_exposure_for_angle(self, angle: float) -> Optional[float]:
+    def get_exposure_for_angle(self, angle: float) -> float:
         """
-        Get the appropriate exposure time for an angle based on its category.
+        Get the appropriate exposure time for an angle based on background calibration.
 
-        Maps angles to exposure categories:
-        - Around 0 deg (crossed polars): use 'crossed' exposure
-        - Around 7 deg (positive): use 'positive' exposure
-        - Around -7 deg (negative): use 'negative' exposure
-        - Around 90 deg (uncrossed): use 'uncrossed' exposure
-        - Around 45 deg: interpolate between positive and uncrossed
+        Uses hardcoded background correction exposures and interpolates for
+        angles between calibration points.
+
+        Calibration points:
+        - -7.0 deg: 21.1 ms (negative polarization)
+        - 0.0 deg: 92.16 ms (crossed polars - darkest)
+        - 7.0 deg: 22.63 ms (positive polarization)
+        - 90.0 deg: 0.57 ms (uncrossed - brightest)
 
         Args:
             angle: Rotation angle in degrees
 
         Returns:
-            Exposure time in ms, or None if not configured
+            Exposure time in ms
         """
-        if not self.imaging_profile_exposures:
-            return None
+        bg = self.BACKGROUND_EXPOSURES_MS
 
-        # Map angle to category with tolerance
+        # Check for exact match first
+        if angle in bg:
+            return bg[angle]
+
+        # Map angle to nearest calibration category
         abs_angle = abs(angle)
 
-        if abs_angle <= 3:  # Near 0 (crossed)
-            return self.imaging_profile_exposures.get('crossed')
-        elif 4 <= abs_angle <= 10:  # Near 7 (positive/negative)
+        # Near 0 (crossed polars): use 0 deg exposure
+        if abs_angle <= 3:
+            return bg[0.0]
+
+        # Near +/-7 (polarization angles): use 7 or -7 deg exposure
+        elif 4 <= abs_angle <= 10:
             if angle >= 0:
-                return self.imaging_profile_exposures.get('positive')
+                return bg[7.0]
             else:
-                return self.imaging_profile_exposures.get('negative')
-        elif 85 <= abs_angle <= 95:  # Near 90 (uncrossed)
-            return self.imaging_profile_exposures.get('uncrossed')
-        elif 40 <= abs_angle <= 50:  # Near 45 - use average of positive and uncrossed
-            pos_exp = self.imaging_profile_exposures.get('positive', 800)
-            unc_exp = self.imaging_profile_exposures.get('uncrossed', 15)
-            # Geometric mean for exposures spanning large range
-            return (pos_exp * unc_exp) ** 0.5
+                return bg[-7.0]
+
+        # Near 90 (uncrossed): use 90 deg exposure
+        elif 85 <= abs_angle <= 95:
+            return bg[90.0]
+
+        # For angles between 7-90, interpolate logarithmically
+        # (exposures span ~2 orders of magnitude)
+        elif 10 < abs_angle < 85:
+            # Interpolate between 7 deg (22.63ms) and 90 deg (0.57ms)
+            # Using log interpolation for large exposure ranges
+            import math
+            exp_7 = bg[7.0]
+            exp_90 = bg[90.0]
+            # Normalize angle to 0-1 range between 7 and 90
+            t = (abs_angle - 7) / (90 - 7)
+            # Log interpolation
+            log_exp = math.log(exp_7) * (1 - t) + math.log(exp_90) * t
+            return math.exp(log_exp)
+
+        # Fallback for any edge cases
         else:
-            # For other angles, interpolate based on expected intensity
-            # Intensity roughly follows cos^2(angle) for polarized light
-            pos_exp = self.imaging_profile_exposures.get('positive', 800)
-            unc_exp = self.imaging_profile_exposures.get('uncrossed', 15)
-            # Linear interpolation as rough approximation
-            t = abs_angle / 90.0
-            return pos_exp * (1 - t) + unc_exp * t
+            return bg[7.0]  # Default to 7 deg exposure
 
     def setup_logging(self):
         """Setup comprehensive logging for the test session."""
@@ -424,24 +454,24 @@ class PPMRotationSensitivityTester:
     def run_fine_deviation_test(self, base_angle: float = 7.0,
                                deviations: List[float] = None,
                                fixed_exposure_ms: float = None,
-                               use_profile_exposure: bool = True) -> Dict[float, Path]:
+                               acquire_zero_reference: bool = True) -> Dict[float, Path]:
         """
         Test fine angular deviations around a base angle.
 
-        All images in a deviation cluster use the SAME exposure to ensure
-        valid sensitivity comparisons. The exposure is determined by:
+        All images in a deviation cluster use the SAME exposure (from background
+        calibration) to ensure valid sensitivity comparisons.
+
+        Exposure selection:
         1. If fixed_exposure_ms is provided, use that
-        2. If use_profile_exposure is True, use the imaging profile exposure
-           for the base angle category (e.g., 7 deg -> 'positive' exposure)
-        3. Otherwise, use adaptive exposure (NOT recommended)
+        2. Otherwise, use background calibration exposure for base angle
 
         Args:
             base_angle: Center angle for testing
             deviations: List of deviations to test (positive and negative)
             fixed_exposure_ms: Override exposure time for ALL images in cluster.
-                              If None, falls back to profile or adaptive.
-            use_profile_exposure: If True and fixed_exposure_ms is None, use
-                                 exposure from imaging profile for base angle.
+                              If None, uses background calibration exposure.
+            acquire_zero_reference: If True, also acquire 0 deg image with
+                                   the cluster's exposure for comparison.
 
         Returns:
             Dictionary mapping angles to image paths
@@ -454,35 +484,38 @@ class PPMRotationSensitivityTester:
         self.logger.info("=" * 60)
         self.logger.info(f"Testing deviations: {deviations}")
 
-        # Determine exposure for this cluster
+        # Determine exposure for this cluster from background calibration
         cluster_exposure = fixed_exposure_ms
-        if cluster_exposure is None and use_profile_exposure:
+        if cluster_exposure is None:
             cluster_exposure = self.get_exposure_for_angle(base_angle)
-            if cluster_exposure:
-                self.logger.info(f"Using PROFILE exposure for {base_angle} deg cluster: "
-                               f"{cluster_exposure:.1f} ms")
+            self.logger.info(f"Using BACKGROUND CALIBRATION exposure for {base_angle} deg: "
+                           f"{cluster_exposure:.2f} ms")
 
-        if cluster_exposure:
-            self.logger.info(f"FIXED exposure for entire cluster: {cluster_exposure:.1f} ms")
-            self.logger.info("All images in this cluster will have identical exposure")
-        else:
-            self.logger.warning("=" * 60)
-            self.logger.warning("WARNING: Using adaptive exposure!")
-            self.logger.warning("Images may have different intensities due to different")
-            self.logger.warning("target settings for exact vs non-exact angles.")
-            self.logger.warning("Results may NOT be valid for sensitivity analysis!")
-            self.logger.warning("Consider specifying fixed_exposure_ms or ensuring")
-            self.logger.warning("imaging profile is properly configured.")
-            self.logger.warning("=" * 60)
+        self.logger.info(f"FIXED exposure for entire cluster: {cluster_exposure:.2f} ms")
+        self.logger.info("All images in this cluster will have identical exposure")
 
         acquired = {}
 
+        # First, acquire 0 degree reference with THIS cluster's exposure
+        # This allows valid comparison to crossed polars baseline
+        if acquire_zero_reference and base_angle != 0:
+            self.logger.info("-" * 40)
+            self.logger.info(f"Acquiring 0 deg reference with cluster exposure ({cluster_exposure:.2f} ms)")
+            save_name = f"ref_0deg_at_{base_angle}deg_exposure.tif"
+            image_path = self.acquire_at_angle(0.0, save_name, exposure_ms=cluster_exposure)
+            if image_path:
+                # Store with special key to indicate it's a reference
+                acquired[f"0.0_ref_{base_angle}"] = image_path
+                self.logger.info(f"Acquired 0 deg reference for {base_angle} deg cluster comparison")
+            self.logger.info("-" * 40)
+
+        # Acquire deviation images
         for i, dev in enumerate(deviations):
             # Test positive deviation
             angle_pos = base_angle + dev
             if 0 <= angle_pos <= 180:  # Check hardware limits
                 self.logger.info(f"[{i*2+1}/{len(deviations)*2}] Testing {angle_pos:.2f} deg (+{dev})")
-                save_name = f"deviation_{base_angle}deg_plus_{dev:.2f}.tif"
+                save_name = f"{angle_pos:.2f}.tif"
                 image_path = self.acquire_at_angle(angle_pos, save_name,
                                                    exposure_ms=cluster_exposure)
                 if image_path:
@@ -493,14 +526,14 @@ class PPMRotationSensitivityTester:
                 angle_neg = base_angle - dev
                 if 0 <= angle_neg <= 180:
                     self.logger.info(f"[{i*2+2}/{len(deviations)*2}] Testing {angle_neg:.2f} deg (-{dev})")
-                    save_name = f"deviation_{base_angle}deg_minus_{dev:.2f}.tif"
+                    save_name = f"{angle_neg:.2f}.tif"
                     image_path = self.acquire_at_angle(angle_neg, save_name,
                                                        exposure_ms=cluster_exposure)
                     if image_path:
                         acquired[angle_neg] = image_path
 
-        self.logger.info(f"Acquired {len(acquired)} deviation test images")
-        self.logger.info(f"Cluster exposure used: {cluster_exposure} ms")
+        self.logger.info(f"Acquired {len(acquired)} images (including reference)")
+        self.logger.info(f"Cluster exposure used: {cluster_exposure:.2f} ms")
         self.test_results[f'deviation_{base_angle}deg'] = acquired
         return acquired
 
