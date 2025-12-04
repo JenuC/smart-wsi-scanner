@@ -1060,18 +1060,29 @@ class PPMRotationAnalyzer:
                     f.write(f"Base Angle: {data['base_angle']:.2f} deg\n")
                     f.write("-" * 50 + "\n")
                     f.write(f"  Samples: {data['n_samples']}\n")
-                    f.write(f"  Sensitivity: {data['sensitivity_pct_per_deg']:.3f}% intensity change per degree\n\n")
+                    f.write(f"  Sensitivity: {data['sensitivity_pct_per_deg']:.3f}% intensity change per degree\n")
 
-                    # Table of deviations
-                    f.write("  Deviation (deg)  |  Intensity Change (%)\n")
-                    f.write("  " + "-" * 45 + "\n")
+                    # Calculate baseline offset (constant offset present in all comparisons)
+                    # This is the minimum pct_change, which represents the baseline noise floor
+                    all_pcts = [item['pct_change'] for item in data['details']]
+                    baseline_offset = min(all_pcts) if all_pcts else 0
+
+                    f.write(f"  Baseline offset: {baseline_offset:.4f}% (constant offset in all comparisons)\n\n")
+
+                    # Table of deviations - show BOTH raw and corrected values
+                    f.write("  Deviation (deg)  |  Raw Change (%)  |  Angular Signal (%)\n")
+                    f.write("  " + "-" * 60 + "\n")
 
                     # Sort by absolute deviation
                     sorted_details = sorted(data['details'], key=lambda x: abs(x['deviation']))
                     for item in sorted_details:
                         dev = item['deviation']
                         pct = item['pct_change']
-                        f.write(f"  {dev:+7.2f}          |  {pct:8.4f}%\n")
+                        corrected = pct - baseline_offset
+                        f.write(f"  {dev:+7.2f}          |  {pct:8.4f}%      |  {corrected:8.4f}%\n")
+
+                    f.write("\n  NOTE: 'Angular Signal' = Raw - Baseline offset.\n")
+                    f.write("        This represents actual intensity change due to angle.\n")
                     f.write("\n")
             else:
                 f.write("  No fine sensitivity data available.\n\n")
@@ -1172,18 +1183,29 @@ class PPMRotationAnalyzer:
                 base_7 = min(angles_near_7, key=lambda x: abs(x - 7.0))
                 f.write(f"  Reference angle: {base_7:.2f} deg\n\n")
 
+                # Use fixed normalization (255 for 8-bit)
+                full_range = 65535.0 if self.images[base_7].max() > 255 else 255.0
+
                 # Small deviations from 7
                 f.write("  Small deviations from reference:\n")
                 f.write("  " + "-" * 50 + "\n")
+                pcts = []
                 for angle in sorted(angles_near_7):
                     if angle != base_7:
                         dev = angle - base_7
                         img_ref = self.images[base_7]
                         img_comp = self.images[angle]
                         mae = float(np.mean(np.abs(img_comp - img_ref)))
-                        img_range = max(img_ref.max() - img_ref.min(), 1)
-                        pct = (mae / img_range) * 100
+                        pct = (mae / full_range) * 100
+                        pcts.append(pct)
                         f.write(f"    {base_7:.2f} -> {angle:.2f} (delta={dev:+.2f}): {pct:.4f}% change\n")
+
+                # Show corrected values
+                if pcts:
+                    min_pct = min(pcts)
+                    f.write(f"\n  Baseline offset: {min_pct:.4f}%\n")
+                    f.write("  After subtracting offset, angular signal ranges from 0% to "
+                           f"{max(pcts) - min_pct:.4f}%\n")
 
                 # Large baseline shift (7 vs 0)
                 if angles_near_0:
@@ -1193,8 +1215,7 @@ class PPMRotationAnalyzer:
                     img_ref = self.images[base_7]
                     img_0 = self.images[base_0]
                     mae = float(np.mean(np.abs(img_0 - img_ref)))
-                    img_range = max(img_ref.max() - img_ref.min(), 1)
-                    pct = (mae / img_range) * 100
+                    pct = (mae / full_range) * 100
                     f.write(f"    {base_7:.2f} -> {base_0:.2f} (delta={base_0 - base_7:.2f}): {pct:.4f}% change\n")
 
                 f.write("\n")
