@@ -1174,20 +1174,23 @@ def get_target_intensity_for_background(modality: str, angle: float) -> float:
         return 250.0
 
     # PPM modality - angle-specific targets
+    # Use RANGES instead of exact matches to ensure consistent exposure
+    # for fine deviation testing (e.g., 89.95 and 90.05 should match 90)
     if "ppm" in modality_lower:
         # Normalize angle to absolute value for symmetric angles
         abs_angle = abs(angle)
 
-        if abs_angle == 90:
+        if 88 <= abs_angle <= 92:
+            # Near-uncrossed region (around 90 deg)
             return 245.0
-        elif abs_angle in [7, 5]:
-            # Same target for positive and negative angles
-            return 160.0  # ±7 or ±5 degrees (lowered to match achievable intensity)
-        elif abs_angle == 0:
+        elif 4 <= abs_angle <= 10:
+            # Birefringence angles (5-7 deg and their neighbors)
+            return 160.0
+        elif abs_angle <= 3:
+            # Near-crossed region (around 0 deg)
             return 125.0
         else:
-            # Default for unknown PPM angles
-            logger.warning(f"Unknown PPM angle {angle}, using default target 150")
+            # Intermediate angles (10-88 deg)
             return 180.0
 
     # Default fallback
