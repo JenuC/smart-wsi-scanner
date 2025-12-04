@@ -20,7 +20,7 @@ import cv2
 from typing import Dict, List, Tuple, Optional
 import pandas as pd
 from scipy import ndimage
-from skimage import metrics
+from skimage import metrics, io
 import json
 import argparse
 from datetime import datetime
