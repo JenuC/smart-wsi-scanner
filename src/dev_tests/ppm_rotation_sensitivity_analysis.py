@@ -1061,37 +1061,79 @@ class PPMRotationAnalyzer:
                 f.write("  No fine sensitivity data available.\n\n")
 
             # ============================================================
-            # SECTION 2: Standard Deviation at Various Angular Steps
+            # SECTION 2: Intensity Change by Base Angle and Step Size
             # ============================================================
             f.write("=" * 70 + "\n")
-            f.write("2. INTENSITY VARIABILITY BY ANGULAR STEP SIZE\n")
-            f.write("   (Standard deviation of intensity differences)\n")
+            f.write("2. INTENSITY CHANGE BY BASE ANGLE AND STEP SIZE\n")
+            f.write("   (Shows sensitivity at each polarization angle)\n")
             f.write("=" * 70 + "\n\n")
 
             if df_adjacent is not None and not df_adjacent.empty:
-                # Group by approximate step size
-                step_groups = {
-                    '0.05 deg': df_adjacent[df_adjacent['delta_deg'] <= 0.06],
-                    '0.10 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.06) & (df_adjacent['delta_deg'] <= 0.15)],
-                    '0.20 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.15) & (df_adjacent['delta_deg'] <= 0.25)],
-                    '0.30 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.25) & (df_adjacent['delta_deg'] <= 0.40)],
-                    '0.50 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.40) & (df_adjacent['delta_deg'] <= 0.60)],
-                    '1.00 deg': df_adjacent[(df_adjacent['delta_deg'] > 0.60) & (df_adjacent['delta_deg'] <= 1.5)],
-                    '7.00 deg': df_adjacent[(df_adjacent['delta_deg'] > 6.0) & (df_adjacent['delta_deg'] <= 8.0)],
+                # Define base angle regions and step size bins
+                base_regions = {
+                    '0 deg (crossed)': (-1.0, 2.0),
+                    '7 deg': (5.0, 10.0),
+                    '-7 deg': (-10.0, -5.0),
+                    '90 deg (uncrossed)': (88.0, 92.0),
                 }
 
-                f.write("  Step Size  |  Mean MAE  |  Std MAE  |  Mean % Change  |  N samples\n")
-                f.write("  " + "-" * 65 + "\n")
+                step_bins = [
+                    ('0.05', 0.0, 0.06),
+                    ('0.10', 0.06, 0.12),
+                    ('0.15', 0.12, 0.18),
+                    ('0.20', 0.18, 0.22),
+                    ('0.25', 0.22, 0.28),
+                    ('0.30', 0.28, 0.35),
+                    ('0.50', 0.45, 0.55),
+                    ('0.70', 0.65, 0.75),
+                    ('1.00', 0.95, 1.05),
+                ]
 
-                for step_name, group in step_groups.items():
-                    if len(group) > 0:
-                        mean_mae = group['mae'].mean()
-                        std_mae = group['mae'].std() if len(group) > 1 else 0
-                        mean_pct = group['pct_change'].mean()
-                        n = len(group)
-                        f.write(f"  {step_name:9s}  |  {mean_mae:8.2f}  |  {std_mae:7.2f}  |  {mean_pct:13.4f}%  |  {n:3d}\n")
+                for base_name, (base_min, base_max) in base_regions.items():
+                    # Find adjacent comparisons where angle1 is in this base region
+                    base_data = df_adjacent[
+                        (df_adjacent['angle1'] >= base_min) &
+                        (df_adjacent['angle1'] <= base_max)
+                    ]
 
-                f.write("\n")
+                    if len(base_data) == 0:
+                        continue
+
+                    f.write(f"  {base_name}:\n")
+                    f.write("  " + "-" * 50 + "\n")
+                    f.write("    Step     |  MAE   |  % Change  |  N\n")
+                    f.write("    " + "-" * 40 + "\n")
+
+                    found_any = False
+                    for step_name, step_min, step_max in step_bins:
+                        step_data = base_data[
+                            (base_data['delta_deg'] >= step_min) &
+                            (base_data['delta_deg'] <= step_max)
+                        ]
+
+                        if len(step_data) > 0:
+                            found_any = True
+                            mean_mae = step_data['mae'].mean()
+                            mean_pct = step_data['pct_change'].mean()
+                            n = len(step_data)
+                            f.write(f"    {step_name:5s} deg |  {mean_mae:5.2f} |  {mean_pct:8.4f}%  |  {n}\n")
+
+                    if not found_any:
+                        f.write("    (No fine step data in this region)\n")
+
+                    f.write("\n")
+
+                # Also show any large jumps (between base angles)
+                large_jumps = df_adjacent[df_adjacent['delta_deg'] > 5.0]
+                if len(large_jumps) > 0:
+                    f.write("  Large jumps (between base angles):\n")
+                    f.write("  " + "-" * 50 + "\n")
+                    for _, row in large_jumps.iterrows():
+                        f.write(f"    {row['angle1']:.1f} -> {row['angle2']:.1f} "
+                               f"(delta={row['delta_deg']:.1f}): "
+                               f"MAE={row['mae']:.2f}, {row['pct_change']:.3f}%\n")
+                    f.write("\n")
+
             else:
                 f.write("  No adjacent difference data available.\n\n")
 
