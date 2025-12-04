@@ -489,10 +489,15 @@ class PPMRotationAnalyzer:
             # Compare each angle to the base angle (or nearest to base)
             base_actual = min(nearby, key=lambda x: abs(x - base))
             if base_actual not in self.images:
+                print(f"  WARNING: Base angle {base_actual} not found in images!")
                 continue
 
             base_img = self.images[base_actual]
             group_results = []
+
+            # DIAGNOSTIC: Check if base image exists and print info
+            print(f"  Using base angle: {base_actual:.2f} deg")
+            print(f"  Base image shape: {base_img.shape}, dtype: {base_img.dtype}")
 
             # Determine normalization: use full bit depth (255 for 8-bit, 65535 for 16-bit)
             # NOT the image's dynamic range, which varies with angle
@@ -513,6 +518,10 @@ class PPMRotationAnalyzer:
                 img = self.images[angle]
                 deviation = angle - base_actual
 
+                # DIAGNOSTIC: Print median intensities to see if images are fundamentally different
+                img_median = float(np.median(img))
+                intensity_diff = img_median - base_median
+
                 mae = float(np.mean(np.abs(img - base_img)))
 
                 # Use FIXED normalization (full bit depth) for consistent comparison
@@ -527,12 +536,19 @@ class PPMRotationAnalyzer:
                     'angle': angle,
                     'mae': mae,
                     'pct_change': pct_change,
-                    'pct_change_old': old_pct  # For debugging
+                    'pct_change_old': old_pct,  # For debugging
+                    'base_median': base_median,
+                    'img_median': img_median
                 })
 
-                print(f"  {base_actual:.2f} -> {angle:.2f} (delta={deviation:+.2f}): "
-                      f"MAE={mae:.2f}, {pct_change:.3f}% (of full range), "
-                      f"[old: {old_pct:.1f}% of image range]")
+                # Show detailed diagnostic info
+                print(f"  {base_actual:.2f} -> {angle:.2f} (delta={deviation:+.2f}):")
+                print(f"      Base median: {base_median:.1f}, This median: {img_median:.1f}, "
+                      f"Intensity diff: {intensity_diff:+.1f}")
+                print(f"      MAE={mae:.2f}, {pct_change:.3f}% (of {full_range:.0f})")
+                if abs(intensity_diff) > 10:
+                    print(f"      WARNING: Large intensity offset ({intensity_diff:+.1f}) suggests "
+                          f"different exposure or acquisition conditions!")
 
             if group_results:
                 # Compute sensitivity rate (% change per degree)
