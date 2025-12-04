@@ -1070,6 +1070,9 @@ class PPMRotationAnalyzer:
                     f.write(f"  Baseline offset: {baseline_offset:.4f}% (constant offset in all comparisons)\n\n")
 
                     # Table of deviations - show BOTH raw and corrected values
+                    f.write(f"  All comparisons are vs the {data['base_angle']:.2f} deg reference image.\n")
+                    f.write("  'Raw Change' = total intensity difference from reference.\n")
+                    f.write("  'Angular Signal' = Raw - offset = change due to angle alone.\n\n")
                     f.write("  Deviation (deg)  |  Raw Change (%)  |  Angular Signal (%)\n")
                     f.write("  " + "-" * 60 + "\n")
 
@@ -1081,8 +1084,6 @@ class PPMRotationAnalyzer:
                         corrected = pct - baseline_offset
                         f.write(f"  {dev:+7.2f}          |  {pct:8.4f}%      |  {corrected:8.4f}%\n")
 
-                    f.write("\n  NOTE: 'Angular Signal' = Raw - Baseline offset.\n")
-                    f.write("        This represents actual intensity change due to angle.\n")
                     f.write("\n")
             else:
                 f.write("  No fine sensitivity data available.\n\n")
