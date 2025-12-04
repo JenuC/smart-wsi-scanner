@@ -313,6 +313,69 @@ class PPMRotationAnalyzer:
 
         print(f"\nAnalyzing {len(baseline_files)} zero-rotation baseline pairs...")
 
+        # ============================================================
+        # SANITY CHECK: Compare first image to EXACT COPY of itself
+        # This MUST show 0.0000% - if not, calculation is broken
+        # ============================================================
+        if baseline_files:
+            test_file = baseline_files[0]
+            print(f"\n  SANITY CHECK: Comparing {test_file.name} to EXACT COPY...")
+            try:
+                test_img = io.imread(test_file)
+                print(f"    Raw image dtype: {test_img.dtype}, shape: {test_img.shape}")
+                print(f"    Raw image range: [{test_img.min()}, {test_img.max()}]")
+
+                # Make exact copy (not a view)
+                test_copy = test_img.copy()
+
+                # Convert same way as real comparison
+                if test_img.ndim == 3:
+                    test_gray = np.mean(test_img, axis=2)
+                    copy_gray = np.mean(test_copy, axis=2)
+                else:
+                    test_gray = test_img
+                    copy_gray = test_copy
+
+                test_f64 = test_gray.astype(np.float64)
+                copy_f64 = copy_gray.astype(np.float64)
+
+                # Compute difference - MUST be exactly 0
+                diff = test_f64 - copy_f64
+                mae_self = float(np.mean(np.abs(diff)))
+                max_diff_self = float(np.max(np.abs(diff)))
+                img_range = max(test_f64.max() - test_f64.min(), 1)
+                pct_self = (mae_self / img_range) * 100
+
+                print(f"    After conversion dtype: {test_f64.dtype}")
+                print(f"    MAE (self vs copy): {mae_self:.10f}")
+                print(f"    Max pixel diff: {max_diff_self:.10f}")
+                print(f"    Percent change: {pct_self:.10f}%")
+
+                if mae_self == 0.0 and max_diff_self == 0.0:
+                    print(f"    --> PASS: Self-comparison is exactly 0.0")
+                else:
+                    print(f"    --> FAIL: Self-comparison should be 0.0!")
+
+                # Add as first result for visibility
+                results.append({
+                    'angle': -999.0,  # Special marker for self-test
+                    'pair': 0,
+                    'mae': mae_self,
+                    'pct_change': pct_self,
+                    'median_intensity_a': float(np.median(test_f64)),
+                    'median_intensity_b': float(np.median(copy_f64)),
+                    'median_pct_change': 0.0,
+                    'ssim': 1.0,
+                    'max_pixel_diff': max_diff_self,
+                    'std_diff': 0.0,
+                    'test_type': 'SELF_COPY_SANITY_CHECK'
+                })
+
+            except Exception as e:
+                print(f"    Sanity check failed: {e}")
+
+        print(f"\n  Analyzing {len(baseline_files)} actual baseline pairs...")
+
         for file_a in baseline_files:
             # Find matching B file
             file_b = file_a.parent / file_a.name.replace("_A.tif", "_B.tif")
@@ -321,10 +384,13 @@ class PPMRotationAnalyzer:
                 print(f"  Warning: Missing pair for {file_a.name}")
                 continue
 
-            # Load images
+            # Load images - use plugin=None to avoid any compression issues
             try:
                 img_a = io.imread(file_a)
                 img_b = io.imread(file_b)
+
+                # Report raw data info
+                print(f"  {file_a.name}: dtype={img_a.dtype}, shape={img_a.shape}")
 
                 # Convert to grayscale if RGB
                 if img_a.ndim == 3:
@@ -890,35 +956,54 @@ class PPMRotationAnalyzer:
             # Analyze baseline pairs
             df_baseline = self.analyze_zero_rotation_baseline()
             if not df_baseline.empty:
-                f.write(f"  Baseline pairs analyzed: {len(df_baseline)}\n\n")
+                # First, show SANITY CHECK result (self-copy comparison)
+                sanity_check = df_baseline[df_baseline['angle'] == -999.0]
+                if not sanity_check.empty:
+                    f.write("  SANITY CHECK: Image compared to EXACT COPY of itself\n")
+                    f.write("  " + "-" * 50 + "\n")
+                    sc = sanity_check.iloc[0]
+                    f.write(f"    MAE: {sc['mae']:.10f}\n")
+                    f.write(f"    Max pixel diff: {sc['max_pixel_diff']:.10f}\n")
+                    f.write(f"    Percent change: {sc['pct_change']:.10f}%\n")
+                    if sc['mae'] == 0.0 and sc['max_pixel_diff'] == 0.0:
+                        f.write(f"    --> PASS: Calculation verified (exactly 0.0)\n\n")
+                    else:
+                        f.write(f"    --> FAIL: Should be exactly 0.0! Check calculation.\n\n")
 
-                # Group by angle
-                for angle in df_baseline['angle'].unique():
-                    angle_data = df_baseline[df_baseline['angle'] == angle]
-                    f.write(f"  Angle {angle:.1f} deg:\n")
-                    f.write(f"    Mean intensity change: {angle_data['pct_change'].mean():.4f}%\n")
-                    f.write(f"    Max intensity change: {angle_data['pct_change'].max():.4f}%\n")
-                    f.write(f"    Mean SSIM: {angle_data['ssim'].mean():.6f}\n")
-                    f.write(f"    Pairs: {len(angle_data)}\n\n")
+                # Filter out sanity check for actual baseline analysis
+                df_actual = df_baseline[df_baseline['angle'] != -999.0]
 
-                # Overall summary
-                f.write(f"  OVERALL BASELINE:\n")
-                f.write(f"    Mean intensity change: {df_baseline['pct_change'].mean():.4f}%\n")
-                f.write(f"    Max intensity change: {df_baseline['pct_change'].max():.4f}%\n")
-                f.write(f"    Mean SSIM: {df_baseline['ssim'].mean():.6f}\n\n")
+                if not df_actual.empty:
+                    f.write(f"  ACTUAL BASELINE PAIRS: {len(df_actual)}\n")
+                    f.write("  " + "-" * 50 + "\n\n")
 
-                # Interpretation
-                mean_baseline = df_baseline['pct_change'].mean()
-                if mean_baseline < 0.1:
-                    f.write(f"  --> GOOD: Baseline noise is low ({mean_baseline:.4f}%)\n")
-                    f.write(f"      Measurement methodology is valid.\n\n")
-                elif mean_baseline < 1.0:
-                    f.write(f"  --> WARNING: Baseline noise is moderate ({mean_baseline:.4f}%)\n")
-                    f.write(f"      Consider this when interpreting small deviations.\n\n")
-                else:
-                    f.write(f"  --> PROBLEM: Baseline noise is HIGH ({mean_baseline:.4f}%)\n")
-                    f.write(f"      This indicates a measurement problem, NOT rotation error!\n")
-                    f.write(f"      Check: camera noise, light fluctuation, or exposure drift.\n\n")
+                    # Group by angle
+                    for angle in sorted(df_actual['angle'].unique()):
+                        angle_data = df_actual[df_actual['angle'] == angle]
+                        f.write(f"  Angle {angle:.1f} deg:\n")
+                        f.write(f"    Mean intensity change: {angle_data['pct_change'].mean():.4f}%\n")
+                        f.write(f"    Max intensity change: {angle_data['pct_change'].max():.4f}%\n")
+                        f.write(f"    Mean SSIM: {angle_data['ssim'].mean():.6f}\n")
+                        f.write(f"    Pairs: {len(angle_data)}\n\n")
+
+                    # Overall summary (excluding sanity check)
+                    f.write(f"  OVERALL BASELINE (actual pairs only):\n")
+                    f.write(f"    Mean intensity change: {df_actual['pct_change'].mean():.4f}%\n")
+                    f.write(f"    Max intensity change: {df_actual['pct_change'].max():.4f}%\n")
+                    f.write(f"    Mean SSIM: {df_actual['ssim'].mean():.6f}\n\n")
+
+                    # Interpretation
+                    mean_baseline = df_actual['pct_change'].mean()
+                    if mean_baseline < 0.1:
+                        f.write(f"  --> GOOD: Baseline noise is low ({mean_baseline:.4f}%)\n")
+                        f.write(f"      Measurement methodology is valid.\n\n")
+                    elif mean_baseline < 1.0:
+                        f.write(f"  --> WARNING: Baseline noise is moderate ({mean_baseline:.4f}%)\n")
+                        f.write(f"      Consider this when interpreting small deviations.\n\n")
+                    else:
+                        f.write(f"  --> PROBLEM: Baseline noise is HIGH ({mean_baseline:.4f}%)\n")
+                        f.write(f"      This indicates a measurement problem, NOT rotation error!\n")
+                        f.write(f"      Check: camera noise, light fluctuation, or exposure drift.\n\n")
             else:
                 f.write("  No baseline image pairs found.\n")
                 f.write("  Run zero-rotation baseline test to establish noise floor.\n\n")
