@@ -52,6 +52,7 @@ class PPMRotationAnalyzer:
 
         # Store loaded images
         self.images = {}
+        self.image_files = {}  # angle -> filename mapping
         self.image_shape = None
 
     def load_images(self, angle_pattern: str = "*_{angle}deg*.tif") -> Dict[float, np.ndarray]:
@@ -108,6 +109,9 @@ class PPMRotationAnalyzer:
         import re
         print("Loading PPM deviation images...")
 
+        # Track which file each angle came from
+        self.image_files = {}  # angle -> filename
+
         # Load BGACQUIRE format: {angle}.tif (e.g., 45.05.tif)
         angle_pattern = re.compile(r'^(-?\d+\.?\d*)\.tif$', re.IGNORECASE)
 
@@ -122,6 +126,7 @@ class PPMRotationAnalyzer:
                         if len(img.shape) == 3:
                             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                         self.images[angle] = img
+                        self.image_files[angle] = file_path.name  # Track filename
                         if self.image_shape is None:
                             self.image_shape = img.shape
                         print(f"  Loaded {angle:.2f} deg image: {file_path.name}")
@@ -1070,7 +1075,11 @@ class PPMRotationAnalyzer:
                     f.write(f"  Baseline offset: {baseline_offset:.4f}% (constant offset in all comparisons)\n\n")
 
                     # Table of deviations - show BOTH raw and corrected values
-                    f.write(f"  All comparisons are vs the {data['base_angle']:.2f} deg reference image.\n")
+                    # Show actual filename if available
+                    ref_file = "unknown"
+                    if hasattr(self, 'image_files') and data['base_angle'] in self.image_files:
+                        ref_file = self.image_files[data['base_angle']]
+                    f.write(f"  Reference: {data['base_angle']:.2f} deg (file: {ref_file})\n")
                     f.write("  'Raw Change' = total intensity difference from reference.\n")
                     f.write("  'Angular Signal' = Raw - offset = change due to angle alone.\n\n")
                     f.write("  Deviation (deg)  |  Raw Change (%)  |  Angular Signal (%)\n")
