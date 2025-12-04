@@ -199,6 +199,9 @@ class PPMRotationAnalyzer:
 
         ref_image = self.images[reference_angle]
 
+        # Use FIXED normalization (full bit depth) for consistent comparison
+        full_range = 65535.0 if ref_image.max() > 255 else 255.0
+
         # Test against actual angles
         for angle, img in self.images.items():
             if angle == reference_angle:
@@ -209,19 +212,15 @@ class PPMRotationAnalyzer:
             mse = np.mean((img - ref_image) ** 2)
             rmse = np.sqrt(mse)
 
-            # Normalized metrics (relative to image intensity range)
-            img_range = ref_image.max() - ref_image.min()
-            if img_range > 0:
-                nmae = mae / img_range
-                nrmse = rmse / img_range
-            else:
-                nmae = nmae = 0
+            # Normalized metrics (relative to FULL BIT DEPTH, not image range)
+            nmae = mae / full_range
+            nrmse = rmse / full_range
 
-            # Structural similarity
-            ssim = metrics.structural_similarity(ref_image, img, data_range=img.max()-img.min())
+            # Structural similarity - use full range
+            ssim = metrics.structural_similarity(ref_image, img, data_range=full_range)
 
-            # Peak signal-to-noise ratio
-            psnr = metrics.peak_signal_noise_ratio(ref_image, img, data_range=img.max()-img.min())
+            # Peak signal-to-noise ratio - use full range
+            psnr = metrics.peak_signal_noise_ratio(ref_image, img, data_range=full_range)
 
             # Pearson correlation
             correlation = np.corrcoef(ref_image.flatten(), img.flatten())[0, 1]
@@ -268,12 +267,15 @@ class PPMRotationAnalyzer:
 
             # Compute metrics
             mae = float(np.mean(np.abs(img2 - img1)))
-            img_range = max(img1.max() - img1.min(), 1)
-            pct_change = (mae / img_range) * 100
+
+            # Use FIXED normalization (full bit depth) for consistent comparison
+            # NOT image range which varies with angle
+            full_range = 65535.0 if img1.max() > 255 else 255.0
+            pct_change = (mae / full_range) * 100
 
             # SSIM for structural similarity
             try:
-                ssim = metrics.structural_similarity(img1, img2, data_range=img1.max()-img1.min())
+                ssim = metrics.structural_similarity(img1, img2, data_range=full_range)
             except Exception:
                 ssim = np.nan
 
@@ -404,17 +406,19 @@ class PPMRotationAnalyzer:
 
                 # Compute metrics
                 mae = float(np.mean(np.abs(img_b - img_a)))
-                img_range = max(img_a.max() - img_a.min(), 1)
-                pct_change = (mae / img_range) * 100
 
-                # Compute median intensity change
+                # Use FIXED normalization (full bit depth) for consistent comparison
+                full_range = 65535.0 if img_a.max() > 255 else 255.0
+                pct_change = (mae / full_range) * 100
+
+                # Compute median intensity change (relative to median, not range)
                 median_a = float(np.median(img_a))
                 median_b = float(np.median(img_b))
                 median_pct_change = abs(median_b - median_a) / max(median_a, 1) * 100
 
-                # SSIM
+                # SSIM - use full range for consistent comparison
                 try:
-                    ssim = metrics.structural_similarity(img_a, img_b, data_range=img_a.max()-img_a.min())
+                    ssim = metrics.structural_similarity(img_a, img_b, data_range=full_range)
                 except Exception:
                     ssim = np.nan
 
@@ -490,6 +494,18 @@ class PPMRotationAnalyzer:
             base_img = self.images[base_actual]
             group_results = []
 
+            # Determine normalization: use full bit depth (255 for 8-bit, 65535 for 16-bit)
+            # NOT the image's dynamic range, which varies with angle
+            if base_img.max() > 255:
+                full_range = 65535.0  # 16-bit
+            else:
+                full_range = 255.0  # 8-bit
+
+            # Also compute the base image's actual dynamic range for reporting
+            base_range = float(base_img.max() - base_img.min())
+            base_median = float(np.median(base_img))
+            print(f"  Base image stats: median={base_median:.1f}, range={base_range:.1f}, max={base_img.max()}")
+
             for angle in nearby:
                 if angle == base_actual:
                     continue
@@ -498,18 +514,25 @@ class PPMRotationAnalyzer:
                 deviation = angle - base_actual
 
                 mae = float(np.mean(np.abs(img - base_img)))
-                img_range = max(base_img.max() - base_img.min(), 1)
-                pct_change = (mae / img_range) * 100
+
+                # Use FIXED normalization (full bit depth) for consistent comparison
+                # This prevents flat images (like 90 deg) from showing inflated percentages
+                pct_change = (mae / full_range) * 100
+
+                # Also compute the "old" way for comparison (will be much higher for flat images)
+                old_pct = (mae / max(base_range, 1)) * 100
 
                 group_results.append({
                     'deviation': deviation,
                     'angle': angle,
                     'mae': mae,
-                    'pct_change': pct_change
+                    'pct_change': pct_change,
+                    'pct_change_old': old_pct  # For debugging
                 })
 
                 print(f"  {base_actual:.2f} -> {angle:.2f} (delta={deviation:+.2f}): "
-                      f"MAE={mae:.2f}, {pct_change:.3f}% change")
+                      f"MAE={mae:.2f}, {pct_change:.3f}% (of full range), "
+                      f"[old: {old_pct:.1f}% of image range]")
 
             if group_results:
                 # Compute sensitivity rate (% change per degree)
