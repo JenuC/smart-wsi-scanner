@@ -477,7 +477,8 @@ class PPMRotationSensitivityTester:
             Dictionary mapping angles to image paths
         """
         if deviations is None:
-            deviations = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.7, 1.0]
+            # Note: 0 (base angle) is acquired separately first, so start with 0.05
+            deviations = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.5, 0.7, 1.0]
 
         self.logger.info("=" * 60)
         self.logger.info(f"FINE DEVIATION TEST: {base_angle} degrees")
@@ -496,12 +497,24 @@ class PPMRotationSensitivityTester:
 
         acquired = {}
 
-        # First, acquire 0 degree reference with THIS cluster's exposure
-        # This allows valid comparison to crossed polars baseline
+        # First, acquire the BASE ANGLE reference image
+        # This is the most important reference - all deviations are compared to this
+        self.logger.info("-" * 40)
+        self.logger.info(f"Acquiring BASE ANGLE reference: {base_angle:.2f} deg with cluster exposure ({cluster_exposure:.2f} ms)")
+        base_save_name = f"{base_angle:.2f}.tif"
+        base_image_path = self.acquire_at_angle(base_angle, base_save_name, exposure_ms=cluster_exposure)
+        if base_image_path:
+            acquired[float(base_angle)] = base_image_path
+            self.logger.info(f"Acquired base angle reference: {base_save_name}")
+        self.logger.info("-" * 40)
+
+        # Optionally acquire 0 degree reference with THIS cluster's exposure
+        # This allows comparison to crossed polars baseline
         if acquire_zero_reference and base_angle != 0:
             self.logger.info("-" * 40)
             self.logger.info(f"Acquiring 0 deg reference with cluster exposure ({cluster_exposure:.2f} ms)")
-            save_name = f"ref_0deg_at_{base_angle}deg_exposure.tif"
+            # Save with cluster-specific name so multiple runs don't overwrite
+            save_name = f"0.00_at_{base_angle:.0f}deg_exposure.tif"
             image_path = self.acquire_at_angle(0.0, save_name, exposure_ms=cluster_exposure)
             if image_path:
                 # Store with special key to indicate it's a reference
