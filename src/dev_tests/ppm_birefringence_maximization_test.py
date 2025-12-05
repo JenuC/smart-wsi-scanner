@@ -617,6 +617,59 @@ class PPMBirefringenceMaximizationTester:
 
         return best_angle, self.birefringence_metrics.get(best_angle, {})
 
+    def compute_sensitivity_curve(self) -> Tuple[List[float], List[float], float, float]:
+        """
+        Compute the sensitivity curve (derivative of signal vs angle).
+
+        Sensitivity = d(signal)/d(angle) - shows where small angle changes
+        produce the largest intensity changes.
+
+        Returns:
+            Tuple of (angles, sensitivities, max_sensitivity_angle, max_sensitivity_value)
+        """
+        if len(self.birefringence_metrics) < 3:
+            return [], [], 0.0, 0.0
+
+        angles = sorted(self.birefringence_metrics.keys())
+        signals = [self.birefringence_metrics[a].get('mean_signal', 0) for a in angles]
+
+        # Compute numerical derivative (central difference where possible)
+        sensitivities = []
+        sensitivity_angles = []
+
+        for i in range(len(angles)):
+            if i == 0:
+                # Forward difference
+                if len(angles) > 1:
+                    dx = angles[i+1] - angles[i]
+                    dy = signals[i+1] - signals[i]
+                    sens = abs(dy / dx) if dx != 0 else 0
+                else:
+                    sens = 0
+            elif i == len(angles) - 1:
+                # Backward difference
+                dx = angles[i] - angles[i-1]
+                dy = signals[i] - signals[i-1]
+                sens = abs(dy / dx) if dx != 0 else 0
+            else:
+                # Central difference
+                dx = angles[i+1] - angles[i-1]
+                dy = signals[i+1] - signals[i-1]
+                sens = abs(dy / dx) if dx != 0 else 0
+
+            sensitivities.append(sens)
+            sensitivity_angles.append(angles[i])
+
+        # Find maximum sensitivity
+        max_sens = 0.0
+        max_sens_angle = 0.0
+        for i, (angle, sens) in enumerate(zip(sensitivity_angles, sensitivities)):
+            if sens > max_sens:
+                max_sens = sens
+                max_sens_angle = angle
+
+        return sensitivity_angles, sensitivities, max_sens_angle, max_sens
+
     def generate_visualization(self):
         """Generate visualization plots of the birefringence analysis."""
         if not MATPLOTLIB_AVAILABLE:
@@ -635,63 +688,109 @@ class PPMBirefringenceMaximizationTester:
         max_signals = [self.birefringence_metrics[a].get('max_signal', 0) for a in angles]
         p95_signals = [self.birefringence_metrics[a].get('p95_signal', 0) for a in angles]
 
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        # Compute sensitivity curve
+        sens_angles, sensitivities, max_sens_angle, max_sens_value = self.compute_sensitivity_curve()
 
-        # Plot 1: Signal vs Angle
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+
+        # Get optimal angles for marking
+        optimal_angle, optimal_metrics = self.find_optimal_angle()
+
+        # Plot 1: Signal vs Angle (main result)
         ax = axes[0, 0]
-        ax.plot(angles, mean_signals, 'b-o', label='Mean Signal', markersize=4)
-        ax.plot(angles, p95_signals, 'r-s', label='P95 Signal', markersize=4)
+        ax.plot(angles, mean_signals, 'b-o', label='Mean Signal', markersize=3, linewidth=1.5)
+        ax.plot(angles, p95_signals, 'r-s', label='P95 Signal', markersize=3, linewidth=1, alpha=0.7)
+        ax.axvline(x=optimal_angle, color='green', linestyle='--', linewidth=2,
+                   label=f'Max Signal: {optimal_angle:.2f} deg')
+        if max_sens_angle != optimal_angle:
+            ax.axvline(x=max_sens_angle, color='orange', linestyle=':', linewidth=2,
+                       label=f'Max Sensitivity: {max_sens_angle:.2f} deg')
         ax.set_xlabel('Angle (degrees)')
-        ax.set_ylabel('Signal Intensity')
-        ax.set_title('Birefringence Signal vs Polarizer Angle')
+        ax.set_ylabel('Birefringence Signal Intensity')
+        ax.set_title('BIREFRINGENCE SIGNAL vs POLARIZER ANGLE')
+        ax.legend(loc='upper right')
+        ax.grid(True, alpha=0.3)
+
+        # Plot 2: Sensitivity (derivative) vs Angle
+        ax = axes[0, 1]
+        if sens_angles and sensitivities:
+            ax.plot(sens_angles, sensitivities, 'm-o', markersize=3, linewidth=1.5)
+            ax.axvline(x=max_sens_angle, color='orange', linestyle='--', linewidth=2,
+                       label=f'Max: {max_sens_angle:.2f} deg')
+            ax.fill_between(sens_angles, sensitivities, alpha=0.3, color='magenta')
+        ax.set_xlabel('Angle (degrees)')
+        ax.set_ylabel('Sensitivity (signal change per degree)')
+        ax.set_title('SENSITIVITY CURVE (d(Signal)/d(Angle))')
         ax.legend()
         ax.grid(True, alpha=0.3)
 
-        # Mark optimal angle
-        optimal_angle, optimal_metrics = self.find_optimal_angle()
-        ax.axvline(x=optimal_angle, color='green', linestyle='--',
-                   label=f'Optimal: {optimal_angle:.2f} deg')
-
-        # Plot 2: Signal-to-background ratio
-        ax = axes[0, 1]
+        # Plot 3: Signal-to-background ratio
+        ax = axes[0, 2]
         sb_ratios = [self.birefringence_metrics[a].get('signal_to_bg_ratio', 0) for a in angles]
-        ax.plot(angles, sb_ratios, 'g-^', markersize=4)
+        ax.plot(angles, sb_ratios, 'g-^', markersize=3, linewidth=1.5)
+        ax.axvline(x=optimal_angle, color='green', linestyle='--', linewidth=2)
         ax.set_xlabel('Angle (degrees)')
         ax.set_ylabel('Signal / Background Ratio')
         ax.set_title('Signal-to-Background Ratio vs Angle')
         ax.grid(True, alpha=0.3)
 
-        # Plot 3: Sample difference images
+        # Plot 4: Difference image at OPTIMAL angle (max signal)
         ax = axes[1, 0]
-        if self.difference_images:
-            # Show difference image at optimal angle
-            if optimal_angle in self.difference_images:
-                diff_img = cv2.imread(str(self.difference_images[optimal_angle]), cv2.IMREAD_UNCHANGED)
-                if diff_img is not None:
-                    im = ax.imshow(diff_img, cmap='hot')
-                    ax.set_title(f'Birefringence Signal at {optimal_angle:.2f} deg (optimal)')
-                    plt.colorbar(im, ax=ax, fraction=0.046)
-                    ax.axis('off')
+        if self.difference_images and optimal_angle in self.difference_images:
+            diff_img = cv2.imread(str(self.difference_images[optimal_angle]), cv2.IMREAD_UNCHANGED)
+            if diff_img is not None:
+                im = ax.imshow(diff_img, cmap='hot')
+                ax.set_title(f'Birefringence at {optimal_angle:.2f} deg (MAX SIGNAL)')
+                plt.colorbar(im, ax=ax, fraction=0.046)
+                ax.axis('off')
+        else:
+            ax.text(0.5, 0.5, 'No image', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Optimal Angle Image')
 
-        # Plot 4: Zero-angle sanity check
+        # Plot 5: Difference image at MAX SENSITIVITY angle
         ax = axes[1, 1]
+        if self.difference_images and max_sens_angle in self.difference_images:
+            sens_diff = cv2.imread(str(self.difference_images[max_sens_angle]), cv2.IMREAD_UNCHANGED)
+            if sens_diff is not None:
+                im = ax.imshow(sens_diff, cmap='hot')
+                ax.set_title(f'Birefringence at {max_sens_angle:.2f} deg (MAX SENSITIVITY)')
+                plt.colorbar(im, ax=ax, fraction=0.046)
+                ax.axis('off')
+        else:
+            ax.text(0.5, 0.5, 'No image', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Max Sensitivity Image')
+
+        # Plot 6: Zero-angle sanity check
+        ax = axes[1, 2]
         if 0.0 in self.difference_images:
             zero_diff = cv2.imread(str(self.difference_images[0.0]), cv2.IMREAD_UNCHANGED)
             if zero_diff is not None:
                 im = ax.imshow(zero_diff, cmap='hot')
-                ax.set_title('Sanity Check: 0 deg (should be ~zero)')
+                zero_mean = np.mean(zero_diff)
+                ax.set_title(f'SANITY CHECK: 0 deg (mean={zero_mean:.1f})')
                 plt.colorbar(im, ax=ax, fraction=0.046)
                 ax.axis('off')
-
-                # Report sanity check
-                zero_mean = np.mean(zero_diff)
                 self.logger.info(f"Sanity check (0 deg): mean signal = {zero_mean:.1f}")
+        else:
+            ax.text(0.5, 0.5, 'No 0 deg image', ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Sanity Check: 0 deg')
 
-        plt.suptitle('PPM Birefringence Maximization Analysis', fontsize=14)
+        # Add summary text box
+        summary_text = (
+            f"RESULTS SUMMARY\n"
+            f"---------------\n"
+            f"Max Signal Angle: {optimal_angle:.2f} deg\n"
+            f"  Signal: {optimal_metrics.get('mean_signal', 0):.1f}\n"
+            f"\n"
+            f"Max Sensitivity Angle: {max_sens_angle:.2f} deg\n"
+            f"  Sensitivity: {max_sens_value:.1f}/deg\n"
+        )
+
+        plt.suptitle('PPM BIREFRINGENCE MAXIMIZATION ANALYSIS', fontsize=16, fontweight='bold')
         plt.tight_layout()
 
         plot_path = self.output_dir / 'birefringence_analysis.png'
-        plt.savefig(plot_path, dpi=150)
+        plt.savefig(plot_path, dpi=150, bbox_inches='tight')
         plt.close()
 
         self.logger.info(f"Saved visualization to {plot_path}")
@@ -709,10 +808,18 @@ class PPMBirefringenceMaximizationTester:
             'metrics': {str(k): v for k, v in self.birefringence_metrics.items()}
         }
 
-        # Find optimal angle
+        # Find optimal angle and sensitivity
         optimal_angle, optimal_metrics = self.find_optimal_angle()
+        sens_angles, sensitivities, max_sens_angle, max_sens_value = self.compute_sensitivity_curve()
+
         metrics_data['optimal_angle'] = optimal_angle
         metrics_data['optimal_metrics'] = optimal_metrics
+        metrics_data['max_sensitivity_angle'] = max_sens_angle
+        metrics_data['max_sensitivity_value'] = max_sens_value
+        metrics_data['sensitivity_curve'] = {
+            'angles': sens_angles,
+            'sensitivities': sensitivities
+        }
 
         with open(metrics_file, 'w') as f:
             json.dump(metrics_data, f, indent=2)
@@ -749,14 +856,39 @@ class PPMBirefringenceMaximizationTester:
             f.write(f"Images Retained: {self.keep_images}\n\n")
 
             f.write("=" * 70 + "\n")
-            f.write("OPTIMAL ANGLE\n")
+            f.write("KEY RESULTS: MAXIMUM SIGNAL AND MAXIMUM SENSITIVITY\n")
             f.write("=" * 70 + "\n\n")
 
-            f.write(f"Optimal polarizer angle: {optimal_angle:.2f} degrees\n")
-            f.write(f"  Mean signal: {optimal_metrics.get('mean_signal', 0):.1f}\n")
-            f.write(f"  Max signal: {optimal_metrics.get('max_signal', 0):.1f}\n")
-            f.write(f"  P95 signal: {optimal_metrics.get('p95_signal', 0):.1f}\n")
-            f.write(f"  Signal/BG ratio: {optimal_metrics.get('signal_to_bg_ratio', 0):.2f}\n\n")
+            # Compute sensitivity
+            sens_angles, sensitivities, max_sens_angle, max_sens_value = self.compute_sensitivity_curve()
+
+            f.write("1. MAXIMUM BIREFRINGENCE SIGNAL\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"   Optimal angle: {optimal_angle:.2f} degrees\n")
+            f.write(f"   Mean signal: {optimal_metrics.get('mean_signal', 0):.1f}\n")
+            f.write(f"   Max signal: {optimal_metrics.get('max_signal', 0):.1f}\n")
+            f.write(f"   P95 signal: {optimal_metrics.get('p95_signal', 0):.1f}\n")
+            f.write(f"   Signal/BG ratio: {optimal_metrics.get('signal_to_bg_ratio', 0):.2f}\n\n")
+
+            f.write("2. MAXIMUM SENSITIVITY (steepest signal change)\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"   Angle of max sensitivity: {max_sens_angle:.2f} degrees\n")
+            f.write(f"   Sensitivity: {max_sens_value:.2f} signal units per degree\n")
+            if max_sens_angle in self.birefringence_metrics:
+                sens_metrics = self.birefringence_metrics[max_sens_angle]
+                f.write(f"   Signal at this angle: {sens_metrics.get('mean_signal', 0):.1f}\n")
+            f.write("\n")
+
+            f.write("3. INTERPRETATION\n")
+            f.write("-" * 40 + "\n")
+            if optimal_angle == max_sens_angle:
+                f.write("   Max signal and max sensitivity occur at the SAME angle.\n")
+                f.write(f"   --> Recommended operating angle: {optimal_angle:.2f} deg\n\n")
+            else:
+                f.write(f"   Max signal at {optimal_angle:.2f} deg, max sensitivity at {max_sens_angle:.2f} deg\n")
+                f.write("   Consider:\n")
+                f.write(f"   - Use {optimal_angle:.2f} deg for strongest birefringence contrast\n")
+                f.write(f"   - Use {max_sens_angle:.2f} deg for most sensitive detection\n\n")
 
             # Sanity check
             f.write("=" * 70 + "\n")
