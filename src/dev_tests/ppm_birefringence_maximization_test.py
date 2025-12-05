@@ -73,6 +73,7 @@ class PPMBirefringenceMaximizationTester:
                  angle_range: Tuple[float, float] = (-10.0, 10.0),
                  angle_step: float = 0.1,
                  exposure_mode: str = "interpolate",
+                 fixed_exposure_ms: float = None,
                  keep_images: bool = True,
                  calibration_exposures: Dict[float, float] = None):
         """
@@ -85,7 +86,11 @@ class PPMBirefringenceMaximizationTester:
             port: qp_server port
             angle_range: (min_angle, max_angle) in degrees (default: -10 to +10)
             angle_step: Step size in degrees (default: 0.1)
-            exposure_mode: 'interpolate' or 'calibrate'
+            exposure_mode: 'interpolate', 'calibrate', or 'fixed'
+                - interpolate: Use calibration points and interpolate between them
+                - calibrate: Measure exposures on background first, then acquire
+                - fixed: Use single fixed exposure for all angles (set via fixed_exposure_ms)
+            fixed_exposure_ms: Exposure time in ms for 'fixed' mode (required if mode='fixed')
             keep_images: If True, keep .tif files after analysis
             calibration_exposures: Optional dict to override default exposures
         """
@@ -93,7 +98,12 @@ class PPMBirefringenceMaximizationTester:
         self.angle_range = angle_range
         self.angle_step = angle_step
         self.exposure_mode = exposure_mode
+        self.fixed_exposure_ms = fixed_exposure_ms
         self.keep_images = keep_images
+
+        # Validate fixed mode
+        if exposure_mode == "fixed" and fixed_exposure_ms is None:
+            raise ValueError("fixed_exposure_ms is required when exposure_mode='fixed'")
 
         # Override calibration exposures if provided
         if calibration_exposures:
@@ -132,6 +142,8 @@ class PPMBirefringenceMaximizationTester:
         self.logger.info(f"  Step size: {angle_step} degrees")
         self.logger.info(f"  Test angles: {len(self.test_angles)} values")
         self.logger.info(f"  Exposure mode: {exposure_mode}")
+        if exposure_mode == "fixed":
+            self.logger.info(f"  Fixed exposure: {fixed_exposure_ms} ms (same for ALL angles)")
         self.logger.info(f"  Output: {self.output_dir}")
 
     def _generate_test_angles(self) -> List[float]:
@@ -200,6 +212,7 @@ class PPMBirefringenceMaximizationTester:
         """
         Get exposure time for a given angle.
 
+        In FIXED mode, returns the fixed exposure for all angles.
         In CALIBRATE mode, uses calibrated exposures if available.
         In INTERPOLATE mode, interpolates from calibration points.
 
@@ -209,6 +222,10 @@ class PPMBirefringenceMaximizationTester:
         Returns:
             Exposure time in milliseconds
         """
+        # FIXED mode: same exposure for all angles
+        if self.exposure_mode == "fixed" and self.fixed_exposure_ms is not None:
+            return self.fixed_exposure_ms
+
         # Check calibrated exposures first (from calibrate mode)
         if angle in self.calibrated_exposures:
             return self.calibrated_exposures[angle]
@@ -977,6 +994,8 @@ class PPMBirefringenceMaximizationTester:
         self.logger.info("PPM BIREFRINGENCE MAXIMIZATION TEST")
         self.logger.info("=" * 70)
         self.logger.info(f"Mode: {self.exposure_mode.upper()}")
+        if self.exposure_mode == "fixed":
+            self.logger.info(f"Fixed exposure: {self.fixed_exposure_ms} ms for ALL angles")
 
         if not self.connect():
             self.logger.error("Failed to connect to server. Aborting.")
@@ -990,11 +1009,15 @@ class PPMBirefringenceMaximizationTester:
                 # Pause for stage move
                 self.wait_for_user_stage_move()
 
-            # Main acquisition (Phase 2 for calibrate, only phase for interpolate)
+            # Main acquisition
             self.logger.info("")
             self.logger.info("=" * 70)
-            self.logger.info("PHASE 2: TISSUE ACQUISITION" if self.exposure_mode == "calibrate"
-                           else "PAIRED ACQUISITION")
+            if self.exposure_mode == "calibrate":
+                self.logger.info("PHASE 2: TISSUE ACQUISITION")
+            elif self.exposure_mode == "fixed":
+                self.logger.info(f"PAIRED ACQUISITION (FIXED EXPOSURE: {self.fixed_exposure_ms} ms)")
+            else:
+                self.logger.info("PAIRED ACQUISITION")
             self.logger.info("=" * 70)
 
             self.run_paired_acquisition()
@@ -1044,6 +1067,7 @@ def run_birefringence_maximization_test(
     angle_range: Tuple[float, float] = (-10.0, 10.0),
     angle_step: float = 0.1,
     exposure_mode: str = "interpolate",
+    fixed_exposure_ms: float = None,
     keep_images: bool = True,
     calibration_exposures: Dict[float, float] = None
 ) -> Optional[Path]:
@@ -1059,7 +1083,8 @@ def run_birefringence_maximization_test(
         port: qp_server port
         angle_range: (min, max) angles to test
         angle_step: Step size in degrees
-        exposure_mode: 'interpolate' or 'calibrate'
+        exposure_mode: 'interpolate', 'calibrate', or 'fixed'
+        fixed_exposure_ms: Exposure time for 'fixed' mode (required if mode='fixed')
         keep_images: If False, delete .tif files after analysis
         calibration_exposures: Optional override for calibration exposures
 
@@ -1074,6 +1099,7 @@ def run_birefringence_maximization_test(
         angle_range=angle_range,
         angle_step=angle_step,
         exposure_mode=exposure_mode,
+        fixed_exposure_ms=fixed_exposure_ms,
         keep_images=keep_images,
         calibration_exposures=calibration_exposures
     )
@@ -1096,6 +1122,9 @@ Examples:
   # Full test with background calibration (more accurate)
   python ppm_birefringence_maximization_test.py config.yml --mode calibrate
 
+  # Fixed exposure for all angles (e.g., 25ms)
+  python ppm_birefringence_maximization_test.py config.yml --mode fixed --exposure 25.0
+
   # Custom angle range
   python ppm_birefringence_maximization_test.py config.yml --min-angle -5 --max-angle 5 --step 0.05
 
@@ -1112,10 +1141,13 @@ Examples:
                        help='qp_server host address')
     parser.add_argument('--port', type=int, default=5000,
                        help='qp_server port')
-    parser.add_argument('--mode', choices=['interpolate', 'calibrate'],
+    parser.add_argument('--mode', choices=['interpolate', 'calibrate', 'fixed'],
                        default='interpolate',
-                       help='Exposure mode: interpolate (use calibration points) or '
-                            'calibrate (measure exposures first)')
+                       help='Exposure mode: interpolate (use calibration points), '
+                            'calibrate (measure exposures first), or '
+                            'fixed (same exposure for all angles)')
+    parser.add_argument('--exposure', type=float, default=None,
+                       help='Fixed exposure time in ms (required for --mode fixed)')
     parser.add_argument('--min-angle', type=float, default=-10.0,
                        help='Minimum angle in degrees (default: -10)')
     parser.add_argument('--max-angle', type=float, default=10.0,
@@ -1131,6 +1163,12 @@ Examples:
                        help='JSON dict of calibration exposures, e.g. \'{"7.0": 25.0}\'')
 
     args = parser.parse_args()
+
+    # Validate fixed mode requires exposure
+    if args.mode == "fixed" and args.exposure is None:
+        print("Error: --exposure is required when using --mode fixed")
+        print("Example: --mode fixed --exposure 25.0")
+        return
 
     # Parse calibration exposures if provided
     calibration_exposures = None
@@ -1151,12 +1189,15 @@ Examples:
         angle_range=(args.min_angle, args.max_angle),
         angle_step=args.step,
         exposure_mode=args.mode,
+        fixed_exposure_ms=args.exposure,
         keep_images=args.keep_images,
         calibration_exposures=calibration_exposures
     )
 
     if result:
         print(f"\nTest complete. Results saved to: {result}")
+        if args.mode == "fixed":
+            print(f"Note: All images acquired with fixed exposure of {args.exposure} ms")
     else:
         print("\nTest failed")
 
