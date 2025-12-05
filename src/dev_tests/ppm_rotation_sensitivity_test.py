@@ -245,6 +245,12 @@ class PPMRotationSensitivityTester:
         self.logger = logging.getLogger("PPMSensitivityTest")
         self.logger.setLevel(logging.DEBUG)
 
+        # Prevent propagation to root logger (avoids duplicate messages)
+        self.logger.propagate = False
+
+        # Clear existing handlers (in case of re-initialization)
+        self.logger.handlers = []
+
         # File handler
         fh = logging.FileHandler(log_file)
         fh.setLevel(logging.DEBUG)

@@ -168,6 +168,9 @@ class PPMBirefringenceMaximizationTester:
         self.logger = logging.getLogger("PPMBirefringenceTest")
         self.logger.setLevel(logging.DEBUG)
 
+        # Prevent propagation to root logger (avoids duplicate messages)
+        self.logger.propagate = False
+
         # Clear existing handlers
         self.logger.handlers = []
 
