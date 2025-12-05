@@ -433,10 +433,10 @@ def handle_client(conn, addr):
 
                         # Check if we have the end marker
                         full_message = "".join(message_parts)
-                        if "END_MARKER" in full_message:
+                        if END_MARKER in full_message:
                             # Remove the end marker
-                            message = full_message.replace(",END_MARKER", "").replace(
-                                "END_MARKER", ""
+                            message = full_message.replace("," + END_MARKER, "").replace(
+                                END_MARKER, ""
                             )
                             logger.debug(
                                 f"Received complete acquisition message ({total_bytes} bytes) "
@@ -513,8 +513,8 @@ def handle_client(conn, addr):
 
                         full_message = "".join(message_parts)
 
-                        if "END_MARKER" in full_message:
-                            message = full_message.replace("END_MARKER", "").strip()
+                        if END_MARKER in full_message:
+                            message = full_message.replace(END_MARKER, "").strip()
 
                             # Parse the message
                             params = {}
@@ -663,8 +663,8 @@ def handle_client(conn, addr):
 
                         full_message = "".join(message_parts)
 
-                        if "END_MARKER" in full_message:
-                            message = full_message.replace("END_MARKER", "").strip()
+                        if END_MARKER in full_message:
+                            message = full_message.replace(END_MARKER, "").strip()
 
                             # Parse the message
                             params = {}
@@ -803,8 +803,8 @@ def handle_client(conn, addr):
 
                         full_message = "".join(message_parts)
 
-                        if "END_MARKER" in full_message:
-                            message = full_message.replace("END_MARKER", "").strip()
+                        if END_MARKER in full_message:
+                            message = full_message.replace(END_MARKER, "").strip()
 
                             # Parse the message
                             params = {}
@@ -936,8 +936,8 @@ def handle_client(conn, addr):
 
                         full_message = "".join(message_parts)
 
-                        if "END_MARKER" in full_message:
-                            message = full_message.replace("END_MARKER", "").strip()
+                        if END_MARKER in full_message:
+                            message = full_message.replace(END_MARKER, "").strip()
 
                             # Parse the message
                             params = {}
@@ -1075,8 +1075,8 @@ def handle_client(conn, addr):
 
                         full_message = "".join(message_parts)
 
-                        if "END_MARKER" in full_message:
-                            message = full_message.replace("END_MARKER", "").strip()
+                        if END_MARKER in full_message:
+                            message = full_message.replace(END_MARKER, "").strip()
 
                             # Parse the message
                             params = {}
@@ -1212,8 +1212,8 @@ def handle_client(conn, addr):
 
                         full_message = "".join(message_parts)
 
-                        if "END_MARKER" in full_message:
-                            message = full_message.replace("END_MARKER", "").strip()
+                        if END_MARKER in full_message:
+                            message = full_message.replace(END_MARKER, "").strip()
 
                             # Parse the message
                             params = {}
