@@ -363,54 +363,23 @@ class PPMRotationSensitivityTester:
             if angle_error > 0.5:  # Warning threshold
                 self.logger.warning(f"Large angle error: {angle_error:.3f} degrees")
 
-            # Step 3: Build and send SNAP command (fixed exposure, no adaptive!)
+            # Step 3: Use test_snap method for proper socket handling
             output_path = self.output_dir / save_name
 
-            message = (
-                f"--angle {angle} "
-                f"--exposure {exposure_ms} "
-                f"--output {output_path} "
-                f"--debayer true "
-            )
-            message += "END_MARKER"
-
             self.logger.debug(f"Sending SNAP: angle={angle:.2f}, exposure={exposure_ms:.2f}ms")
-            self.client.socket.sendall(ExtendedCommand.SNAP)
-            self.client.socket.sendall(message.encode('utf-8'))
+            result = self.client.test_snap(
+                angle=angle,
+                exposure_ms=exposure_ms,
+                output_path=str(output_path),
+                debayer=True
+            )
 
-            # Step 4: Read the response - SNAP is simpler than BGACQUIRE
-            # Response is directly SUCCESS:path or FAILED:reason
-            response_data = b""
-            self.client.socket.settimeout(30.0)  # Shorter timeout for simple snap
-
-            try:
-                while True:
-                    chunk = self.client.socket.recv(4096)
-                    if not chunk:
-                        self.logger.error("Connection closed while waiting for response")
-                        break
-
-                    response_data += chunk
-                    response = response_data.decode('utf-8', errors='replace')
-
-                    if 'SUCCESS:' in response:
-                        self.logger.info(f"SNAP complete: {save_name}")
-                        return output_path
-                    elif 'FAILED:' in response:
-                        self.logger.error(f"SNAP failed: {response}")
-                        return None
-
-            except socket.timeout:
-                self.logger.error("Timeout waiting for SNAP response")
-                # Check if file exists as last resort
-                if output_path.exists():
-                    self.logger.info(f"File exists despite timeout: {save_name}")
-                    return output_path
+            if result:
+                self.logger.info(f"SNAP complete: {save_name}")
+                return output_path
+            else:
+                self.logger.error(f"SNAP failed for {save_name}")
                 return None
-            finally:
-                self.client.socket.settimeout(None)
-
-            return None
 
         except Exception as e:
             self.logger.error(f"Error acquiring at angle {angle}: {e}")

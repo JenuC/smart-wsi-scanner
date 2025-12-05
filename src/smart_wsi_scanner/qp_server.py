@@ -640,6 +640,7 @@ def handle_client(conn, addr):
 
             if data == ExtendedCommand.SNAP:
                 logger.info(f"Client {addr} requested simple snap (fixed exposure)")
+                snap_start_time = time.time()
 
                 # Read the message with parameters
                 message_parts = []
@@ -658,6 +659,7 @@ def handle_client(conn, addr):
 
                         message_parts.append(chunk.decode("utf-8"))
                         total_bytes += len(chunk)
+                        logger.debug(f"SNAP: received {total_bytes} bytes so far")
 
                         full_message = "".join(message_parts)
 
@@ -736,15 +738,18 @@ def handle_client(conn, addr):
                                     compressionargs={"level": 6},
                                 )
 
+                                elapsed = time.time() - snap_start_time
                                 logger.info(
                                     f"SNAP complete: {output_path.name}, "
                                     f"angle={angle:.2f}deg, exposure={exposure_ms:.2f}ms, "
-                                    f"shape={image.shape}, median={float(image.mean()):.1f}"
+                                    f"shape={image.shape}, median={float(image.mean()):.1f}, "
+                                    f"total_time={elapsed:.2f}s"
                                 )
 
                                 # Send success response
                                 response = f"SUCCESS:{output_path}".encode()
                                 conn.sendall(response)
+                                logger.debug(f"SNAP: sent SUCCESS response")
 
                             except Exception as e:
                                 logger.error(f"SNAP failed: {str(e)}", exc_info=True)

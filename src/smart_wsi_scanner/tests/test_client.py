@@ -326,8 +326,8 @@ class QuPathTestClient:
         logger.info(f"  Debayer: {debayer}")
 
         try:
-            # Send SNAP command
-            self.socket.send(ExtendedCommand.SNAP)
+            # Send SNAP command (8 bytes)
+            self.socket.sendall(ExtendedCommand.SNAP)
 
             # Build the message
             message = (
@@ -338,16 +338,20 @@ class QuPathTestClient:
             )
             message += END_MARKER
 
-            # Send the message
-            self.socket.send(message.encode())
+            # Send the message - use sendall to ensure complete transmission
+            self.socket.sendall(message.encode())
 
             # Wait for response (no STARTED acknowledgment for simple snap)
+            # Timeout needs to account for exposure time + image processing + save
+            timeout = max(60.0, exposure_ms / 1000.0 * 2 + 30)  # At least 60s, or 2x exposure + 30s
             response_parts = []
-            self.socket.settimeout(30.0)  # 30 second timeout for snap
+            self.socket.settimeout(timeout)
+            logger.debug(f"  Waiting for SNAP response (timeout: {timeout:.1f}s)")
             try:
                 while True:
                     chunk = self.socket.recv(1024)
                     if not chunk:
+                        logger.warning("  Connection closed while waiting for SNAP response")
                         break
                     response_parts.append(chunk.decode())
                     response = "".join(response_parts)
