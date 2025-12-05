@@ -59,3 +59,4 @@ class ExtendedCommand:
     ACKMF = b"ackmf___"  # Acknowledge manual focus - retry autofocus
     SKIPAF = b"skipaf__"  # Skip autofocus retry - use current focus
     AFBENCH = b"afbench_"  # Run autofocus parameter benchmark
+    SNAP = b"snap____"  # Simple snap with fixed exposure (no adaptive)

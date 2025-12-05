@@ -300,6 +300,75 @@ class QuPathTestClient:
             logger.error(f"  BGACQUIRE failed: {e}")
             raise
 
+    def test_snap(
+        self,
+        angle: float,
+        exposure_ms: float,
+        output_path: str,
+        debayer: bool = True,
+    ) -> Optional[str]:
+        """
+        Test SNAP command - simple fixed-exposure acquisition.
+
+        Args:
+            angle: Rotation angle in degrees
+            exposure_ms: Fixed exposure time in milliseconds
+            output_path: Full path for output image file
+            debayer: Whether to apply debayering (default True)
+
+        Returns:
+            Output path on success, None on failure
+        """
+        logger.info("Testing SNAP (fixed exposure)...")
+        logger.info(f"  Angle: {angle} deg")
+        logger.info(f"  Exposure: {exposure_ms} ms")
+        logger.info(f"  Output: {output_path}")
+        logger.info(f"  Debayer: {debayer}")
+
+        try:
+            # Send SNAP command
+            self.socket.send(ExtendedCommand.SNAP)
+
+            # Build the message
+            message = (
+                f"--angle {angle} "
+                f"--exposure {exposure_ms} "
+                f"--output {output_path} "
+                f"--debayer {debayer} "
+            )
+            message += END_MARKER
+
+            # Send the message
+            self.socket.send(message.encode())
+
+            # Wait for response (no STARTED acknowledgment for simple snap)
+            response_parts = []
+            self.socket.settimeout(30.0)  # 30 second timeout for snap
+            try:
+                while True:
+                    chunk = self.socket.recv(1024)
+                    if not chunk:
+                        break
+                    response_parts.append(chunk.decode())
+                    response = "".join(response_parts)
+                    if response.startswith("SUCCESS:") or response.startswith("FAILED:"):
+                        break
+            finally:
+                self.socket.settimeout(None)
+
+            response = "".join(response_parts)
+            if response.startswith("SUCCESS:"):
+                result_path = response.replace("SUCCESS:", "")
+                logger.info(f"  SNAP successful: {result_path}")
+                return result_path
+            else:
+                logger.error(f"  SNAP failed: {response}")
+                return None
+
+        except Exception as e:
+            logger.error(f"  SNAP failed: {e}")
+            raise
+
     def _monitor_acquisition(self, interval: float = 1.0):
         """Monitor acquisition progress until complete."""
         logger.info("  Monitoring acquisition progress...")

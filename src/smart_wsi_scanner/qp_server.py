@@ -638,6 +638,143 @@ def handle_client(conn, addr):
 
                 continue
 
+            if data == ExtendedCommand.SNAP:
+                logger.info(f"Client {addr} requested simple snap (fixed exposure)")
+
+                # Read the message with parameters
+                message_parts = []
+                total_bytes = 0
+                start_time = time.time()
+
+                conn.settimeout(5.0)
+
+                try:
+                    while True:
+                        chunk = conn.recv(1024)
+                        if not chunk:
+                            logger.error("Connection closed while reading snap message")
+                            conn.sendall(b"FAILED:Connection closed")
+                            break
+
+                        message_parts.append(chunk.decode("utf-8"))
+                        total_bytes += len(chunk)
+
+                        full_message = "".join(message_parts)
+
+                        if "END_MARKER" in full_message:
+                            message = full_message.replace("END_MARKER", "").strip()
+
+                            # Parse the message
+                            params = {}
+
+                            # Parse flags: --angle, --exposure, --output, --debayer
+                            flags = ["--angle", "--exposure", "--output", "--debayer"]
+
+                            for i, flag in enumerate(flags):
+                                if flag in message:
+                                    start_idx = message.index(flag) + len(flag)
+                                    end_idx = len(message)
+                                    for next_flag in flags[i + 1:]:
+                                        if next_flag in message[start_idx:]:
+                                            next_pos = message.index(next_flag, start_idx)
+                                            if next_pos < end_idx:
+                                                end_idx = next_pos
+                                                break
+
+                                    value = message[start_idx:end_idx].strip()
+
+                                    if flag == "--angle":
+                                        params["angle"] = float(value)
+                                    elif flag == "--exposure":
+                                        params["exposure_ms"] = float(value)
+                                    elif flag == "--output":
+                                        params["output_path"] = value
+                                    elif flag == "--debayer":
+                                        params["debayer"] = value.lower() in ("true", "1", "yes")
+
+                            # Validate required parameters
+                            required = ["angle", "exposure_ms", "output_path"]
+                            missing = [key for key in required if key not in params]
+                            if missing:
+                                error_msg = f"Missing required parameters: {missing}"
+                                logger.error(error_msg)
+                                conn.sendall(f"FAILED:{error_msg}".encode())
+                                break
+
+                            try:
+                                import tifffile
+                                from pathlib import Path
+
+                                angle = params["angle"]
+                                exposure_ms = params["exposure_ms"]
+                                output_path = Path(params["output_path"])
+                                debayer = params.get("debayer", True)
+
+                                # Create output directory if needed
+                                output_path.parent.mkdir(parents=True, exist_ok=True)
+
+                                # Set exposure (fixed - no adaptive adjustment!)
+                                hardware.set_exposure(exposure_ms)
+                                logger.info(f"Set exposure to {exposure_ms:.2f} ms (FIXED)")
+
+                                # Set rotation angle
+                                if hasattr(hardware, "set_psg_ticks"):
+                                    hardware.set_psg_ticks(angle)
+                                    logger.info(f"Set rotation angle to {angle:.2f} deg")
+
+                                # Snap image with simple acquisition
+                                image, metadata = hardware.snap_image(debayering=debayer)
+
+                                if image is None:
+                                    raise RuntimeError("snap_image returned None")
+
+                                # Save the image
+                                tifffile.imwrite(
+                                    str(output_path),
+                                    image,
+                                    compression="zlib",
+                                    compressionargs={"level": 6},
+                                )
+
+                                logger.info(
+                                    f"SNAP complete: {output_path.name}, "
+                                    f"angle={angle:.2f}deg, exposure={exposure_ms:.2f}ms, "
+                                    f"shape={image.shape}, median={float(image.mean()):.1f}"
+                                )
+
+                                # Send success response
+                                response = f"SUCCESS:{output_path}".encode()
+                                conn.sendall(response)
+
+                            except Exception as e:
+                                logger.error(f"SNAP failed: {str(e)}", exc_info=True)
+                                response = f"FAILED:{str(e)}".encode()
+                                conn.sendall(response)
+
+                            break
+
+                        # Safety checks
+                        if total_bytes > 10000:
+                            logger.error(f"SNAP message too large: {total_bytes} bytes")
+                            conn.sendall(b"FAILED:Message too large")
+                            break
+
+                        if time.time() - start_time > 10:
+                            logger.error("Timeout reading SNAP message")
+                            conn.sendall(b"FAILED:Timeout waiting for complete message")
+                            break
+
+                except socket.timeout:
+                    logger.error(f"Timeout reading SNAP message from {addr}")
+                    conn.sendall(b"FAILED:Timeout reading message")
+                except Exception as e:
+                    logger.error(f"Error in SNAP: {str(e)}", exc_info=True)
+                    conn.sendall(f"FAILED:{str(e)}".encode())
+                finally:
+                    conn.settimeout(None)
+
+                continue
+
             if data == ExtendedCommand.TESTAF:
                 logger.info(f"Client {addr} requested autofocus test")
 

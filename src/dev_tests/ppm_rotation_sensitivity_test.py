@@ -68,7 +68,8 @@ class PPMRotationSensitivityTester:
                  config_yaml: str,
                  output_dir: str = None,
                  host: str = "127.0.0.1",
-                 port: int = 5000):
+                 port: int = 5000,
+                 fixed_exposure_ms: float = 22.0):
         """
         Initialize the tester with configuration and connection parameters.
 
@@ -77,6 +78,7 @@ class PPMRotationSensitivityTester:
             output_dir: Output directory for test results (default: configurations/ppm_sensitivity_tests/)
             host: qp_server host address
             port: qp_server port
+            fixed_exposure_ms: Fixed exposure time in ms for all SNAP acquisitions (default: 22.0)
         """
         self.config_yaml = Path(config_yaml)
 
@@ -111,12 +113,17 @@ class PPMRotationSensitivityTester:
         self.standard_angles = self.config.get('ppm', {}).get('angles',
             [0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91])
 
-        # Load imaging profile exposures if available
+        # Fixed exposure for SNAP acquisitions (no adaptive adjustment)
+        self.fixed_exposure_ms = fixed_exposure_ms
+
+        # Load imaging profile exposures if available (for reference only)
         self.imaging_profile_exposures = self._load_imaging_profile_exposures()
 
+        self.logger.info(f"Loaded imaging profile exposures: {self.imaging_profile_exposures}")
         self.logger.info(f"PPM Rotation Sensitivity Tester initialized")
         self.logger.info(f"Config: {self.config_yaml}")
         self.logger.info(f"Output: {self.output_dir}")
+        self.logger.info(f"Fixed exposure for SNAP: {self.fixed_exposure_ms:.2f} ms")
 
     def _load_imaging_profile_exposures(self) -> Dict[str, float]:
         """
@@ -153,7 +160,6 @@ class PPMRotationSensitivityTester:
                     elif val is not None:
                         exposures[category] = float(val)
 
-                self.logger.info(f"Loaded imaging profile exposures: {exposures}")
             else:
                 self.logger.warning(f"Imaging profile not found at {imgproc_file}")
 
@@ -316,18 +322,25 @@ class PPMRotationSensitivityTester:
     def acquire_at_angle(self, angle: float, save_name: str,
                         exposure_ms: float = None) -> Optional[Path]:
         """
-        Acquire a single image at specified rotation angle.
+        Acquire a single image at specified rotation angle using SNAP command.
+
+        Uses fixed exposure (no adaptive adjustment) for consistent intensity
+        comparison across angles.
 
         Args:
             angle: Rotation angle in degrees
             save_name: Name for the saved image
-            exposure_ms: Exposure time in milliseconds (uses config default if None)
+            exposure_ms: Exposure time in milliseconds (REQUIRED for fixed exposure)
 
         Returns:
             Path to acquired image or None if failed
         """
         if not self.connected:
             self.logger.error("Not connected to server")
+            return None
+
+        if exposure_ms is None:
+            self.logger.error("exposure_ms is required for SNAP command")
             return None
 
         try:
@@ -344,36 +357,28 @@ class PPMRotationSensitivityTester:
             if angle_error > 0.5:  # Warning threshold
                 self.logger.warning(f"Large angle error: {angle_error:.3f} degrees")
 
-            # Step 3: Build and send BGACQUIRE command
+            # Step 3: Build and send SNAP command (fixed exposure, no adaptive!)
             output_path = self.output_dir / save_name
 
             message = (
-                f"--yaml {self.config_yaml} "
-                f"--output {output_path.parent} "
-                f"--modality {self.config.get('modality', 'ppm_20x')} "
-                f"--angles {angle} "
+                f"--angle {angle} "
+                f"--exposure {exposure_ms} "
+                f"--output {output_path} "
+                f"--debayer true "
             )
-
-            if exposure_ms:
-                message += f"--exposures {exposure_ms} "
-
             message += "END_MARKER"
 
-            self.logger.debug(f"Sending BGACQUIRE: {message[:80]}...")
-            self.client.socket.sendall(ExtendedCommand.BGACQUIRE)
+            self.logger.debug(f"Sending SNAP: angle={angle:.2f}, exposure={exposure_ms:.2f}ms")
+            self.client.socket.sendall(ExtendedCommand.SNAP)
             self.client.socket.sendall(message.encode('utf-8'))
 
-            # Step 4: Read the COMPLETE response - DO NOT send any other commands
-            # The response will be either:
-            #   - "STARTED:..." followed eventually by "SUCCESS:..." or "FAILED:..."
-            #   - "FAILED:..." immediately
+            # Step 4: Read the response - SNAP is simpler than BGACQUIRE
+            # Response is directly SUCCESS:path or FAILED:reason
             response_data = b""
-            self.client.socket.settimeout(120.0)  # Long timeout for acquisition
+            self.client.socket.settimeout(30.0)  # Shorter timeout for simple snap
 
-            # Read until we get a final SUCCESS or FAILED (after any STARTED)
-            got_started = False
-            while True:
-                try:
+            try:
+                while True:
                     chunk = self.client.socket.recv(4096)
                     if not chunk:
                         self.logger.error("Connection closed while waiting for response")
@@ -382,40 +387,22 @@ class PPMRotationSensitivityTester:
                     response_data += chunk
                     response = response_data.decode('utf-8', errors='replace')
 
-                    # Check for STARTED
-                    if 'STARTED:' in response:
-                        if not got_started:
-                            self.logger.debug("Acquisition started, waiting for completion...")
-                            got_started = True
-
-                    # Check for final response (SUCCESS or FAILED after STARTED, or immediate FAILED)
-                    if got_started:
-                        # Look for SUCCESS or FAILED after the STARTED message
-                        after_started = response[response.index('STARTED:'):]
-                        if 'SUCCESS:' in after_started:
-                            self.logger.info(f"Acquisition complete: {save_name}")
-                            return output_path
-                        elif after_started.count('FAILED:') > 0 and 'FAILED:' in after_started[8:]:
-                            # FAILED that appears after STARTED (not part of STARTED message)
-                            self.logger.error(f"Acquisition failed: {response[-300:]}")
-                            return None
-                    else:
-                        # No STARTED yet - check for immediate FAILED
-                        if 'FAILED:' in response:
-                            self.logger.error(f"Acquisition failed: {response[:300]}")
-                            return None
-                        # Or immediate SUCCESS (unlikely but possible)
-                        if 'SUCCESS:' in response:
-                            self.logger.info(f"Acquisition complete: {save_name}")
-                            return output_path
-
-                except socket.timeout:
-                    self.logger.error("Timeout waiting for acquisition response")
-                    # Check if file exists as last resort
-                    if output_path.exists():
-                        self.logger.info(f"File exists despite timeout: {save_name}")
+                    if 'SUCCESS:' in response:
+                        self.logger.info(f"SNAP complete: {save_name}")
                         return output_path
-                    return None
+                    elif 'FAILED:' in response:
+                        self.logger.error(f"SNAP failed: {response}")
+                        return None
+
+            except socket.timeout:
+                self.logger.error("Timeout waiting for SNAP response")
+                # Check if file exists as last resort
+                if output_path.exists():
+                    self.logger.info(f"File exists despite timeout: {save_name}")
+                    return output_path
+                return None
+            finally:
+                self.client.socket.settimeout(None)
 
             return None
 
@@ -423,16 +410,29 @@ class PPMRotationSensitivityTester:
             self.logger.error(f"Error acquiring at angle {angle}: {e}")
             return None
 
-    def run_standard_angles_test(self) -> Dict[float, Path]:
+    def run_standard_angles_test(self, fixed_exposure_ms: float = None) -> Dict[float, Path]:
         """
-        Acquire images at all standard PPM angles.
+        Acquire images at all standard PPM angles with FIXED exposure.
+
+        For valid sensitivity analysis, all images must use the same exposure.
+        Choose an exposure that gives good signal at the angles of interest
+        (e.g., 22 ms for 7 deg region, or adjust based on your sample).
+
+        Args:
+            fixed_exposure_ms: Fixed exposure time for ALL angles (required).
+                              If None, uses default of 22.0 ms (suitable for ~7 deg).
 
         Returns:
             Dictionary mapping angles to image paths
         """
         self.logger.info("=" * 60)
-        self.logger.info("STANDARD ANGLES TEST")
+        self.logger.info("STANDARD ANGLES TEST (FIXED EXPOSURE)")
         self.logger.info("=" * 60)
+
+        # Use provided exposure or default
+        exposure = fixed_exposure_ms if fixed_exposure_ms is not None else 22.0
+        self.logger.info(f"Using FIXED exposure: {exposure:.2f} ms for all angles")
+        self.logger.info("NOTE: Images may be over/underexposed at some angles - this is expected for sensitivity analysis")
 
         acquired = {}
 
@@ -440,7 +440,7 @@ class PPMRotationSensitivityTester:
             self.logger.info(f"[{i+1}/{len(self.standard_angles)}] Acquiring at {angle} degrees")
 
             save_name = f"standard_{angle:05.1f}deg.tif"
-            image_path = self.acquire_at_angle(angle, save_name)
+            image_path = self.acquire_at_angle(angle, save_name, exposure_ms=exposure)
 
             if image_path:
                 acquired[angle] = image_path
@@ -1159,15 +1159,16 @@ class PPMRotationSensitivityTester:
             # 1. Repeatability test first (quick, doesn't need images)
             self.run_repeatability_test(test_angle=7.0, n_repeats=10)
 
-            # 2. Standard angles acquisition
-            self.run_standard_angles_test()
+            # 2. Standard angles acquisition with FIXED exposure
+            self.run_standard_angles_test(fixed_exposure_ms=self.fixed_exposure_ms)
 
             # 3. Zero-rotation baseline test (should show 0% change)
             self.run_zero_rotation_baseline_test()
 
-            # 4. Fine deviation tests at PPM-relevant angles
+            # 4. Fine deviation tests at PPM-relevant angles with FIXED exposure
             for base_angle in [7, 0, -7, 90]:
-                self.run_fine_deviation_test(base_angle=base_angle)
+                self.run_fine_deviation_test(base_angle=base_angle,
+                                             fixed_exposure_ms=self.fixed_exposure_ms)
 
             # 4. Optional: Polarizer calibration comparison
             # self.run_polarizer_calibration_comparison()
@@ -1208,17 +1209,31 @@ def main():
                        help='Test type to run')
     parser.add_argument('--base-angle', type=float, default=7.0,
                        help='Base angle for deviation testing')
+    parser.add_argument('--exposure', type=float, default=22.0,
+                       help='Fixed exposure time in ms for all acquisitions (default: 22.0)')
     parser.add_argument('--repeats', type=int, default=10,
                        help='Number of repetitions for repeatability test')
+    parser.add_argument('--clean', action='store_true',
+                       help='Delete existing output directory before running (prevents stale file issues)')
 
     args = parser.parse_args()
+
+    # Handle --clean flag
+    if args.clean and args.output:
+        import shutil
+        output_path = Path(args.output)
+        if output_path.exists():
+            print(f"Cleaning output directory: {output_path}")
+            shutil.rmtree(output_path)
+            print("Done - starting fresh")
 
     # Initialize tester
     tester = PPMRotationSensitivityTester(
         config_yaml=args.config_yaml,
         output_dir=args.output,
         host=args.host,
-        port=args.port
+        port=args.port,
+        fixed_exposure_ms=args.exposure
     )
 
     # Run selected test
@@ -1231,9 +1246,10 @@ def main():
 
         try:
             if args.test == 'standard':
-                tester.run_standard_angles_test()
+                tester.run_standard_angles_test(fixed_exposure_ms=args.exposure)
             elif args.test == 'deviation':
-                tester.run_fine_deviation_test(base_angle=args.base_angle)
+                tester.run_fine_deviation_test(base_angle=args.base_angle,
+                                               fixed_exposure_ms=args.exposure)
             elif args.test == 'repeatability':
                 tester.run_repeatability_test(test_angle=args.base_angle,
                                              n_repeats=args.repeats)
