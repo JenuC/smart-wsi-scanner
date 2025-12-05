@@ -55,11 +55,12 @@ class PPMRotationSensitivityTester:
     analyzes the impact on image quality and birefringence calculations.
     """
 
-    # Background correction exposures from calibration
-    # These are the exposures that achieve proper intensity at each angle
-    BACKGROUND_EXPOSURES_MS = {
+    # Fixed exposures for each angle category (from background calibration)
+    # These are predetermined values - SNAP uses them directly without adaptive adjustment
+    # Can be overridden via CLI --angle-exposures or future QuPath command
+    ANGLE_EXPOSURES_MS = {
         -7.0: 21.1,
-        0.0: 92.16,
+        0.0: 96.81,
         7.0: 22.63,
         90.0: 0.57,
     }
@@ -69,7 +70,7 @@ class PPMRotationSensitivityTester:
                  output_dir: str = None,
                  host: str = "127.0.0.1",
                  port: int = 5000,
-                 fixed_exposure_ms: float = 22.0):
+                 angle_exposures: Dict[float, float] = None):
         """
         Initialize the tester with configuration and connection parameters.
 
@@ -78,7 +79,8 @@ class PPMRotationSensitivityTester:
             output_dir: Output directory for test results (default: configurations/ppm_sensitivity_tests/)
             host: qp_server host address
             port: qp_server port
-            fixed_exposure_ms: Fixed exposure time in ms for all SNAP acquisitions (default: 22.0)
+            angle_exposures: Optional dict of {angle: exposure_ms} to override defaults.
+                            If provided, updates ANGLE_EXPOSURES_MS.
         """
         self.config_yaml = Path(config_yaml)
 
@@ -113,17 +115,18 @@ class PPMRotationSensitivityTester:
         self.standard_angles = self.config.get('ppm', {}).get('angles',
             [0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91])
 
-        # Fixed exposure for SNAP acquisitions (no adaptive adjustment)
-        self.fixed_exposure_ms = fixed_exposure_ms
+        # Override angle exposures if provided
+        if angle_exposures:
+            self.ANGLE_EXPOSURES_MS.update(angle_exposures)
+            self.logger.info(f"Updated angle exposures with overrides: {angle_exposures}")
 
         # Load imaging profile exposures if available (for reference only)
         self.imaging_profile_exposures = self._load_imaging_profile_exposures()
 
-        self.logger.info(f"Loaded imaging profile exposures: {self.imaging_profile_exposures}")
         self.logger.info(f"PPM Rotation Sensitivity Tester initialized")
         self.logger.info(f"Config: {self.config_yaml}")
         self.logger.info(f"Output: {self.output_dir}")
-        self.logger.info(f"Fixed exposure for SNAP: {self.fixed_exposure_ms:.2f} ms")
+        self.logger.info(f"Angle exposures (fixed, no adaptive): {self.ANGLE_EXPOSURES_MS}")
 
     def _load_imaging_profile_exposures(self) -> Dict[str, float]:
         """
@@ -170,64 +173,65 @@ class PPMRotationSensitivityTester:
 
     def get_exposure_for_angle(self, angle: float) -> float:
         """
-        Get the appropriate exposure time for an angle based on background calibration.
+        Get the fixed exposure time for an angle.
 
-        Uses hardcoded background correction exposures and interpolates for
-        angles between calibration points.
+        Uses predetermined exposures from ANGLE_EXPOSURES_MS and interpolates
+        logarithmically for angles between calibration points.
 
-        Calibration points:
+        Calibration points (from background acquisition):
         - -7.0 deg: 21.1 ms (negative polarization)
-        - 0.0 deg: 92.16 ms (crossed polars - darkest)
+        - 0.0 deg: 96.81 ms (crossed polars - darkest)
         - 7.0 deg: 22.63 ms (positive polarization)
         - 90.0 deg: 0.57 ms (uncrossed - brightest)
+
+        Interpolation: For angles like 45 deg, logarithmic interpolation
+        between 7 deg and 90 deg exposures is used.
 
         Args:
             angle: Rotation angle in degrees
 
         Returns:
-            Exposure time in ms
+            Exposure time in ms (fixed, not adaptive)
         """
-        bg = self.BACKGROUND_EXPOSURES_MS
+        exp = self.ANGLE_EXPOSURES_MS
 
         # Check for exact match first
-        if angle in bg:
-            return bg[angle]
+        if angle in exp:
+            return exp[angle]
 
         # Map angle to nearest calibration category
         abs_angle = abs(angle)
 
         # Near 0 (crossed polars): use 0 deg exposure
         if abs_angle <= 3:
-            return bg[0.0]
+            return exp[0.0]
 
         # Near +/-7 (polarization angles): use 7 or -7 deg exposure
-        elif 4 <= abs_angle <= 10:
+        elif 3 < abs_angle <= 10:
             if angle >= 0:
-                return bg[7.0]
+                return exp[7.0]
             else:
-                return bg[-7.0]
+                return exp[-7.0]
 
         # Near 90 (uncrossed): use 90 deg exposure
         elif 85 <= abs_angle <= 95:
-            return bg[90.0]
+            return exp[90.0]
 
-        # For angles between 7-90, interpolate logarithmically
-        # (exposures span ~2 orders of magnitude)
+        # For angles between 10-85, interpolate logarithmically
+        # (exposures span ~2 orders of magnitude: 22ms to 0.57ms)
         elif 10 < abs_angle < 85:
-            # Interpolate between 7 deg (22.63ms) and 90 deg (0.57ms)
-            # Using log interpolation for large exposure ranges
             import math
-            exp_7 = bg[7.0]
-            exp_90 = bg[90.0]
+            exp_7 = exp[7.0]
+            exp_90 = exp[90.0]
             # Normalize angle to 0-1 range between 7 and 90
             t = (abs_angle - 7) / (90 - 7)
-            # Log interpolation
+            # Log interpolation for large exposure ranges
             log_exp = math.log(exp_7) * (1 - t) + math.log(exp_90) * t
             return math.exp(log_exp)
 
         # Fallback for any edge cases
         else:
-            return bg[7.0]  # Default to 7 deg exposure
+            return exp[7.0]  # Default to 7 deg exposure
 
     def setup_logging(self):
         """Setup comprehensive logging for the test session."""
@@ -324,13 +328,14 @@ class PPMRotationSensitivityTester:
         """
         Acquire a single image at specified rotation angle using SNAP command.
 
-        Uses fixed exposure (no adaptive adjustment) for consistent intensity
-        comparison across angles.
+        Uses fixed exposure (no adaptive adjustment). If exposure_ms is not
+        provided, looks up the appropriate exposure from ANGLE_EXPOSURES_MS.
 
         Args:
             angle: Rotation angle in degrees
             save_name: Name for the saved image
-            exposure_ms: Exposure time in milliseconds (REQUIRED for fixed exposure)
+            exposure_ms: Exposure time in milliseconds. If None, uses
+                        get_exposure_for_angle() to determine appropriate exposure.
 
         Returns:
             Path to acquired image or None if failed
@@ -339,9 +344,10 @@ class PPMRotationSensitivityTester:
             self.logger.error("Not connected to server")
             return None
 
+        # Look up exposure if not provided
         if exposure_ms is None:
-            self.logger.error("exposure_ms is required for SNAP command")
-            return None
+            exposure_ms = self.get_exposure_for_angle(angle)
+            self.logger.debug(f"Using looked-up exposure for {angle} deg: {exposure_ms:.2f} ms")
 
         try:
             # Step 1: Move to angle and wait for completion
@@ -410,34 +416,28 @@ class PPMRotationSensitivityTester:
             self.logger.error(f"Error acquiring at angle {angle}: {e}")
             return None
 
-    def run_standard_angles_test(self, fixed_exposure_ms: float = None) -> Dict[float, Path]:
+    def run_standard_angles_test(self) -> Dict[float, Path]:
         """
-        Acquire images at all standard PPM angles with FIXED exposure.
+        Acquire images at all standard PPM angles with per-angle fixed exposures.
 
-        For valid sensitivity analysis, all images must use the same exposure.
-        Choose an exposure that gives good signal at the angles of interest
-        (e.g., 22 ms for 7 deg region, or adjust based on your sample).
-
-        Args:
-            fixed_exposure_ms: Fixed exposure time for ALL angles (required).
-                              If None, uses default of 22.0 ms (suitable for ~7 deg).
+        Each angle uses its predetermined exposure from ANGLE_EXPOSURES_MS
+        (or interpolated for angles not in the dictionary). These are FIXED
+        exposures - no adaptive adjustment occurs.
 
         Returns:
             Dictionary mapping angles to image paths
         """
         self.logger.info("=" * 60)
-        self.logger.info("STANDARD ANGLES TEST (FIXED EXPOSURE)")
+        self.logger.info("STANDARD ANGLES TEST (PER-ANGLE FIXED EXPOSURES)")
         self.logger.info("=" * 60)
-
-        # Use provided exposure or default
-        exposure = fixed_exposure_ms if fixed_exposure_ms is not None else 22.0
-        self.logger.info(f"Using FIXED exposure: {exposure:.2f} ms for all angles")
-        self.logger.info("NOTE: Images may be over/underexposed at some angles - this is expected for sensitivity analysis")
+        self.logger.info(f"Exposure lookup: {self.ANGLE_EXPOSURES_MS}")
+        self.logger.info("Each angle uses its own fixed exposure (interpolated if not in table)")
 
         acquired = {}
 
         for i, angle in enumerate(self.standard_angles):
-            self.logger.info(f"[{i+1}/{len(self.standard_angles)}] Acquiring at {angle} degrees")
+            exposure = self.get_exposure_for_angle(angle)
+            self.logger.info(f"[{i+1}/{len(self.standard_angles)}] Acquiring at {angle} deg (exposure: {exposure:.2f} ms)")
 
             save_name = f"standard_{angle:05.1f}deg.tif"
             image_path = self.acquire_at_angle(angle, save_name, exposure_ms=exposure)
@@ -1159,16 +1159,16 @@ class PPMRotationSensitivityTester:
             # 1. Repeatability test first (quick, doesn't need images)
             self.run_repeatability_test(test_angle=7.0, n_repeats=10)
 
-            # 2. Standard angles acquisition with FIXED exposure
-            self.run_standard_angles_test(fixed_exposure_ms=self.fixed_exposure_ms)
+            # 2. Standard angles acquisition (each angle uses its own fixed exposure)
+            self.run_standard_angles_test()
 
             # 3. Zero-rotation baseline test (should show 0% change)
             self.run_zero_rotation_baseline_test()
 
-            # 4. Fine deviation tests at PPM-relevant angles with FIXED exposure
+            # 4. Fine deviation tests at PPM-relevant angles
+            # Each cluster uses the BASE angle's exposure for all images in that cluster
             for base_angle in [7, 0, -7, 90]:
-                self.run_fine_deviation_test(base_angle=base_angle,
-                                             fixed_exposure_ms=self.fixed_exposure_ms)
+                self.run_fine_deviation_test(base_angle=base_angle)
 
             # 4. Optional: Polarizer calibration comparison
             # self.run_polarizer_calibration_comparison()
@@ -1209,12 +1209,13 @@ def main():
                        help='Test type to run')
     parser.add_argument('--base-angle', type=float, default=7.0,
                        help='Base angle for deviation testing')
-    parser.add_argument('--exposure', type=float, default=22.0,
-                       help='Fixed exposure time in ms for all acquisitions (default: 22.0)')
     parser.add_argument('--repeats', type=int, default=10,
                        help='Number of repetitions for repeatability test')
     parser.add_argument('--clean', action='store_true',
                        help='Delete existing output directory before running (prevents stale file issues)')
+    # Future: --angle-exposures for QuPath command integration
+    # parser.add_argument('--angle-exposures', type=str,
+    #                    help='JSON dict of {angle: exposure_ms} overrides')
 
     args = parser.parse_args()
 
@@ -1232,8 +1233,8 @@ def main():
         config_yaml=args.config_yaml,
         output_dir=args.output,
         host=args.host,
-        port=args.port,
-        fixed_exposure_ms=args.exposure
+        port=args.port
+        # angle_exposures can be passed here for QuPath integration
     )
 
     # Run selected test
@@ -1246,10 +1247,9 @@ def main():
 
         try:
             if args.test == 'standard':
-                tester.run_standard_angles_test(fixed_exposure_ms=args.exposure)
+                tester.run_standard_angles_test()
             elif args.test == 'deviation':
-                tester.run_fine_deviation_test(base_angle=args.base_angle,
-                                               fixed_exposure_ms=args.exposure)
+                tester.run_fine_deviation_test(base_angle=args.base_angle)
             elif args.test == 'repeatability':
                 tester.run_repeatability_test(test_angle=args.base_angle,
                                              n_repeats=args.repeats)
