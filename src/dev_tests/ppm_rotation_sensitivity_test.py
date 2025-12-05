@@ -70,7 +70,8 @@ class PPMRotationSensitivityTester:
                  output_dir: str = None,
                  host: str = "127.0.0.1",
                  port: int = 5000,
-                 angle_exposures: Dict[float, float] = None):
+                 angle_exposures: Dict[float, float] = None,
+                 keep_images: bool = True):
         """
         Initialize the tester with configuration and connection parameters.
 
@@ -81,7 +82,10 @@ class PPMRotationSensitivityTester:
             port: qp_server port
             angle_exposures: Optional dict of {angle: exposure_ms} to override defaults.
                             If provided, updates ANGLE_EXPOSURES_MS.
+            keep_images: If True, keep acquired .tif images after analysis.
+                        If False, delete them to conserve disk space (default: True).
         """
+        self.keep_images = keep_images
         self.config_yaml = Path(config_yaml)
 
         # Default output to configurations/ppm_sensitivity_tests/
@@ -1114,6 +1118,257 @@ class PPMRotationSensitivityTester:
         self.logger.info(f"Test summary saved to {summary_file}")
         self.logger.info(f"Test report saved to {report_file}")
 
+    def save_combined_summary(self):
+        """
+        Save a combined summary with both motion (repeatability) and intensity analysis.
+
+        Creates a single comprehensive report file that includes:
+        - Mechanical repeatability results
+        - Intensity sensitivity analysis
+        - Zero-rotation baseline measurements
+        - Key findings and recommendations
+        """
+        combined_file = self.output_dir / "combined_summary.txt"
+
+        self.logger.info("Generating combined motion + intensity summary...")
+
+        with open(combined_file, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write("PPM ROTATION SENSITIVITY - COMBINED ANALYSIS REPORT\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(f"Test Date: {datetime.now().isoformat()}\n")
+            f.write(f"Config: {self.config_yaml}\n")
+            f.write(f"Output: {self.output_dir}\n")
+            f.write(f"Images retained: {self.keep_images}\n\n")
+
+            # ================================================================
+            # SECTION 1: MECHANICAL MOTION ANALYSIS
+            # ================================================================
+            f.write("=" * 80 + "\n")
+            f.write("PART 1: MECHANICAL MOTION ANALYSIS\n")
+            f.write("=" * 80 + "\n\n")
+
+            if 'repeatability' in self.test_results:
+                rep = self.test_results['repeatability']
+                overall = rep.get('overall_statistics', {})
+                by_type = rep.get('statistics_by_type', {})
+
+                f.write("1.1 OVERALL REPEATABILITY\n")
+                f.write("-" * 60 + "\n")
+                if overall:
+                    f.write(f"  Total measurements: {overall.get('total_measurements', 0)}\n")
+                    f.write(f"  Mean error: {overall.get('mean_error', 0):.4f} deg\n")
+                    f.write(f"  Standard deviation: {overall.get('std_error', 0):.4f} deg\n")
+                    f.write(f"  Maximum error: {overall.get('max_error', 0):.4f} deg\n")
+                    f.write(f"  2-sigma repeatability: {overall.get('repeatability_2sigma', 0):.4f} deg\n\n")
+
+                    # Interpretation
+                    rep_2sigma = overall.get('repeatability_2sigma', 0)
+                    if rep_2sigma < 0.05:
+                        f.write("  --> EXCELLENT: Repeatability < 0.05 deg (2-sigma)\n\n")
+                    elif rep_2sigma < 0.1:
+                        f.write("  --> GOOD: Repeatability < 0.1 deg (2-sigma)\n\n")
+                    elif rep_2sigma < 0.2:
+                        f.write("  --> ACCEPTABLE: Repeatability < 0.2 deg (2-sigma)\n\n")
+                    else:
+                        f.write(f"  --> WARNING: Repeatability {rep_2sigma:.3f} deg may affect measurements\n\n")
+                else:
+                    f.write("  No overall statistics available\n\n")
+
+                f.write("1.2 BY MOVEMENT TYPE\n")
+                f.write("-" * 60 + "\n")
+                if by_type:
+                    for test_type, stats in by_type.items():
+                        if test_type == 'bidirectional_hysteresis':
+                            f.write(f"\n  {test_type}:\n")
+                            f.write(f"    Total travel: 180 deg (0 -> 90 -> 0)\n")
+                            f.write(f"    Mean hysteresis: {stats.get('mean_hysteresis', 0):.4f} deg\n")
+                            f.write(f"    Max hysteresis: {stats.get('max_hysteresis', 0):.4f} deg\n")
+                        else:
+                            travel = stats.get('travel_deg', 0)
+                            f.write(f"\n  {test_type}:\n")
+                            f.write(f"    Travel distance: {travel} deg\n")
+                            f.write(f"    Mean error: {stats.get('mean_error', 0):.4f} deg\n")
+                            f.write(f"    2-sigma: {stats.get('repeatability_2sigma', 0):.4f} deg\n")
+                            f.write(f"    Max error: {stats.get('max_error', 0):.4f} deg\n")
+                    f.write("\n")
+                else:
+                    f.write("  No per-type statistics available\n\n")
+            else:
+                f.write("  No repeatability test data available.\n")
+                f.write("  Run repeatability test to measure mechanical precision.\n\n")
+
+            # ================================================================
+            # SECTION 2: INTENSITY SENSITIVITY ANALYSIS
+            # ================================================================
+            f.write("=" * 80 + "\n")
+            f.write("PART 2: INTENSITY SENSITIVITY ANALYSIS\n")
+            f.write("=" * 80 + "\n\n")
+
+            # Check for analysis results (from PPMRotationAnalyzer)
+            analysis_summary_file = self.output_dir / "analysis" / "summary.txt"
+            if analysis_summary_file.exists():
+                f.write("(See detailed analysis in: analysis/summary.txt)\n\n")
+
+                # Extract key metrics from analysis results
+                if 'analysis' in self.test_results:
+                    analysis = self.test_results['analysis']
+                    f.write("2.1 IMAGES ANALYZED\n")
+                    f.write("-" * 60 + "\n")
+                    f.write(f"  Total images: {analysis.get('n_images_loaded', 'N/A')}\n")
+                    angles = analysis.get('angles_available', [])
+                    if angles:
+                        f.write(f"  Angle range: {min(angles):.2f} to {max(angles):.2f} deg\n")
+                    f.write("\n")
+            else:
+                f.write("  Analysis not yet run or no results available.\n\n")
+
+            # Look for zero-rotation baseline CSV
+            baseline_csv = self.output_dir / "zero_rotation_baseline.csv"
+            if baseline_csv.exists():
+                import pandas as pd
+                try:
+                    df_baseline = pd.read_csv(baseline_csv)
+                    # Filter out sanity check
+                    df_actual = df_baseline[df_baseline['angle'] != -999.0]
+
+                    f.write("2.2 ZERO-ROTATION BASELINE (Measurement Noise Floor)\n")
+                    f.write("-" * 60 + "\n")
+                    f.write("  Images acquired at SAME angle without rotation.\n")
+                    f.write("  Expected difference: ~0%\n\n")
+
+                    if not df_actual.empty:
+                        mean_pct = df_actual['pct_change'].mean()
+                        max_pct = df_actual['pct_change'].max()
+                        mean_ssim = df_actual['ssim'].mean()
+
+                        f.write(f"  Pairs analyzed: {len(df_actual)}\n")
+                        f.write(f"  Mean intensity change: {mean_pct:.4f}%\n")
+                        f.write(f"  Max intensity change: {max_pct:.4f}%\n")
+                        f.write(f"  Mean SSIM: {mean_ssim:.6f}\n\n")
+
+                        if mean_pct < 0.1:
+                            f.write("  --> GOOD: Baseline noise is low. Measurements are valid.\n\n")
+                        elif mean_pct < 1.0:
+                            f.write("  --> MODERATE: Baseline noise present. Consider in analysis.\n\n")
+                        else:
+                            f.write("  --> WARNING: High baseline noise indicates measurement issues.\n\n")
+                except Exception as e:
+                    f.write(f"  Error reading baseline data: {e}\n\n")
+
+            # Look for adjacent differences CSV
+            adjacent_csv = self.output_dir / "adjacent_differences.csv"
+            if adjacent_csv.exists():
+                import pandas as pd
+                try:
+                    df_adj = pd.read_csv(adjacent_csv)
+
+                    f.write("2.3 ANGULAR SENSITIVITY (Intensity Change per Degree)\n")
+                    f.write("-" * 60 + "\n")
+
+                    # Group by step size
+                    fine_steps = df_adj[df_adj['delta_deg'] < 0.3]
+                    medium_steps = df_adj[(df_adj['delta_deg'] >= 0.3) & (df_adj['delta_deg'] < 1.0)]
+
+                    if not fine_steps.empty:
+                        mean_pct_fine = fine_steps['pct_change'].mean()
+                        mean_delta_fine = fine_steps['delta_deg'].mean()
+                        sensitivity_fine = mean_pct_fine / mean_delta_fine if mean_delta_fine > 0 else 0
+                        f.write(f"  Fine steps (<0.3 deg): {mean_pct_fine:.4f}% avg change\n")
+                        f.write(f"    -> Sensitivity: ~{sensitivity_fine:.3f}% per degree\n\n")
+
+                    if not medium_steps.empty:
+                        mean_pct_med = medium_steps['pct_change'].mean()
+                        mean_delta_med = medium_steps['delta_deg'].mean()
+                        sensitivity_med = mean_pct_med / mean_delta_med if mean_delta_med > 0 else 0
+                        f.write(f"  Medium steps (0.3-1.0 deg): {mean_pct_med:.4f}% avg change\n")
+                        f.write(f"    -> Sensitivity: ~{sensitivity_med:.3f}% per degree\n\n")
+
+                except Exception as e:
+                    f.write(f"  Error reading adjacent differences: {e}\n\n")
+
+            # ================================================================
+            # SECTION 3: COMBINED FINDINGS AND RECOMMENDATIONS
+            # ================================================================
+            f.write("=" * 80 + "\n")
+            f.write("PART 3: COMBINED FINDINGS AND RECOMMENDATIONS\n")
+            f.write("=" * 80 + "\n\n")
+
+            # Calculate combined metrics
+            rep_2sigma = 0
+            baseline_noise = 0
+            intensity_sensitivity = 0
+
+            if 'repeatability' in self.test_results:
+                rep_2sigma = self.test_results['repeatability'].get(
+                    'overall_statistics', {}).get('repeatability_2sigma', 0)
+
+            f.write("3.1 COMBINED ERROR BUDGET\n")
+            f.write("-" * 60 + "\n")
+            f.write(f"  Mechanical repeatability (2-sigma): {rep_2sigma:.4f} deg\n")
+
+            # Estimate intensity error from mechanical error
+            if rep_2sigma > 0:
+                # Assume ~1% intensity change per degree as rough estimate
+                estimated_intensity_error = rep_2sigma * 1.0
+                f.write(f"  Estimated intensity error from motion: ~{estimated_intensity_error:.3f}%\n")
+            f.write("\n")
+
+            f.write("3.2 RECOMMENDATIONS\n")
+            f.write("-" * 60 + "\n")
+
+            if rep_2sigma < 0.1:
+                f.write("  [OK] Mechanical precision is sufficient for PPM imaging.\n")
+            else:
+                f.write("  [!] Consider mechanical improvements to reduce positioning error.\n")
+
+            f.write("\n")
+            f.write("=" * 80 + "\n")
+            f.write("END OF COMBINED REPORT\n")
+            f.write("=" * 80 + "\n")
+
+        self.logger.info(f"Combined summary saved to {combined_file}")
+        return combined_file
+
+    def cleanup_images(self):
+        """
+        Remove acquired .tif image files to conserve disk space.
+
+        Called automatically at end of test if keep_images=False.
+        Preserves analysis outputs (CSV, JSON, PNG, TXT files).
+        """
+        if self.keep_images:
+            self.logger.info("keep_images=True, preserving all .tif files")
+            return 0
+
+        self.logger.info("Cleaning up .tif files to conserve disk space...")
+
+        # Count and remove .tif files in output directory
+        tif_files = list(self.output_dir.glob("*.tif"))
+        removed_count = 0
+
+        for tif_file in tif_files:
+            try:
+                tif_file.unlink()
+                removed_count += 1
+                self.logger.debug(f"Removed: {tif_file.name}")
+            except Exception as e:
+                self.logger.warning(f"Failed to remove {tif_file.name}: {e}")
+
+        # Also clean up analysis subdirectory if it exists
+        analysis_dir = self.output_dir / "analysis"
+        if analysis_dir.exists():
+            analysis_tifs = list(analysis_dir.glob("*.tif"))
+            for tif_file in analysis_tifs:
+                try:
+                    tif_file.unlink()
+                    removed_count += 1
+                except Exception as e:
+                    self.logger.warning(f"Failed to remove {tif_file.name}: {e}")
+
+        self.logger.info(f"Removed {removed_count} .tif files")
+        return removed_count
+
     def run_comprehensive_test(self):
         """Run all tests in sequence."""
         self.logger.info("=" * 70)
@@ -1145,16 +1400,105 @@ class PPMRotationSensitivityTester:
             # 5. Analyze all results
             self.analyze_results()
 
-            # 6. Save comprehensive summary
+            # 6. Save summaries
             self.save_test_summary()
+            self.save_combined_summary()
+
+            # 7. Cleanup images if requested
+            if not self.keep_images:
+                self.cleanup_images()
 
             self.logger.info("=" * 70)
             self.logger.info("COMPREHENSIVE TEST COMPLETE")
             self.logger.info("=" * 70)
             self.logger.info(f"All results saved to: {self.output_dir}")
+            if not self.keep_images:
+                self.logger.info("Images were deleted to conserve disk space")
 
         finally:
             self.disconnect()
+
+
+def run_ppm_sensitivity_test(
+    config_yaml: str,
+    output_dir: str = None,
+    host: str = "127.0.0.1",
+    port: int = 5000,
+    test_type: str = "comprehensive",
+    base_angle: float = 7.0,
+    n_repeats: int = 10,
+    keep_images: bool = True,
+    angle_exposures: Dict[float, float] = None
+) -> Optional[Path]:
+    """
+    Run PPM rotation sensitivity test programmatically.
+
+    This function can be called from QuPath or other applications to run
+    the sensitivity test without CLI interaction.
+
+    Args:
+        config_yaml: Path to microscope configuration YAML file
+        output_dir: Output directory for results (auto-generated if None)
+        host: qp_server host address
+        port: qp_server port
+        test_type: Type of test ('comprehensive', 'standard', 'deviation',
+                   'repeatability', 'calibration')
+        base_angle: Base angle for deviation testing
+        n_repeats: Number of repetitions for repeatability test
+        keep_images: If True, keep acquired .tif images. If False, delete
+                    them after analysis to conserve disk space.
+        angle_exposures: Optional dict of {angle: exposure_ms} to override
+                        default exposures
+
+    Returns:
+        Path to output directory on success, None on failure
+    """
+    # Initialize tester
+    tester = PPMRotationSensitivityTester(
+        config_yaml=config_yaml,
+        output_dir=output_dir,
+        host=host,
+        port=port,
+        angle_exposures=angle_exposures,
+        keep_images=keep_images
+    )
+
+    # Run selected test
+    if test_type == 'comprehensive':
+        tester.run_comprehensive_test()
+        return tester.output_dir
+
+    # For non-comprehensive tests, handle connection manually
+    if not tester.connect():
+        print("Failed to connect to server")
+        return None
+
+    try:
+        if test_type == 'standard':
+            tester.run_standard_angles_test()
+        elif test_type == 'deviation':
+            tester.run_fine_deviation_test(base_angle=base_angle)
+        elif test_type == 'repeatability':
+            tester.run_repeatability_test(test_angle=base_angle, n_repeats=n_repeats)
+        elif test_type == 'calibration':
+            tester.run_polarizer_calibration_comparison()
+
+        # Analyze if we acquired images
+        if test_type in ['standard', 'deviation']:
+            tester.analyze_results()
+
+        # Save summaries
+        tester.save_test_summary()
+        tester.save_combined_summary()
+
+        # Cleanup if requested
+        if not keep_images:
+            tester.cleanup_images()
+
+        return tester.output_dir
+
+    finally:
+        tester.disconnect()
 
 
 def main():
@@ -1181,10 +1525,14 @@ def main():
     parser.add_argument('--repeats', type=int, default=10,
                        help='Number of repetitions for repeatability test')
     parser.add_argument('--clean', action='store_true',
-                       help='Delete existing output directory before running (prevents stale file issues)')
-    # Future: --angle-exposures for QuPath command integration
-    # parser.add_argument('--angle-exposures', type=str,
-    #                    help='JSON dict of {angle: exposure_ms} overrides')
+                       help='Delete existing output directory before running')
+    parser.add_argument('--keep-images', dest='keep_images', action='store_true',
+                       default=True,
+                       help='Keep acquired .tif images after analysis (default)')
+    parser.add_argument('--no-keep-images', dest='keep_images', action='store_false',
+                       help='Delete .tif images after analysis to conserve disk space')
+    parser.add_argument('--angle-exposures', type=str, default=None,
+                       help='JSON dict of {angle: exposure_ms} overrides, e.g. \'{"7.0": 25.0}\'')
 
     args = parser.parse_args()
 
@@ -1197,39 +1545,36 @@ def main():
             shutil.rmtree(output_path)
             print("Done - starting fresh")
 
-    # Initialize tester
-    tester = PPMRotationSensitivityTester(
+    # Parse angle exposures if provided
+    angle_exposures = None
+    if args.angle_exposures:
+        try:
+            angle_exposures = json.loads(args.angle_exposures)
+            # Convert string keys to float
+            angle_exposures = {float(k): float(v) for k, v in angle_exposures.items()}
+        except Exception as e:
+            print(f"Error parsing --angle-exposures: {e}")
+            return
+
+    # Run the test using the programmatic interface
+    result = run_ppm_sensitivity_test(
         config_yaml=args.config_yaml,
         output_dir=args.output,
         host=args.host,
-        port=args.port
-        # angle_exposures can be passed here for QuPath integration
+        port=args.port,
+        test_type=args.test,
+        base_angle=args.base_angle,
+        n_repeats=args.repeats,
+        keep_images=args.keep_images,
+        angle_exposures=angle_exposures
     )
 
-    # Run selected test
-    if args.test == 'comprehensive':
-        tester.run_comprehensive_test()
+    if result:
+        print(f"\nTest complete. Results saved to: {result}")
+        if not args.keep_images:
+            print("Note: .tif images were deleted to conserve disk space")
     else:
-        if not tester.connect():
-            print("Failed to connect to server")
-            return
-
-        try:
-            if args.test == 'standard':
-                tester.run_standard_angles_test()
-            elif args.test == 'deviation':
-                tester.run_fine_deviation_test(base_angle=args.base_angle)
-            elif args.test == 'repeatability':
-                tester.run_repeatability_test(test_angle=args.base_angle,
-                                             n_repeats=args.repeats)
-            elif args.test == 'calibration':
-                tester.run_polarizer_calibration_comparison()
-
-            # Always save summary
-            tester.save_test_summary()
-
-        finally:
-            tester.disconnect()
+        print("\nTest failed")
 
 
 if __name__ == "__main__":
