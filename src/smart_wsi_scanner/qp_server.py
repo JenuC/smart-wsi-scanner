@@ -456,6 +456,12 @@ def handle_client(conn, addr):
                             acquisition_thread.start()
 
                             logger.info(f"Acquisition thread started for {addr}")
+
+                            # Send acknowledgment to prevent client timeout
+                            # Format matches BGACQUIRE pattern for consistency
+                            ack_response = "STARTED:ACQUIRE".ljust(16)[:16].encode()
+                            conn.sendall(ack_response)
+                            logger.debug(f"Sent ACQUIRE acknowledgment to {addr}")
                             break
 
                         # Safety check for message size
