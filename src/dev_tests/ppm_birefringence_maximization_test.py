@@ -217,7 +217,7 @@ class PPMBirefringenceMaximizationTester:
 
         In FIXED mode, returns the fixed exposure for all angles.
         In CALIBRATE mode, uses calibrated exposures if available.
-        In INTERPOLATE mode, interpolates from calibration points.
+        In INTERPOLATE mode, interpolates smoothly from calibration points.
 
         Args:
             angle: Rotation angle in degrees
@@ -225,6 +225,8 @@ class PPMBirefringenceMaximizationTester:
         Returns:
             Exposure time in milliseconds
         """
+        import math
+
         # FIXED mode: same exposure for all angles
         if self.exposure_mode == "fixed" and self.fixed_exposure_ms is not None:
             return self.fixed_exposure_ms
@@ -238,25 +240,23 @@ class PPMBirefringenceMaximizationTester:
         if angle in exp:
             return exp[angle]
 
-        # Interpolate based on angle magnitude
+        # Smooth interpolation using log-space interpolation between known points
+        # Known calibration points: 0 deg (crossed, dark), +/-7 deg (optimal), 90 deg (parallel, bright)
         abs_angle = abs(angle)
 
-        # Near 0 (crossed polars): use 0 deg exposure
-        if abs_angle <= 3:
-            return exp[0.0]
+        # Get reference exposures
+        exp_0 = exp.get(0.0, 96.81)    # Crossed polars - darkest, needs longest exposure
+        exp_7 = exp.get(7.0, 22.63)    # Near optimal - intermediate
+        exp_90 = exp.get(90.0, 0.57)   # Parallel polars - brightest, shortest exposure
 
-        # Near +/-7 (polarization angles)
-        elif 3 < abs_angle <= 10:
-            if angle >= 0:
-                return exp.get(7.0, exp.get(-7.0, 22.0))
-            else:
-                return exp.get(-7.0, exp.get(7.0, 22.0))
-
-        # For angles beyond 10, extrapolate towards 90
+        # Use piecewise log-linear interpolation for smooth transitions
+        if abs_angle <= 7:
+            # Interpolate between 0 and 7 degrees (log-space for smooth transition)
+            t = abs_angle / 7.0
+            log_exp = math.log(exp_0) * (1 - t) + math.log(exp_7) * t
+            return math.exp(log_exp)
         else:
-            import math
-            exp_7 = exp.get(7.0, 22.0)
-            exp_90 = exp.get(90.0, 0.57)
+            # Interpolate between 7 and 90 degrees
             t = (abs_angle - 7) / (90 - 7)
             t = min(t, 1.0)  # Clamp to [0, 1]
             log_exp = math.log(exp_7) * (1 - t) + math.log(exp_90) * t
@@ -321,6 +321,9 @@ class PPMBirefringenceMaximizationTester:
         This is Phase 1 of CALIBRATE mode - acquire background images at non-tissue
         location to measure exposures needed for proper intensity.
 
+        Uses iterative adaptive exposure: acquire, measure, adjust, repeat until
+        target intensity is achieved.
+
         Returns:
             Dictionary mapping angle -> calibrated exposure (ms)
         """
@@ -346,68 +349,134 @@ class PPMBirefringenceMaximizationTester:
 
         self.logger.info(f"Calibrating {len(all_angles)} angles...")
 
+        # Adaptive exposure parameters
+        target_intensity = 128  # Target median intensity (8-bit scale)
+        tolerance = 0.15        # 15% tolerance (target +/- 15%)
+        max_iterations = 5      # Max iterations per angle
+        min_exposure = 0.5      # Minimum exposure (ms)
+        max_exposure = 500.0    # Maximum exposure (ms)
+
         for i, angle in enumerate(all_angles):
             self.logger.info(f"[{i+1}/{len(all_angles)}] Calibrating {angle:+.2f} deg...")
 
-            # Start with interpolated exposure as initial guess
-            initial_exp = self.get_exposure_for_angle(angle)
-
-            # Move to angle
+            # Move to angle first
             self.client.test_move_rotation(angle)
             time.sleep(0.3)
 
-            # Acquire with initial exposure
-            save_name = f"cal_{angle:+.2f}.tif"
-            output_path = cal_dir / save_name
+            # Start with interpolated exposure as initial guess
+            current_exp = self.get_exposure_for_angle(angle)
+            final_exp = current_exp
+            final_intensity = 0
 
-            result = self.client.test_snap(
-                angle=angle,
-                exposure_ms=initial_exp,
-                output_path=str(output_path),
-                debayer=True
-            )
+            for iteration in range(max_iterations):
+                # Acquire with current exposure
+                save_name = f"cal_{angle:+.2f}_iter{iteration}.tif"
+                output_path = cal_dir / save_name
 
-            if result and output_path.exists():
+                result = self.client.test_snap(
+                    angle=angle,
+                    exposure_ms=current_exp,
+                    output_path=str(output_path),
+                    debayer=True
+                )
+
+                if not result or not output_path.exists():
+                    self.logger.warning(f"  Iteration {iteration}: acquisition failed")
+                    break
+
                 # Load and analyze image
                 img = cv2.imread(str(output_path), cv2.IMREAD_UNCHANGED)
-                if img is not None:
-                    if len(img.shape) == 3:
-                        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                if img is None:
+                    self.logger.warning(f"  Iteration {iteration}: could not load image")
+                    break
 
-                    median_intensity = float(np.median(img))
-                    max_intensity = float(np.max(img))
+                if len(img.shape) == 3:
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-                    # Target: median around 30-50% of max range
-                    # For 16-bit: target ~20000-30000
-                    # For 8-bit: target ~75-125
-                    bit_depth = 16 if img.max() > 255 else 8
-                    target_median = 25000 if bit_depth == 16 else 100
-
-                    # Adjust exposure proportionally
-                    if median_intensity > 0:
-                        adjusted_exp = initial_exp * (target_median / median_intensity)
-                        # Clamp to reasonable range
-                        adjusted_exp = max(0.1, min(adjusted_exp, 500.0))
-                    else:
-                        adjusted_exp = initial_exp
-
-                    calibrated[angle] = adjusted_exp
-                    self.logger.info(f"  Initial exp: {initial_exp:.2f}ms, median: {median_intensity:.0f}")
-                    self.logger.info(f"  Calibrated exp: {adjusted_exp:.2f}ms")
+                # Convert to 8-bit scale for consistent comparison
+                if img.max() > 255:
+                    # 16-bit image - scale to 8-bit
+                    median_intensity = float(np.median(img)) / 256.0
                 else:
-                    calibrated[angle] = initial_exp
-                    self.logger.warning(f"  Could not load image, using initial: {initial_exp:.2f}ms")
-            else:
-                calibrated[angle] = initial_exp
-                self.logger.warning(f"  Acquisition failed, using initial: {initial_exp:.2f}ms")
+                    median_intensity = float(np.median(img))
+
+                # Check for saturation
+                saturation_threshold = 250 if img.max() <= 255 else 64000
+                saturated_fraction = np.sum(img >= saturation_threshold) / img.size
+
+                self.logger.debug(f"  Iter {iteration}: exp={current_exp:.2f}ms, "
+                                 f"median={median_intensity:.1f}, sat={saturated_fraction:.1%}")
+
+                # Check if we've achieved target
+                error_ratio = abs(median_intensity - target_intensity) / target_intensity
+                if error_ratio <= tolerance and saturated_fraction < 0.01:
+                    self.logger.info(f"  Converged: exp={current_exp:.2f}ms, median={median_intensity:.1f}")
+                    final_exp = current_exp
+                    final_intensity = median_intensity
+                    break
+
+                # Adjust exposure for next iteration
+                if saturated_fraction > 0.05:
+                    # Too much saturation - reduce exposure significantly
+                    new_exp = current_exp * 0.5
+                    self.logger.debug(f"  Reducing exposure due to saturation")
+                elif median_intensity < 5:
+                    # Very dark - increase exposure significantly
+                    new_exp = current_exp * 4.0
+                elif median_intensity > 0:
+                    # Proportional adjustment
+                    new_exp = current_exp * (target_intensity / median_intensity)
+                else:
+                    new_exp = current_exp * 2.0
+
+                # Clamp to valid range
+                new_exp = max(min_exposure, min(new_exp, max_exposure))
+
+                # Check for convergence (not improving)
+                if abs(new_exp - current_exp) < 0.1:
+                    self.logger.debug(f"  Exposure converged at {current_exp:.2f}ms")
+                    final_exp = current_exp
+                    final_intensity = median_intensity
+                    break
+
+                final_exp = current_exp
+                final_intensity = median_intensity
+                current_exp = new_exp
+
+            # Save final calibrated exposure
+            calibrated[angle] = final_exp
+            self.logger.info(f"  Final: {final_exp:.2f}ms (median={final_intensity:.1f})")
+
+            # Keep only the final calibration image
+            final_cal_path = cal_dir / f"cal_{angle:+.2f}.tif"
+            # Find the last iteration file and rename it
+            for iter_num in range(max_iterations - 1, -1, -1):
+                iter_path = cal_dir / f"cal_{angle:+.2f}_iter{iter_num}.tif"
+                if iter_path.exists():
+                    if final_cal_path.exists():
+                        final_cal_path.unlink()
+                    iter_path.rename(final_cal_path)
+                    break
+
+            # Clean up intermediate iteration files
+            for iter_num in range(max_iterations):
+                iter_path = cal_dir / f"cal_{angle:+.2f}_iter{iter_num}.tif"
+                if iter_path.exists():
+                    iter_path.unlink()
 
         self.calibrated_exposures = calibrated
 
         # Save calibration data
         cal_file = self.output_dir / "calibrated_exposures.json"
         with open(cal_file, 'w') as f:
-            json.dump({str(k): v for k, v in calibrated.items()}, f, indent=2)
+            json.dump({str(k): v for k, v in sorted(calibrated.items())}, f, indent=2)
         self.logger.info(f"Saved calibration data to {cal_file}")
+
+        # Log summary statistics
+        exposures = list(calibrated.values())
+        self.logger.info(f"\nCalibration summary:")
+        self.logger.info(f"  Exposure range: {min(exposures):.2f} - {max(exposures):.2f} ms")
+        self.logger.info(f"  Mean exposure: {np.mean(exposures):.2f} ms")
 
         return calibrated
 
