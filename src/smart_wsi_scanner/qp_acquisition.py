@@ -654,12 +654,20 @@ def _acquisition_workflow(
         logger.info(f"Timing window size for progress estimation: {timing_window_size} tiles (3 × {af_n_tiles} AF positions, min 10)")
 
         # Write timing window to file for Java progress dialog
+        # Include all information needed for accurate time estimation:
+        # - timing_window_size: how many tiles to use for rolling average
+        # - af_n_tiles: number of adaptive autofocus positions per annotation
+        # - total_tiles: total number of tile positions in this annotation
+        # - af_n_steps: number of Z-steps per autofocus operation (for reference)
         timing_metadata_path = output_path / "acquisition_metadata.txt"
         with open(timing_metadata_path, "w") as f:
             f.write(f"timing_window_size={timing_window_size}\n")
+            f.write(f"af_n_tiles={af_n_tiles}\n")
+            f.write(f"total_tiles={len(positions)}\n")
             f.write(f"af_n_steps={af_n_steps}\n")
             f.write(f"objective={current_objective}\n")
-        logger.info(f"Wrote timing metadata to {timing_metadata_path}")
+        logger.info(f"Wrote timing metadata to {timing_metadata_path}: "
+                    f"window={timing_window_size}, af_positions={af_n_tiles}, tiles={len(positions)}")
 
         af_positions, af_min_distance = AutofocusUtils.get_autofocus_positions(
             fov, xy_positions, n_tiles=af_n_tiles
