@@ -351,8 +351,8 @@ class PPMBirefringenceMaximizationTester:
 
         # Adaptive exposure parameters
         target_intensity = 128  # Target median intensity (8-bit scale)
-        tolerance = 0.15        # 15% tolerance (target +/- 15%)
-        max_iterations = 5      # Max iterations per angle
+        tolerance = 0.05        # 5% tolerance (target +/- 5%)
+        max_iterations = 8      # Max iterations per angle (increased for tighter tolerance)
         min_exposure = 0.5      # Minimum exposure (ms)
         max_exposure = 500.0    # Maximum exposure (ms)
 
@@ -447,7 +447,7 @@ class PPMBirefringenceMaximizationTester:
             calibrated[angle] = final_exp
             self.logger.info(f"  Final: {final_exp:.2f}ms (median={final_intensity:.1f})")
 
-            # Keep only the final calibration image
+            # Keep only the final calibration image (the converged one)
             final_cal_path = cal_dir / f"cal_{angle:+.2f}.tif"
             # Find the last iteration file and rename it
             for iter_num in range(max_iterations - 1, -1, -1):
@@ -458,11 +458,14 @@ class PPMBirefringenceMaximizationTester:
                     iter_path.rename(final_cal_path)
                     break
 
-            # Clean up intermediate iteration files
+            # Clean up any remaining intermediate iteration files
             for iter_num in range(max_iterations):
                 iter_path = cal_dir / f"cal_{angle:+.2f}_iter{iter_num}.tif"
                 if iter_path.exists():
-                    iter_path.unlink()
+                    try:
+                        iter_path.unlink()
+                    except Exception:
+                        pass  # Ignore cleanup errors
 
         self.calibrated_exposures = calibrated
 
