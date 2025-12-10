@@ -302,8 +302,7 @@ class PPMBirefringenceMaximizationTester:
             result = self.client.test_snap(
                 angle=angle,
                 exposure_ms=exposure_ms,
-                output_path=str(output_path),
-                debayer=True
+                output_path=str(output_path)
             )
 
             if result:
@@ -379,8 +378,7 @@ class PPMBirefringenceMaximizationTester:
                 result = self.client.test_snap(
                     angle=angle,
                     exposure_ms=current_exp,
-                    output_path=str(output_path),
-                    debayer=True
+                    output_path=str(output_path)
                 )
 
                 if not result or not output_path.exists():

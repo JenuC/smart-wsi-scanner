@@ -185,14 +185,18 @@ class PycromanagerHardware(MicroscopeHardware):
             self.core.get_x_position(), self.core.get_y_position(), self.core.get_position()
         )
 
-    def snap_image(self, background_correction=False, remove_alpha=True, debayering=False):
+    def snap_image(self, background_correction=False, remove_alpha=True, debayering="auto"):
         """
         Snap an image using MM Core and return img, tags.
 
         Args:
             background_correction: Apply background correction (if implemented)
             remove_alpha: Remove alpha channel from BGRA images
-            debayering: Apply debayering for MicroPublisher6
+            debayering: Debayering mode:
+                - "auto" (default): Automatically debayer based on camera type
+                  (MicroPublisher6 requires debayering, JAI prism camera does not)
+                - True: Force debayering (only applies to MicroPublisher6)
+                - False: Disable debayering
 
         Returns:
             Tuple of (image_array, metadata_tags)
@@ -211,8 +215,22 @@ class PycromanagerHardware(MicroscopeHardware):
         t_get_props = time.perf_counter()
         logger.debug(f"    [TIMING-INTERNAL] Get camera name (cached): {(t_get_props - t_live_check)*1000:.1f}ms")
 
+        # Determine if debayering should be applied
+        # MicroPublisher6 has a Bayer filter and needs debayering
+        # JAI prism camera does NOT need debayering (3-sensor prism design)
+        needs_debayer = False
+        if debayering == "auto":
+            # Auto-detect based on camera type
+            needs_debayer = (camera == "MicroPublisher6")
+        elif debayering:
+            # Explicitly requested - only works for MicroPublisher6
+            needs_debayer = (camera == "MicroPublisher6")
+        # If debayering=False, needs_debayer stays False
+
+        logger.debug(f"    Camera: {camera}, Debayering: {needs_debayer} (requested: {debayering})")
+
         # Handle debayering for MicroPublisher6
-        if debayering and (camera == "MicroPublisher6"):
+        if needs_debayer:
             self.core.set_property("MicroPublisher6", "Color", "OFF")
 
         # Handle white balance for JAI
@@ -251,8 +269,8 @@ class PycromanagerHardware(MicroscopeHardware):
         t_reshape = time.perf_counter()
         logger.debug(f"    [TIMING-INTERNAL] Pixel reshape: {(t_reshape - t_proc_start)*1000:.1f}ms")
 
-        # Apply debayering if requested
-        if debayering and (camera == "MicroPublisher6"):
+        # Apply debayering if needed
+        if needs_debayer:
             debayerx = CPUDebayer(
                 pattern="GRBG",
                 image_bit_clipmax=(2**14) - 1,

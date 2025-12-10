@@ -305,7 +305,7 @@ class QuPathTestClient:
         angle: float,
         exposure_ms: float,
         output_path: str,
-        debayer: bool = True,
+        debayer: str = "auto",
     ) -> Optional[str]:
         """
         Test SNAP command - simple fixed-exposure acquisition.
@@ -314,7 +314,9 @@ class QuPathTestClient:
             angle: Rotation angle in degrees
             exposure_ms: Fixed exposure time in milliseconds
             output_path: Full path for output image file
-            debayer: Whether to apply debayering (default True)
+            debayer: Debayering mode - "auto" (default), "true", or "false"
+                     Auto mode detects camera type (MicroPublisher6 needs debayer,
+                     JAI prism camera does not)
 
         Returns:
             Output path on success, None on failure
@@ -323,7 +325,7 @@ class QuPathTestClient:
         logger.info(f"  Angle: {angle} deg")
         logger.info(f"  Exposure: {exposure_ms} ms")
         logger.info(f"  Output: {output_path}")
-        logger.info(f"  Debayer: {debayer}")
+        logger.info(f"  Debayer mode: {debayer}")
 
         try:
             # Send SNAP command (8 bytes)

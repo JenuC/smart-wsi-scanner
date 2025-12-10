@@ -698,7 +698,12 @@ def handle_client(conn, addr):
                                     elif flag == "--output":
                                         params["output_path"] = value
                                     elif flag == "--debayer":
-                                        params["debayer"] = value.lower() in ("true", "1", "yes")
+                                        # Support "auto", "true"/"1"/"yes", "false"/"0"/"no"
+                                        val = value.lower()
+                                        if val == "auto":
+                                            params["debayer"] = "auto"
+                                        else:
+                                            params["debayer"] = val in ("true", "1", "yes")
 
                             # Validate required parameters
                             required = ["angle", "exposure_ms", "output_path"]
@@ -716,7 +721,7 @@ def handle_client(conn, addr):
                                 angle = params["angle"]
                                 exposure_ms = params["exposure_ms"]
                                 output_path = Path(params["output_path"])
-                                debayer = params.get("debayer", True)
+                                debayer = params.get("debayer", "auto")
 
                                 # Create output directory if needed
                                 output_path.parent.mkdir(parents=True, exist_ok=True)

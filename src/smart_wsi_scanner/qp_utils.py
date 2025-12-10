@@ -1457,8 +1457,8 @@ class BackgroundCorrectionUtils:
                 hardware.set_exposure(exposures[angle_idx])
                 logger.info(f"Set exposure to {exposures[angle_idx]}ms")
 
-            # Acquire image with debayering
-            image, metadata = hardware.snap_image(debayering=True)
+            # Acquire image (debayering auto-detected based on camera type)
+            image, metadata = hardware.snap_image()
 
             # Save as background.tif
             background_path = angle_dir / "background.tif"
@@ -1582,7 +1582,7 @@ class PolarizerCalibrationUtils:
 
             # Capture image
             try:
-                img, tags = hardware.snap_image(debayering=True)
+                img, tags = hardware.snap_image()
             except Exception as e:
                 raise RuntimeError(f"Image acquisition failed at angle {angle} deg: {e}")
 
@@ -1770,7 +1770,7 @@ class PolarizerCalibrationUtils:
 
             # Capture image
             try:
-                img, tags = hardware.snap_image(debayering=True)
+                img, tags = hardware.snap_image()
             except Exception as e:
                 raise RuntimeError(f"Image acquisition failed at hardware position {hw_pos:.0f}: {e}")
 
@@ -1883,7 +1883,7 @@ class PolarizerCalibrationUtils:
                 hardware.core.wait_for_device(rotation_device)
 
                 try:
-                    img, tags = hardware.snap_image(debayering=True)
+                    img, tags = hardware.snap_image()
                 except Exception as e:
                     raise RuntimeError(f"Fine sweep image acquisition failed at {hw_pos:.1f}: {e}")
 

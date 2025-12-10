@@ -1255,8 +1255,8 @@ def acquire_background_with_target_intensity(
     last_exposure = current_exposure
 
     for iteration in range(max_iterations):
-        # Snap image with debayering
-        image, metadata = hardware.snap_image(debayering=True)
+        # Snap image (debayering auto-detected based on camera type)
+        image, metadata = hardware.snap_image()
 
         if image is None:
             raise RuntimeError(f"Failed to acquire image at iteration {iteration}")
@@ -1388,7 +1388,7 @@ def acquire_background_with_biref_matching(
     best_exposure = current_exposure
 
     for iteration in range(max_iterations):
-        image, metadata = hardware.snap_image(debayering=True)
+        image, metadata = hardware.snap_image()
 
         if image is None:
             raise RuntimeError(f"Failed to acquire image at iteration {iteration}")
