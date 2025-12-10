@@ -21,7 +21,14 @@ acquisition-configs/*
 ## coverage
 .coverage
 
-## 
+## Test results directories
+**/autofocus_tests/
+**/ppm_sensitivity_tests/
+**/ppm_birefringence_tests/
+**/ppm_rotation_analysis_*/
+results/
+
+##
 *.tif
 *.egg-info
 __pycache__
