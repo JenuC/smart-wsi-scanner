@@ -134,8 +134,11 @@ class PPMBirefringenceMaximizationTester:
         # Store results
         self.calibrated_exposures = {}  # angle -> exposure_ms (for calibrate mode)
         self.acquired_images = {}  # angle -> {'positive': path, 'negative': path}
-        self.difference_images = {}  # angle -> path to difference image
-        self.birefringence_metrics = {}  # angle -> metrics dict
+        self.difference_images = {}  # angle -> path to difference image (I+ - I-)
+        self.sum_images = {}  # angle -> path to sum image (I+ + I-)
+        self.normalized_images = {}  # angle -> path to normalized difference (I+ - I-)/(I+ + I-)
+        self.birefringence_metrics = {}  # angle -> metrics dict (raw difference)
+        self.normalized_metrics = {}  # angle -> metrics dict (normalized difference)
 
         self.logger.info("PPM Birefringence Maximization Tester initialized")
         self.logger.info(f"  Angle range: {angle_range[0]} to {angle_range[1]} degrees")
@@ -538,9 +541,17 @@ class PPMBirefringenceMaximizationTester:
         return pos_path, neg_path
 
     def compute_difference_image(self, pos_path: Path, neg_path: Path,
-                                 angle: float) -> Optional[Path]:
+                                 angle: float) -> Tuple[Optional[Path], Optional[Path], Optional[Path]]:
         """
-        Compute the difference image (birefringence signal) from paired images.
+        Compute difference, sum, and normalized difference images from paired images.
+
+        Computes:
+        - Difference: I(+) - I(-)
+        - Sum: I(+) + I(-)
+        - Normalized difference: [I(+) - I(-)] / [I(+) + I(-)]
+
+        The normalized difference helps suppress color modification introduced by
+        H&E staining by normalizing the birefringence signal to total intensity.
 
         Args:
             pos_path: Path to positive angle image
@@ -548,7 +559,7 @@ class PPMBirefringenceMaximizationTester:
             angle: The angle value (for naming)
 
         Returns:
-            Path to difference image, or None on failure
+            Tuple of (diff_path, sum_path, normalized_path), any may be None on failure
         """
         try:
             # Load images
@@ -557,7 +568,7 @@ class PPMBirefringenceMaximizationTester:
 
             if pos_img is None or neg_img is None:
                 self.logger.error(f"Could not load images for angle {angle}")
-                return None
+                return None, None, None
 
             # Convert to grayscale if needed
             if len(pos_img.shape) == 3:
@@ -565,73 +576,111 @@ class PPMBirefringenceMaximizationTester:
             if len(neg_img.shape) == 3:
                 neg_img = cv2.cvtColor(neg_img, cv2.COLOR_BGR2GRAY)
 
-            # Convert to float for difference calculation
+            # Convert to float for calculations
             pos_float = pos_img.astype(np.float32)
             neg_float = neg_img.astype(np.float32)
 
-            # Compute difference (birefringence signal)
-            # Using absolute difference to capture signal magnitude
-            diff = pos_float - neg_float
-
-            # Save both signed and absolute difference
+            # Create output directory
             diff_dir = self.output_dir / "differences"
             diff_dir.mkdir(exist_ok=True)
 
-            # Signed difference (shifted to positive range for saving)
+            # 1. Compute difference: I(+) - I(-)
+            diff = pos_float - neg_float
+
+            # Save signed difference (shifted to positive range for 16-bit storage)
             signed_diff = diff + 32768  # Shift for 16-bit storage
             signed_diff = np.clip(signed_diff, 0, 65535).astype(np.uint16)
             signed_path = diff_dir / f"diff_signed_{angle:.2f}.tif"
             cv2.imwrite(str(signed_path), signed_diff)
 
-            # Absolute difference (magnitude of birefringence signal)
+            # Save absolute difference (magnitude of birefringence signal)
             abs_diff = np.abs(diff).astype(np.uint16)
             abs_path = diff_dir / f"diff_abs_{angle:.2f}.tif"
             cv2.imwrite(str(abs_path), abs_diff)
 
-            return abs_path
+            # 2. Compute sum: I(+) + I(-)
+            img_sum = pos_float + neg_float
+            # Clip to valid 16-bit range (sum can exceed single image max)
+            sum_clipped = np.clip(img_sum, 0, 65535).astype(np.uint16)
+            sum_path = diff_dir / f"sum_{angle:.2f}.tif"
+            cv2.imwrite(str(sum_path), sum_clipped)
+
+            # 3. Compute normalized difference: [I(+) - I(-)] / [I(+) + I(-)]
+            # This normalizes the birefringence signal by total intensity,
+            # helping to suppress effects of H&E staining variations
+            # Avoid division by zero - use small epsilon where sum is near zero
+            epsilon = 1.0  # Small value to avoid division by zero
+            normalized = diff / (img_sum + epsilon)
+
+            # Normalized values range from -1 to +1
+            # Scale to 0-65535 for 16-bit storage: (normalized + 1) * 32767.5
+            normalized_scaled = (normalized + 1.0) * 32767.5
+            normalized_scaled = np.clip(normalized_scaled, 0, 65535).astype(np.uint16)
+            normalized_path = diff_dir / f"normalized_{angle:.2f}.tif"
+            cv2.imwrite(str(normalized_path), normalized_scaled)
+
+            # Also save absolute normalized for metrics (magnitude only)
+            abs_normalized = np.abs(normalized)
+            # Scale 0-1 to 0-65535 for storage
+            abs_norm_scaled = (abs_normalized * 65535).astype(np.uint16)
+            abs_norm_path = diff_dir / f"normalized_abs_{angle:.2f}.tif"
+            cv2.imwrite(str(abs_norm_path), abs_norm_scaled)
+
+            return abs_path, sum_path, abs_norm_path
 
         except Exception as e:
             self.logger.error(f"Error computing difference for angle {angle}: {e}")
-            return None
+            return None, None, None
 
-    def compute_birefringence_metrics(self, diff_path: Path, angle: float) -> Dict:
+    def compute_birefringence_metrics(self, diff_path: Path, angle: float,
+                                       metric_type: str = 'raw') -> Dict:
         """
         Compute metrics for the birefringence signal.
 
         Args:
-            diff_path: Path to absolute difference image
+            diff_path: Path to absolute difference image (raw or normalized)
             angle: The angle value
+            metric_type: 'raw' for I(+)-I(-) metrics, 'normalized' for
+                        [I(+)-I(-)]/[I(+)+I(-)] metrics
 
         Returns:
-            Dictionary of metrics
+            Dictionary of metrics with appropriate prefix
         """
         try:
             img = cv2.imread(str(diff_path), cv2.IMREAD_UNCHANGED)
             if img is None:
                 return {'error': 'Could not load image'}
 
+            # For normalized images, convert back from scaled storage
+            # Normalized abs images are stored as: value * 65535 (range 0-1 -> 0-65535)
+            if metric_type == 'normalized':
+                img_float = img.astype(np.float32) / 65535.0  # Back to 0-1 range
+            else:
+                img_float = img.astype(np.float32)
+
             # Compute statistics
+            prefix = 'norm_' if metric_type == 'normalized' else ''
             metrics = {
                 'angle': angle,
-                'mean_signal': float(np.mean(img)),
-                'median_signal': float(np.median(img)),
-                'max_signal': float(np.max(img)),
-                'std_signal': float(np.std(img)),
-                'signal_area': float(np.sum(img > np.percentile(img, 95))),  # Pixels with strong signal
+                f'{prefix}mean_signal': float(np.mean(img_float)),
+                f'{prefix}median_signal': float(np.median(img_float)),
+                f'{prefix}max_signal': float(np.max(img_float)),
+                f'{prefix}std_signal': float(np.std(img_float)),
+                f'{prefix}signal_area': float(np.sum(img_float > np.percentile(img_float, 95))),
             }
 
             # Compute percentiles for robust statistics
-            metrics['p90_signal'] = float(np.percentile(img, 90))
-            metrics['p95_signal'] = float(np.percentile(img, 95))
-            metrics['p99_signal'] = float(np.percentile(img, 99))
+            metrics[f'{prefix}p90_signal'] = float(np.percentile(img_float, 90))
+            metrics[f'{prefix}p95_signal'] = float(np.percentile(img_float, 95))
+            metrics[f'{prefix}p99_signal'] = float(np.percentile(img_float, 99))
 
             # Signal-to-background ratio
-            background = np.percentile(img, 10)
-            signal_region = np.percentile(img, 90)
+            background = np.percentile(img_float, 10)
+            signal_region = np.percentile(img_float, 90)
             if background > 0:
-                metrics['signal_to_bg_ratio'] = float(signal_region / background)
+                metrics[f'{prefix}signal_to_bg_ratio'] = float(signal_region / background)
             else:
-                metrics['signal_to_bg_ratio'] = float(signal_region)
+                metrics[f'{prefix}signal_to_bg_ratio'] = float(signal_region)
 
             return metrics
 
@@ -642,14 +691,17 @@ class PPMBirefringenceMaximizationTester:
         """
         Run the main paired acquisition test.
 
-        Acquires image pairs at each test angle and computes birefringence metrics.
+        Acquires image pairs at each test angle and computes birefringence metrics
+        for both raw difference I(+)-I(-) and normalized difference
+        [I(+)-I(-)]/[I(+)+I(-)].
 
         Returns:
-            Dictionary mapping angle -> metrics
+            Dictionary mapping angle -> metrics (combined raw and normalized)
         """
         self.logger.info("=" * 70)
         self.logger.info("PAIRED IMAGE ACQUISITION FOR BIREFRINGENCE ANALYSIS")
         self.logger.info("=" * 70)
+        self.logger.info("Computing: I(+)-I(-), I(+)+I(-), and [I(+)-I(-)]/[I(+)+I(-)]")
 
         all_metrics = {}
 
@@ -666,104 +718,82 @@ class PPMBirefringenceMaximizationTester:
                     'negative': neg_path
                 }
 
-                # Compute difference
-                diff_path = self.compute_difference_image(pos_path, neg_path, angle)
+                # Compute difference, sum, and normalized difference
+                diff_path, sum_path, norm_path = self.compute_difference_image(
+                    pos_path, neg_path, angle)
 
                 if diff_path:
                     self.difference_images[angle] = diff_path
 
-                    # Compute metrics
-                    metrics = self.compute_birefringence_metrics(diff_path, angle)
-                    all_metrics[angle] = metrics
-                    self.birefringence_metrics[angle] = metrics
+                    # Compute raw metrics
+                    raw_metrics = self.compute_birefringence_metrics(
+                        diff_path, angle, metric_type='raw')
+                    self.birefringence_metrics[angle] = raw_metrics
 
-                    self.logger.info(f"  Mean signal: {metrics.get('mean_signal', 0):.1f}")
-                    self.logger.info(f"  Max signal: {metrics.get('max_signal', 0):.1f}")
-                    self.logger.info(f"  P95 signal: {metrics.get('p95_signal', 0):.1f}")
-                else:
-                    self.logger.warning(f"  Failed to compute difference image")
+                    self.logger.info(f"  Raw - Mean: {raw_metrics.get('mean_signal', 0):.1f}, "
+                                   f"P95: {raw_metrics.get('p95_signal', 0):.1f}")
+
+                if sum_path:
+                    self.sum_images[angle] = sum_path
+
+                if norm_path:
+                    self.normalized_images[angle] = norm_path
+
+                    # Compute normalized metrics
+                    norm_metrics = self.compute_birefringence_metrics(
+                        norm_path, angle, metric_type='normalized')
+                    self.normalized_metrics[angle] = norm_metrics
+
+                    # Normalized values are 0-1, so display as percentage
+                    self.logger.info(f"  Normalized - Mean: {norm_metrics.get('norm_mean_signal', 0)*100:.2f}%, "
+                                   f"P95: {norm_metrics.get('norm_p95_signal', 0)*100:.2f}%")
+
+                # Combine metrics for return value
+                combined = {}
+                if diff_path:
+                    combined.update(raw_metrics)
+                if norm_path:
+                    combined.update(norm_metrics)
+                all_metrics[angle] = combined
+
+                if not diff_path and not norm_path:
+                    self.logger.warning(f"  Failed to compute difference images")
             else:
                 self.logger.warning(f"  Failed to acquire image pair")
 
         return all_metrics
 
-    def find_optimal_angle(self) -> Tuple[float, Dict]:
+    def find_optimal_angle(self, use_normalized: bool = False) -> Tuple[float, Dict]:
         """
         Find the angle that maximizes birefringence signal.
+
+        Args:
+            use_normalized: If True, find optimal based on normalized metrics.
+                           If False (default), use raw difference metrics.
 
         Returns:
             Tuple of (optimal_angle, metrics_at_optimal)
         """
-        if not self.birefringence_metrics:
+        metrics_dict = self.normalized_metrics if use_normalized else self.birefringence_metrics
+        signal_key = 'norm_mean_signal' if use_normalized else 'mean_signal'
+
+        if not metrics_dict:
             return 0.0, {}
 
         # Find angle with maximum mean signal
         best_angle = 0.0
         best_signal = 0.0
 
-        for angle, metrics in self.birefringence_metrics.items():
-            signal = metrics.get('mean_signal', 0)
+        for angle, metrics in metrics_dict.items():
+            signal = metrics.get(signal_key, 0)
             if signal > best_signal:
                 best_signal = signal
                 best_angle = angle
 
-        return best_angle, self.birefringence_metrics.get(best_angle, {})
-
-    def compute_sensitivity_curve(self) -> Tuple[List[float], List[float], float, float]:
-        """
-        Compute the sensitivity curve (derivative of signal vs angle).
-
-        Sensitivity = d(signal)/d(angle) - shows where small angle changes
-        produce the largest intensity changes.
-
-        Returns:
-            Tuple of (angles, sensitivities, max_sensitivity_angle, max_sensitivity_value)
-        """
-        if len(self.birefringence_metrics) < 3:
-            return [], [], 0.0, 0.0
-
-        angles = sorted(self.birefringence_metrics.keys())
-        signals = [self.birefringence_metrics[a].get('mean_signal', 0) for a in angles]
-
-        # Compute numerical derivative (central difference where possible)
-        sensitivities = []
-        sensitivity_angles = []
-
-        for i in range(len(angles)):
-            if i == 0:
-                # Forward difference
-                if len(angles) > 1:
-                    dx = angles[i+1] - angles[i]
-                    dy = signals[i+1] - signals[i]
-                    sens = abs(dy / dx) if dx != 0 else 0
-                else:
-                    sens = 0
-            elif i == len(angles) - 1:
-                # Backward difference
-                dx = angles[i] - angles[i-1]
-                dy = signals[i] - signals[i-1]
-                sens = abs(dy / dx) if dx != 0 else 0
-            else:
-                # Central difference
-                dx = angles[i+1] - angles[i-1]
-                dy = signals[i+1] - signals[i-1]
-                sens = abs(dy / dx) if dx != 0 else 0
-
-            sensitivities.append(sens)
-            sensitivity_angles.append(angles[i])
-
-        # Find maximum sensitivity
-        max_sens = 0.0
-        max_sens_angle = 0.0
-        for i, (angle, sens) in enumerate(zip(sensitivity_angles, sensitivities)):
-            if sens > max_sens:
-                max_sens = sens
-                max_sens_angle = angle
-
-        return sensitivity_angles, sensitivities, max_sens_angle, max_sens
+        return best_angle, metrics_dict.get(best_angle, {})
 
     def generate_visualization(self):
-        """Generate visualization plots of the birefringence analysis."""
+        """Generate visualization plots comparing raw and normalized birefringence."""
         if not MATPLOTLIB_AVAILABLE:
             self.logger.warning("matplotlib not available, skipping visualization")
             return
@@ -777,108 +807,116 @@ class PPMBirefringenceMaximizationTester:
         # Extract data for plotting
         angles = sorted(self.birefringence_metrics.keys())
         mean_signals = [self.birefringence_metrics[a].get('mean_signal', 0) for a in angles]
-        max_signals = [self.birefringence_metrics[a].get('max_signal', 0) for a in angles]
         p95_signals = [self.birefringence_metrics[a].get('p95_signal', 0) for a in angles]
 
-        # Compute sensitivity curve
-        sens_angles, sensitivities, max_sens_angle, max_sens_value = self.compute_sensitivity_curve()
+        # Extract normalized data
+        norm_angles = sorted(self.normalized_metrics.keys()) if self.normalized_metrics else []
+        norm_mean_signals = [self.normalized_metrics[a].get('norm_mean_signal', 0) * 100
+                           for a in norm_angles] if self.normalized_metrics else []
+        norm_p95_signals = [self.normalized_metrics[a].get('norm_p95_signal', 0) * 100
+                          for a in norm_angles] if self.normalized_metrics else []
 
         fig, axes = plt.subplots(2, 3, figsize=(18, 10))
 
-        # Get optimal angles for marking
-        optimal_angle, optimal_metrics = self.find_optimal_angle()
+        # Get optimal angles for both raw and normalized
+        optimal_angle_raw, optimal_metrics_raw = self.find_optimal_angle(use_normalized=False)
+        optimal_angle_norm, optimal_metrics_norm = self.find_optimal_angle(use_normalized=True)
 
-        # Plot 1: Signal vs Angle (main result)
+        # Plot 1: Raw Signal vs Angle I(+) - I(-)
         ax = axes[0, 0]
         ax.plot(angles, mean_signals, 'b-o', label='Mean Signal', markersize=3, linewidth=1.5)
         ax.plot(angles, p95_signals, 'r-s', label='P95 Signal', markersize=3, linewidth=1, alpha=0.7)
-        ax.axvline(x=optimal_angle, color='green', linestyle='--', linewidth=2,
-                   label=f'Max Signal: {optimal_angle:.2f} deg')
-        if max_sens_angle != optimal_angle:
-            ax.axvline(x=max_sens_angle, color='orange', linestyle=':', linewidth=2,
-                       label=f'Max Sensitivity: {max_sens_angle:.2f} deg')
+        ax.axvline(x=optimal_angle_raw, color='green', linestyle='--', linewidth=2,
+                   label=f'Optimal: {optimal_angle_raw:.2f} deg')
         ax.set_xlabel('Angle (degrees)')
-        ax.set_ylabel('Birefringence Signal Intensity')
-        ax.set_title('BIREFRINGENCE SIGNAL vs POLARIZER ANGLE')
+        ax.set_ylabel('Raw Signal Intensity')
+        ax.set_title('RAW DIFFERENCE: I(+) - I(-)')
         ax.legend(loc='upper right')
         ax.grid(True, alpha=0.3)
 
-        # Plot 2: Sensitivity (derivative) vs Angle
+        # Plot 2: Normalized Signal vs Angle [I(+) - I(-)]/[I(+) + I(-)]
         ax = axes[0, 1]
-        if sens_angles and sensitivities:
-            ax.plot(sens_angles, sensitivities, 'm-o', markersize=3, linewidth=1.5)
-            ax.axvline(x=max_sens_angle, color='orange', linestyle='--', linewidth=2,
-                       label=f'Max: {max_sens_angle:.2f} deg')
-            ax.fill_between(sens_angles, sensitivities, alpha=0.3, color='magenta')
+        if norm_angles and norm_mean_signals:
+            ax.plot(norm_angles, norm_mean_signals, 'b-o', label='Mean (%)', markersize=3, linewidth=1.5)
+            ax.plot(norm_angles, norm_p95_signals, 'r-s', label='P95 (%)', markersize=3, linewidth=1, alpha=0.7)
+            ax.axvline(x=optimal_angle_norm, color='purple', linestyle='--', linewidth=2,
+                       label=f'Optimal: {optimal_angle_norm:.2f} deg')
         ax.set_xlabel('Angle (degrees)')
-        ax.set_ylabel('Sensitivity (signal change per degree)')
-        ax.set_title('SENSITIVITY CURVE (d(Signal)/d(Angle))')
-        ax.legend()
+        ax.set_ylabel('Normalized Signal (%)')
+        ax.set_title('NORMALIZED: [I(+)-I(-)]/[I(+)+I(-)]')
+        ax.legend(loc='upper right')
         ax.grid(True, alpha=0.3)
 
-        # Plot 3: Signal-to-background ratio
+        # Plot 3: Comparison of Raw vs Normalized (overlaid, dual y-axis)
         ax = axes[0, 2]
-        sb_ratios = [self.birefringence_metrics[a].get('signal_to_bg_ratio', 0) for a in angles]
-        ax.plot(angles, sb_ratios, 'g-^', markersize=3, linewidth=1.5)
-        ax.axvline(x=optimal_angle, color='green', linestyle='--', linewidth=2)
+        ax.plot(angles, mean_signals, 'b-o', label='Raw Mean', markersize=3, linewidth=1.5)
         ax.set_xlabel('Angle (degrees)')
-        ax.set_ylabel('Signal / Background Ratio')
-        ax.set_title('Signal-to-Background Ratio vs Angle')
+        ax.set_ylabel('Raw Signal', color='blue')
+        ax.tick_params(axis='y', labelcolor='blue')
+        ax.axvline(x=optimal_angle_raw, color='blue', linestyle='--', linewidth=1.5, alpha=0.7)
+
+        ax2 = ax.twinx()
+        if norm_angles and norm_mean_signals:
+            ax2.plot(norm_angles, norm_mean_signals, 'g-s', label='Normalized Mean (%)',
+                    markersize=3, linewidth=1.5)
+            ax2.axvline(x=optimal_angle_norm, color='green', linestyle=':', linewidth=1.5, alpha=0.7)
+        ax2.set_ylabel('Normalized Signal (%)', color='green')
+        ax2.tick_params(axis='y', labelcolor='green')
+        ax.set_title('RAW vs NORMALIZED COMPARISON')
+        # Combined legend
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
         ax.grid(True, alpha=0.3)
 
-        # Plot 4: Difference image at OPTIMAL angle (max signal)
+        # Plot 4: Raw difference image at optimal angle
         ax = axes[1, 0]
-        if self.difference_images and optimal_angle in self.difference_images:
-            diff_img = cv2.imread(str(self.difference_images[optimal_angle]), cv2.IMREAD_UNCHANGED)
+        if self.difference_images and optimal_angle_raw in self.difference_images:
+            diff_img = cv2.imread(str(self.difference_images[optimal_angle_raw]), cv2.IMREAD_UNCHANGED)
             if diff_img is not None:
                 im = ax.imshow(diff_img, cmap='hot')
-                ax.set_title(f'Birefringence at {optimal_angle:.2f} deg (MAX SIGNAL)')
+                ax.set_title(f'Raw Diff at {optimal_angle_raw:.2f} deg')
                 plt.colorbar(im, ax=ax, fraction=0.046)
                 ax.axis('off')
         else:
             ax.text(0.5, 0.5, 'No image', ha='center', va='center', transform=ax.transAxes)
-            ax.set_title('Optimal Angle Image')
+            ax.set_title('Raw Difference Image')
 
-        # Plot 5: Difference image at MAX SENSITIVITY angle
+        # Plot 5: Normalized difference image at optimal angle
         ax = axes[1, 1]
-        if self.difference_images and max_sens_angle in self.difference_images:
-            sens_diff = cv2.imread(str(self.difference_images[max_sens_angle]), cv2.IMREAD_UNCHANGED)
-            if sens_diff is not None:
-                im = ax.imshow(sens_diff, cmap='hot')
-                ax.set_title(f'Birefringence at {max_sens_angle:.2f} deg (MAX SENSITIVITY)')
-                plt.colorbar(im, ax=ax, fraction=0.046)
+        if self.normalized_images and optimal_angle_norm in self.normalized_images:
+            norm_img = cv2.imread(str(self.normalized_images[optimal_angle_norm]), cv2.IMREAD_UNCHANGED)
+            if norm_img is not None:
+                # Convert back to 0-1 scale for display
+                norm_display = norm_img.astype(np.float32) / 65535.0
+                im = ax.imshow(norm_display, cmap='hot', vmin=0, vmax=1)
+                ax.set_title(f'Normalized at {optimal_angle_norm:.2f} deg')
+                cbar = plt.colorbar(im, ax=ax, fraction=0.046)
+                cbar.set_label('Normalized Signal')
                 ax.axis('off')
         else:
             ax.text(0.5, 0.5, 'No image', ha='center', va='center', transform=ax.transAxes)
-            ax.set_title('Max Sensitivity Image')
+            ax.set_title('Normalized Difference Image')
 
-        # Plot 6: Zero-angle sanity check
+        # Plot 6: Zero-angle sanity check (should be ~0 for both)
         ax = axes[1, 2]
         if 0.0 in self.difference_images:
             zero_diff = cv2.imread(str(self.difference_images[0.0]), cv2.IMREAD_UNCHANGED)
             if zero_diff is not None:
                 im = ax.imshow(zero_diff, cmap='hot')
                 zero_mean = np.mean(zero_diff)
-                ax.set_title(f'SANITY CHECK: 0 deg (mean={zero_mean:.1f})')
+                zero_norm_mean = 0.0
+                if 0.0 in self.normalized_metrics:
+                    zero_norm_mean = self.normalized_metrics[0.0].get('norm_mean_signal', 0) * 100
+                ax.set_title(f'SANITY CHECK: 0 deg\nRaw={zero_mean:.1f}, Norm={zero_norm_mean:.2f}%')
                 plt.colorbar(im, ax=ax, fraction=0.046)
                 ax.axis('off')
-                self.logger.info(f"Sanity check (0 deg): mean signal = {zero_mean:.1f}")
+                self.logger.info(f"Sanity check (0 deg): raw={zero_mean:.1f}, norm={zero_norm_mean:.2f}%")
         else:
             ax.text(0.5, 0.5, 'No 0 deg image', ha='center', va='center', transform=ax.transAxes)
             ax.set_title('Sanity Check: 0 deg')
 
-        # Add summary text box
-        summary_text = (
-            f"RESULTS SUMMARY\n"
-            f"---------------\n"
-            f"Max Signal Angle: {optimal_angle:.2f} deg\n"
-            f"  Signal: {optimal_metrics.get('mean_signal', 0):.1f}\n"
-            f"\n"
-            f"Max Sensitivity Angle: {max_sens_angle:.2f} deg\n"
-            f"  Sensitivity: {max_sens_value:.1f}/deg\n"
-        )
-
-        plt.suptitle('PPM BIREFRINGENCE MAXIMIZATION ANALYSIS', fontsize=16, fontweight='bold')
+        plt.suptitle('PPM BIREFRINGENCE: RAW vs NORMALIZED COMPARISON', fontsize=16, fontweight='bold')
         plt.tight_layout()
 
         plot_path = self.output_dir / 'birefringence_analysis.png'
@@ -889,6 +927,10 @@ class PPMBirefringenceMaximizationTester:
 
     def save_results(self):
         """Save all results to files."""
+        # Find optimal angles for both raw and normalized
+        optimal_angle_raw, optimal_metrics_raw = self.find_optimal_angle(use_normalized=False)
+        optimal_angle_norm, optimal_metrics_norm = self.find_optimal_angle(use_normalized=True)
+
         # Save metrics as JSON
         metrics_file = self.output_dir / "birefringence_metrics.json"
         metrics_data = {
@@ -897,41 +939,45 @@ class PPMBirefringenceMaximizationTester:
             'angle_range': list(self.angle_range),
             'angle_step': self.angle_step,
             'exposure_mode': self.exposure_mode,
-            'metrics': {str(k): v for k, v in self.birefringence_metrics.items()}
-        }
-
-        # Find optimal angle and sensitivity
-        optimal_angle, optimal_metrics = self.find_optimal_angle()
-        sens_angles, sensitivities, max_sens_angle, max_sens_value = self.compute_sensitivity_curve()
-
-        metrics_data['optimal_angle'] = optimal_angle
-        metrics_data['optimal_metrics'] = optimal_metrics
-        metrics_data['max_sensitivity_angle'] = max_sens_angle
-        metrics_data['max_sensitivity_value'] = max_sens_value
-        metrics_data['sensitivity_curve'] = {
-            'angles': sens_angles,
-            'sensitivities': sensitivities
+            'raw_metrics': {str(k): v for k, v in self.birefringence_metrics.items()},
+            'normalized_metrics': {str(k): v for k, v in self.normalized_metrics.items()},
+            'optimal_angle_raw': optimal_angle_raw,
+            'optimal_metrics_raw': optimal_metrics_raw,
+            'optimal_angle_normalized': optimal_angle_norm,
+            'optimal_metrics_normalized': optimal_metrics_norm,
         }
 
         with open(metrics_file, 'w') as f:
             json.dump(metrics_data, f, indent=2)
 
-        # Save CSV for easy analysis
+        # Save CSV for easy analysis - combined raw and normalized
         csv_file = self.output_dir / "birefringence_metrics.csv"
         with open(csv_file, 'w') as f:
-            # Header
+            # Build combined headers from raw and normalized metrics
+            raw_keys = []
+            norm_keys = []
             if self.birefringence_metrics:
-                first_metrics = list(self.birefringence_metrics.values())[0]
-                headers = ['angle'] + [k for k in first_metrics.keys() if k != 'angle']
-                f.write(','.join(headers) + '\n')
+                first_raw = list(self.birefringence_metrics.values())[0]
+                raw_keys = [k for k in first_raw.keys() if k != 'angle']
+            if self.normalized_metrics:
+                first_norm = list(self.normalized_metrics.values())[0]
+                norm_keys = [k for k in first_norm.keys() if k != 'angle']
 
-                # Data rows
-                for angle in sorted(self.birefringence_metrics.keys()):
-                    metrics = self.birefringence_metrics[angle]
-                    row = [str(angle)]
-                    for h in headers[1:]:
-                        row.append(str(metrics.get(h, '')))
-                    f.write(','.join(row) + '\n')
+            headers = ['angle'] + raw_keys + norm_keys
+            f.write(','.join(headers) + '\n')
+
+            # Data rows - use raw metrics angles as primary
+            all_angles = sorted(set(self.birefringence_metrics.keys()) |
+                              set(self.normalized_metrics.keys()))
+            for angle in all_angles:
+                row = [str(angle)]
+                raw_m = self.birefringence_metrics.get(angle, {})
+                norm_m = self.normalized_metrics.get(angle, {})
+                for k in raw_keys:
+                    row.append(str(raw_m.get(k, '')))
+                for k in norm_keys:
+                    row.append(str(norm_m.get(k, '')))
+                f.write(','.join(row) + '\n')
 
         # Save human-readable summary
         summary_file = self.output_dir / "birefringence_summary.txt"
@@ -948,67 +994,84 @@ class PPMBirefringenceMaximizationTester:
             f.write(f"Images Retained: {self.keep_images}\n\n")
 
             f.write("=" * 70 + "\n")
-            f.write("KEY RESULTS: MAXIMUM SIGNAL AND MAXIMUM SENSITIVITY\n")
+            f.write("IMAGE PROCESSING METHODS\n")
+            f.write("=" * 70 + "\n\n")
+            f.write("Two birefringence signal calculations are compared:\n\n")
+            f.write("1. RAW DIFFERENCE: I(+) - I(-)\n")
+            f.write("   Simple subtraction of paired images at +/- angles.\n")
+            f.write("   Directly measures birefringence-induced intensity change.\n\n")
+            f.write("2. NORMALIZED DIFFERENCE: [I(+) - I(-)]/[I(+) + I(-)]\n")
+            f.write("   Divides difference by sum of paired images.\n")
+            f.write("   Normalizes by total intensity to suppress H&E staining effects.\n")
+            f.write("   Values range from -1 to +1 (reported as percentages).\n\n")
+
+            f.write("=" * 70 + "\n")
+            f.write("KEY RESULTS: RAW vs NORMALIZED COMPARISON\n")
             f.write("=" * 70 + "\n\n")
 
-            # Compute sensitivity
-            sens_angles, sensitivities, max_sens_angle, max_sens_value = self.compute_sensitivity_curve()
-
-            f.write("1. MAXIMUM BIREFRINGENCE SIGNAL\n")
+            f.write("1. RAW DIFFERENCE OPTIMAL ANGLE\n")
             f.write("-" * 40 + "\n")
-            f.write(f"   Optimal angle: {optimal_angle:.2f} degrees\n")
-            f.write(f"   Mean signal: {optimal_metrics.get('mean_signal', 0):.1f}\n")
-            f.write(f"   Max signal: {optimal_metrics.get('max_signal', 0):.1f}\n")
-            f.write(f"   P95 signal: {optimal_metrics.get('p95_signal', 0):.1f}\n")
-            f.write(f"   Signal/BG ratio: {optimal_metrics.get('signal_to_bg_ratio', 0):.2f}\n\n")
+            f.write(f"   Optimal angle: {optimal_angle_raw:.2f} degrees\n")
+            f.write(f"   Mean signal: {optimal_metrics_raw.get('mean_signal', 0):.1f}\n")
+            f.write(f"   Max signal: {optimal_metrics_raw.get('max_signal', 0):.1f}\n")
+            f.write(f"   P95 signal: {optimal_metrics_raw.get('p95_signal', 0):.1f}\n")
+            f.write(f"   Signal/BG ratio: {optimal_metrics_raw.get('signal_to_bg_ratio', 0):.2f}\n\n")
 
-            f.write("2. MAXIMUM SENSITIVITY (steepest signal change)\n")
+            f.write("2. NORMALIZED DIFFERENCE OPTIMAL ANGLE\n")
             f.write("-" * 40 + "\n")
-            f.write(f"   Angle of max sensitivity: {max_sens_angle:.2f} degrees\n")
-            f.write(f"   Sensitivity: {max_sens_value:.2f} signal units per degree\n")
-            if max_sens_angle in self.birefringence_metrics:
-                sens_metrics = self.birefringence_metrics[max_sens_angle]
-                f.write(f"   Signal at this angle: {sens_metrics.get('mean_signal', 0):.1f}\n")
-            f.write("\n")
+            f.write(f"   Optimal angle: {optimal_angle_norm:.2f} degrees\n")
+            norm_mean = optimal_metrics_norm.get('norm_mean_signal', 0) * 100
+            norm_max = optimal_metrics_norm.get('norm_max_signal', 0) * 100
+            norm_p95 = optimal_metrics_norm.get('norm_p95_signal', 0) * 100
+            f.write(f"   Mean signal: {norm_mean:.2f}%\n")
+            f.write(f"   Max signal: {norm_max:.2f}%\n")
+            f.write(f"   P95 signal: {norm_p95:.2f}%\n\n")
 
-            f.write("3. INTERPRETATION\n")
+            f.write("3. COMPARISON\n")
             f.write("-" * 40 + "\n")
-            if optimal_angle == max_sens_angle:
-                f.write("   Max signal and max sensitivity occur at the SAME angle.\n")
-                f.write(f"   --> Recommended operating angle: {optimal_angle:.2f} deg\n\n")
+            if optimal_angle_raw == optimal_angle_norm:
+                f.write("   Raw and normalized methods agree on optimal angle.\n")
+                f.write(f"   --> Recommended operating angle: {optimal_angle_raw:.2f} deg\n\n")
             else:
-                f.write(f"   Max signal at {optimal_angle:.2f} deg, max sensitivity at {max_sens_angle:.2f} deg\n")
-                f.write("   Consider:\n")
-                f.write(f"   - Use {optimal_angle:.2f} deg for strongest birefringence contrast\n")
-                f.write(f"   - Use {max_sens_angle:.2f} deg for most sensitive detection\n\n")
+                f.write(f"   Raw optimal: {optimal_angle_raw:.2f} deg\n")
+                f.write(f"   Normalized optimal: {optimal_angle_norm:.2f} deg\n")
+                f.write("   The normalized method may better handle H&E staining variations.\n")
+                f.write("   Consider using normalized optimal if staining is non-uniform.\n\n")
 
             # Sanity check
             f.write("=" * 70 + "\n")
             f.write("SANITY CHECK (0 degree)\n")
             f.write("=" * 70 + "\n\n")
 
-            zero_metrics = self.birefringence_metrics.get(0.0, {})
-            if zero_metrics:
-                f.write(f"At 0 degrees (should be ~zero):\n")
-                f.write(f"  Mean signal: {zero_metrics.get('mean_signal', 0):.1f}\n")
-                f.write(f"  Max signal: {zero_metrics.get('max_signal', 0):.1f}\n")
+            zero_raw = self.birefringence_metrics.get(0.0, {})
+            zero_norm = self.normalized_metrics.get(0.0, {})
+            if zero_raw or zero_norm:
+                f.write("At 0 degrees (should be ~zero for both methods):\n\n")
+                if zero_raw:
+                    f.write(f"  Raw mean signal: {zero_raw.get('mean_signal', 0):.1f}\n")
+                    if optimal_metrics_raw.get('mean_signal', 0) > 0:
+                        ratio = zero_raw.get('mean_signal', 0) / optimal_metrics_raw.get('mean_signal', 1)
+                        f.write(f"  Raw ratio vs optimal: {ratio:.4f}\n")
+                if zero_norm:
+                    zero_norm_pct = zero_norm.get('norm_mean_signal', 0) * 100
+                    f.write(f"  Normalized mean signal: {zero_norm_pct:.4f}%\n")
 
-                # Compare to optimal
-                if optimal_metrics.get('mean_signal', 0) > 0:
-                    ratio = zero_metrics.get('mean_signal', 0) / optimal_metrics.get('mean_signal', 1)
-                    f.write(f"  Ratio vs optimal: {ratio:.4f} (should be << 1)\n")
+                # Interpret results
+                raw_ratio = 0
+                if zero_raw and optimal_metrics_raw.get('mean_signal', 0) > 0:
+                    raw_ratio = zero_raw.get('mean_signal', 0) / optimal_metrics_raw.get('mean_signal', 1)
 
-                    if ratio < 0.1:
-                        f.write("  --> GOOD: Zero-angle signal is low as expected\n")
-                    elif ratio < 0.3:
-                        f.write("  --> ACCEPTABLE: Some residual signal at 0 deg\n")
-                    else:
-                        f.write("  --> WARNING: High signal at 0 deg suggests alignment issues\n")
+                if raw_ratio < 0.1:
+                    f.write("\n  --> GOOD: Zero-angle signal is low as expected\n")
+                elif raw_ratio < 0.3:
+                    f.write("\n  --> ACCEPTABLE: Some residual signal at 0 deg\n")
+                else:
+                    f.write("\n  --> WARNING: High signal at 0 deg suggests alignment issues\n")
             f.write("\n")
 
-            # Full table
+            # Full tables
             f.write("=" * 70 + "\n")
-            f.write("FULL RESULTS TABLE\n")
+            f.write("RAW DIFFERENCE RESULTS TABLE\n")
             f.write("=" * 70 + "\n\n")
 
             f.write(f"{'Angle':>8}  {'Mean':>10}  {'Max':>10}  {'P95':>10}  {'S/B Ratio':>10}\n")
@@ -1019,6 +1082,20 @@ class PPMBirefringenceMaximizationTester:
                 f.write(f"{angle:>8.2f}  {m.get('mean_signal', 0):>10.1f}  "
                        f"{m.get('max_signal', 0):>10.1f}  {m.get('p95_signal', 0):>10.1f}  "
                        f"{m.get('signal_to_bg_ratio', 0):>10.2f}\n")
+
+            f.write("\n")
+            f.write("=" * 70 + "\n")
+            f.write("NORMALIZED DIFFERENCE RESULTS TABLE\n")
+            f.write("=" * 70 + "\n\n")
+
+            f.write(f"{'Angle':>8}  {'Mean%':>10}  {'Max%':>10}  {'P95%':>10}  {'S/B Ratio':>10}\n")
+            f.write("-" * 55 + "\n")
+
+            for angle in sorted(self.normalized_metrics.keys()):
+                m = self.normalized_metrics[angle]
+                f.write(f"{angle:>8.2f}  {m.get('norm_mean_signal', 0)*100:>10.2f}  "
+                       f"{m.get('norm_max_signal', 0)*100:>10.2f}  {m.get('norm_p95_signal', 0)*100:>10.2f}  "
+                       f"{m.get('norm_signal_to_bg_ratio', 0):>10.2f}\n")
 
             f.write("\n")
             f.write("=" * 70 + "\n")
@@ -1100,19 +1177,39 @@ class PPMBirefringenceMaximizationTester:
             # Analysis
             self.logger.info("")
             self.logger.info("=" * 70)
-            self.logger.info("ANALYSIS")
+            self.logger.info("ANALYSIS: RAW vs NORMALIZED COMPARISON")
             self.logger.info("=" * 70)
 
-            # Find optimal
-            optimal_angle, optimal_metrics = self.find_optimal_angle()
-            self.logger.info(f"\nOPTIMAL ANGLE: {optimal_angle:.2f} degrees")
-            self.logger.info(f"  Mean signal: {optimal_metrics.get('mean_signal', 0):.1f}")
-            self.logger.info(f"  Max signal: {optimal_metrics.get('max_signal', 0):.1f}")
+            # Find optimal angles for both methods
+            optimal_raw, metrics_raw = self.find_optimal_angle(use_normalized=False)
+            optimal_norm, metrics_norm = self.find_optimal_angle(use_normalized=True)
+
+            self.logger.info(f"\nRAW DIFFERENCE [I(+) - I(-)]:")
+            self.logger.info(f"  Optimal angle: {optimal_raw:.2f} degrees")
+            self.logger.info(f"  Mean signal: {metrics_raw.get('mean_signal', 0):.1f}")
+            self.logger.info(f"  P95 signal: {metrics_raw.get('p95_signal', 0):.1f}")
+
+            self.logger.info(f"\nNORMALIZED DIFFERENCE [I(+)-I(-)]/[I(+)+I(-)]:")
+            self.logger.info(f"  Optimal angle: {optimal_norm:.2f} degrees")
+            norm_mean = metrics_norm.get('norm_mean_signal', 0) * 100
+            norm_p95 = metrics_norm.get('norm_p95_signal', 0) * 100
+            self.logger.info(f"  Mean signal: {norm_mean:.2f}%")
+            self.logger.info(f"  P95 signal: {norm_p95:.2f}%")
+
+            if optimal_raw == optimal_norm:
+                self.logger.info(f"\nBoth methods agree: optimal angle is {optimal_raw:.2f} degrees")
+            else:
+                self.logger.info(f"\nMethods differ: raw={optimal_raw:.2f}, normalized={optimal_norm:.2f}")
 
             # Sanity check
-            zero_metrics = self.birefringence_metrics.get(0.0, {})
-            if zero_metrics:
-                self.logger.info(f"\nSANITY CHECK (0 deg): mean signal = {zero_metrics.get('mean_signal', 0):.1f}")
+            zero_raw = self.birefringence_metrics.get(0.0, {})
+            zero_norm = self.normalized_metrics.get(0.0, {})
+            if zero_raw or zero_norm:
+                self.logger.info(f"\nSANITY CHECK (0 deg):")
+                if zero_raw:
+                    self.logger.info(f"  Raw mean: {zero_raw.get('mean_signal', 0):.1f}")
+                if zero_norm:
+                    self.logger.info(f"  Normalized mean: {zero_norm.get('norm_mean_signal', 0)*100:.4f}%")
 
             # Generate outputs
             self.generate_visualization()
