@@ -248,6 +248,9 @@ def parse_acquisition_message(message: str) -> dict:
             elif parts[i] == "--processing" and i + 1 < len(parts):
                 params["processing_pipeline"] = parts[i + 1]
                 i += 2
+            elif parts[i] == "--hint-z" and i + 1 < len(parts):
+                params["hint_z"] = float(parts[i + 1])
+                i += 2
             else:
                 i += 1
 
@@ -685,6 +688,15 @@ def _acquisition_workflow(
 
         metadata_txt_for_positions = output_path / "image_positions_metadata.txt"
 
+        # Apply Z-focus hint if provided (predicted from tilt correction model)
+        hint_z = params.get("hint_z")
+        if hint_z is not None:
+            current_z = hardware.get_current_position().z
+            logger.info(f"Z-focus hint received: {hint_z:.2f} um (current Z: {current_z:.2f} um)")
+            logger.info(f"Moving to predicted Z position before acquisition...")
+            hardware.move_to_position(Position(z=hint_z))
+            logger.info(f"Moved to predicted Z: {hint_z:.2f} um")
+
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
             # Check for cancellation
@@ -1101,8 +1113,11 @@ def _acquisition_workflow(
 
             dict_printer(current_props, stream=fid)
 
-        set_state("COMPLETED")
+        # Get final Z position for tilt correction model
+        final_z = hardware.get_current_position().z
+        set_state("COMPLETED", final_z=final_z)
         logger.info("=== ACQUISITION COMPLETED SUCCESSFULLY ===")
+        logger.info(f"Final Z position: {final_z:.2f} um")
         logger.info(f"Total images saved: {image_count}/{total_images}")
         logger.info(f"Output directory: {output_path}")
 

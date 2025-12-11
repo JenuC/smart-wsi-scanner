@@ -69,6 +69,7 @@ acquisition_progress = {}  # addr -> (current, total)
 acquisition_locks = {}  # addr -> Lock
 acquisition_cancel_events = {}  # addr -> Event
 acquisition_failure_messages = {}  # addr -> str (error message when FAILED)
+acquisition_final_z = {}  # addr -> float (final Z position when COMPLETED, for tilt model)
 manual_focus_request_events = {}  # addr -> Event (set when manual focus needed)
 manual_focus_complete_events = {}  # addr -> Event (set when user acknowledges)
 manual_focus_user_choice = {}  # addr -> str ("retry", "skip", "cancel")
@@ -118,7 +119,7 @@ def acquisitionWorkflow(message, client_addr):
         with acquisition_locks[client_addr]:
             acquisition_progress[client_addr] = (current, total)
 
-    def _set_state(state_str: str, error_message: str = None):
+    def _set_state(state_str: str, error_message: str = None, final_z: float = None):
         with acquisition_locks[client_addr]:
             try:
                 new_state = AcquisitionState[state_str]
@@ -126,6 +127,9 @@ def acquisitionWorkflow(message, client_addr):
                 # Store error message if state is FAILED
                 if new_state == AcquisitionState.FAILED and error_message:
                     acquisition_failure_messages[client_addr] = error_message
+                # Store final Z position if state is COMPLETED (for tilt correction model)
+                if new_state == AcquisitionState.COMPLETED and final_z is not None:
+                    acquisition_final_z[client_addr] = final_z
             except KeyError:
                 acquisition_states[client_addr] = AcquisitionState.FAILED
                 if error_message:
@@ -330,6 +334,14 @@ def handle_client(conn, addr):
                         response = state_str.encode('utf-8')
                         conn.sendall(response)
                         logger.debug(f"Sent FAILED status with message to {addr}: {error_msg[:50]}...")
+                    # If state is COMPLETED and we have final_z, include it for tilt model
+                    elif state == AcquisitionState.COMPLETED and addr in acquisition_final_z:
+                        final_z = acquisition_final_z[addr]
+                        # Send "COMPLETED|final_z:<value>" format
+                        state_str = f"COMPLETED|final_z:{final_z:.2f}"
+                        response = state_str.encode('utf-8')
+                        conn.sendall(response)
+                        logger.debug(f"Sent COMPLETED status with final_z to {addr}: {final_z:.2f}")
                     else:
                         # Send state as 16-byte string (padded)
                         state_str = state.value.ljust(16)[:16]
@@ -1382,6 +1394,8 @@ def handle_client(conn, addr):
             del acquisition_cancel_events[addr]
         if addr in acquisition_failure_messages:
             del acquisition_failure_messages[addr]
+        if addr in acquisition_final_z:
+            del acquisition_final_z[addr]
 
         conn.close()
         logger.info(f"<<< Client {addr} disconnected and cleaned up")
