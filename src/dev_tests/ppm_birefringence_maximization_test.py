@@ -75,7 +75,8 @@ class PPMBirefringenceMaximizationTester:
                  exposure_mode: str = "interpolate",
                  fixed_exposure_ms: float = None,
                  keep_images: bool = True,
-                 calibration_exposures: Dict[float, float] = None):
+                 calibration_exposures: Dict[float, float] = None,
+                 target_intensity: int = 128):
         """
         Initialize the birefringence maximization tester.
 
@@ -93,6 +94,7 @@ class PPMBirefringenceMaximizationTester:
             fixed_exposure_ms: Exposure time in ms for 'fixed' mode (required if mode='fixed')
             keep_images: If True, keep .tif files after analysis
             calibration_exposures: Optional dict to override default exposures
+            target_intensity: Target median intensity for background calibration (0-255, default 128)
         """
         self.config_yaml = Path(config_yaml)
         self.angle_range = angle_range
@@ -100,6 +102,7 @@ class PPMBirefringenceMaximizationTester:
         self.exposure_mode = exposure_mode
         self.fixed_exposure_ms = fixed_exposure_ms
         self.keep_images = keep_images
+        self.target_intensity = target_intensity
 
         # Validate fixed mode
         if exposure_mode == "fixed" and fixed_exposure_ms is None:
@@ -147,6 +150,8 @@ class PPMBirefringenceMaximizationTester:
         self.logger.info(f"  Exposure mode: {exposure_mode}")
         if exposure_mode == "fixed":
             self.logger.info(f"  Fixed exposure: {fixed_exposure_ms} ms (same for ALL angles)")
+        if exposure_mode == "calibrate":
+            self.logger.info(f"  Target intensity: {target_intensity} (0-255 scale)")
         self.logger.info(f"  Output: {self.output_dir}")
 
     def _generate_test_angles(self) -> List[float]:
@@ -350,9 +355,9 @@ class PPMBirefringenceMaximizationTester:
         all_angles = sorted(all_angles)
 
         self.logger.info(f"Calibrating {len(all_angles)} angles...")
+        self.logger.info(f"Target intensity: {self.target_intensity} (0-255 scale)")
 
         # Adaptive exposure parameters
-        target_intensity = 128  # Target median intensity (8-bit scale)
         tolerance = 0.05        # 5% tolerance (target +/- 5%)
         max_iterations = 8      # Max iterations per angle (increased for tighter tolerance)
         min_exposure = 0.5      # Minimum exposure (ms)
@@ -409,7 +414,7 @@ class PPMBirefringenceMaximizationTester:
                                  f"median={median_intensity:.1f}, sat={saturated_fraction:.1%}")
 
                 # Check if we've achieved target
-                error_ratio = abs(median_intensity - target_intensity) / target_intensity
+                error_ratio = abs(median_intensity - self.target_intensity) / self.target_intensity
                 if error_ratio <= tolerance and saturated_fraction < 0.01:
                     self.logger.info(f"  Converged: exp={current_exp:.2f}ms, median={median_intensity:.1f}")
                     final_exp = current_exp
@@ -426,7 +431,7 @@ class PPMBirefringenceMaximizationTester:
                     new_exp = current_exp * 4.0
                 elif median_intensity > 0:
                     # Proportional adjustment
-                    new_exp = current_exp * (target_intensity / median_intensity)
+                    new_exp = current_exp * (self.target_intensity / median_intensity)
                 else:
                     new_exp = current_exp * 2.0
 
@@ -1239,7 +1244,8 @@ def run_birefringence_maximization_test(
     exposure_mode: str = "interpolate",
     fixed_exposure_ms: float = None,
     keep_images: bool = True,
-    calibration_exposures: Dict[float, float] = None
+    calibration_exposures: Dict[float, float] = None,
+    target_intensity: int = 128
 ) -> Optional[Path]:
     """
     Run birefringence maximization test programmatically.
@@ -1257,6 +1263,7 @@ def run_birefringence_maximization_test(
         fixed_exposure_ms: Exposure time for 'fixed' mode (required if mode='fixed')
         keep_images: If False, delete .tif files after analysis
         calibration_exposures: Optional override for calibration exposures
+        target_intensity: Target median intensity for background calibration (0-255, default 128)
 
     Returns:
         Path to output directory on success, None on failure
@@ -1271,7 +1278,8 @@ def run_birefringence_maximization_test(
         exposure_mode=exposure_mode,
         fixed_exposure_ms=fixed_exposure_ms,
         keep_images=keep_images,
-        calibration_exposures=calibration_exposures
+        calibration_exposures=calibration_exposures,
+        target_intensity=target_intensity
     )
 
     return tester.run_test()
@@ -1331,6 +1339,9 @@ Examples:
                        help='Delete .tif images after analysis')
     parser.add_argument('--calibration-exposures', type=str, default=None,
                        help='JSON dict of calibration exposures, e.g. \'{"7.0": 25.0}\'')
+    parser.add_argument('--target-intensity', type=int, default=128,
+                       help='Target median intensity for background calibration (0-255, default: 128). '
+                            'Lower values for brighter samples, higher for darker samples.')
 
     args = parser.parse_args()
 
@@ -1361,7 +1372,8 @@ Examples:
         exposure_mode=args.mode,
         fixed_exposure_ms=args.exposure,
         keep_images=args.keep_images,
-        calibration_exposures=calibration_exposures
+        calibration_exposures=calibration_exposures,
+        target_intensity=args.target_intensity
     )
 
     if result:
