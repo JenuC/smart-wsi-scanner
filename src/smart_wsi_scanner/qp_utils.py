@@ -941,6 +941,89 @@ class TifWriterUtils:
         return sum_abs_diff.astype(np.uint16)
 
     @staticmethod
+    def ppm_normalized_difference(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
+        """
+        Calculate normalized birefringence for polarized microscopy images.
+        Formula: [I(+) - I(-)]/[I(+) + I(-)], converted to grayscale first.
+
+        This normalization suppresses H&E staining color variations by dividing
+        the birefringence signal by total intensity at each pixel.
+
+        Args:
+            img1: Positive angle image (RGB, uint8)
+            img2: Negative angle image (RGB, uint8)
+
+        Returns:
+            Normalized difference as single channel uint16, scaled 0-65535
+            where 32768 = 0 (no difference), >32768 = positive, <32768 = negative
+        """
+        # Convert RGB to grayscale using standard luminance weights
+        if len(img1.shape) == 3:
+            gray1 = np.dot(img1[..., :3].astype(np.float32), [0.2989, 0.5870, 0.1140])
+        else:
+            gray1 = img1.astype(np.float32)
+
+        if len(img2.shape) == 3:
+            gray2 = np.dot(img2[..., :3].astype(np.float32), [0.2989, 0.5870, 0.1140])
+        else:
+            gray2 = img2.astype(np.float32)
+
+        # Calculate difference and sum
+        diff = gray1 - gray2
+        total = gray1 + gray2
+
+        # Avoid division by zero - use small epsilon
+        epsilon = 1e-6
+        normalized = diff / (total + epsilon)
+
+        # normalized is in range [-1, 1]
+        # Scale to uint16: 0 -> 32768, -1 -> 0, +1 -> 65535
+        scaled = (normalized + 1.0) * 32767.5
+
+        return np.clip(scaled, 0, 65535).astype(np.uint16)
+
+    @staticmethod
+    def ppm_normalized_difference_abs(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
+        """
+        Calculate absolute normalized birefringence for polarized microscopy images.
+        Formula: |[I(+) - I(-)]/[I(+) + I(-)]|, converted to grayscale first.
+
+        This returns the magnitude of normalized birefringence (always positive).
+
+        Args:
+            img1: Positive angle image (RGB, uint8)
+            img2: Negative angle image (RGB, uint8)
+
+        Returns:
+            Absolute normalized difference as single channel uint16, scaled 0-65535
+            where 0 = no birefringence, 65535 = maximum birefringence
+        """
+        # Convert RGB to grayscale using standard luminance weights
+        if len(img1.shape) == 3:
+            gray1 = np.dot(img1[..., :3].astype(np.float32), [0.2989, 0.5870, 0.1140])
+        else:
+            gray1 = img1.astype(np.float32)
+
+        if len(img2.shape) == 3:
+            gray2 = np.dot(img2[..., :3].astype(np.float32), [0.2989, 0.5870, 0.1140])
+        else:
+            gray2 = img2.astype(np.float32)
+
+        # Calculate difference and sum
+        diff = gray1 - gray2
+        total = gray1 + gray2
+
+        # Avoid division by zero - use small epsilon
+        epsilon = 1e-6
+        normalized = np.abs(diff / (total + epsilon))
+
+        # normalized is in range [0, 1]
+        # Scale to uint16: 0 -> 0, 1 -> 65535
+        scaled = normalized * 65535.0
+
+        return np.clip(scaled, 0, 65535).astype(np.uint16)
+
+    @staticmethod
     def ppm_angle_sum(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
         """
         Calculate angle sum for polarized microscopy images.
@@ -1020,6 +1103,60 @@ class TifWriterUtils:
             logger.info(f"  Created sum image: {filename}")
 
         return sum_img
+
+    @staticmethod
+    def create_normalized_birefringence_tile(
+        pos_image: np.ndarray,
+        neg_image: np.ndarray,
+        output_dir: pathlib.Path,
+        filename: str,
+        pixel_size_um: float,
+        tile_config_source: Optional[pathlib.Path] = None,
+        logger=None,
+    ) -> np.ndarray:
+        """
+        Create a normalized birefringence image from positive and negative angle images.
+        Uses the formula [I(+) - I(-)]/[I(+) + I(-)] to suppress H&E staining variations.
+
+        Args:
+            pos_image: Positive angle image
+            neg_image: Negative angle image
+            output_dir: Directory to save birefringence image
+            filename: Output filename
+            pixel_size_um: Pixel size for OME-TIFF metadata
+            tile_config_source: Path to source TileConfiguration.txt to copy (optional)
+            logger: Logger instance (optional)
+
+        Returns:
+            The normalized birefringence image array (uint16, 0-65535)
+        """
+        # Create output directory if it doesn't exist
+        if not output_dir.exists():
+            output_dir.mkdir(exist_ok=True)
+
+            # Copy TileConfiguration.txt if source provided
+            if tile_config_source and tile_config_source.exists():
+                shutil.copy2(tile_config_source, output_dir / "TileConfiguration.txt")
+                if logger:
+                    logger.debug(f"Copied TileConfiguration.txt to {output_dir}")
+
+        # Calculate normalized birefringence (absolute value for visualization)
+        output_path = output_dir / filename
+
+        norm_biref_img = TifWriterUtils.ppm_normalized_difference_abs(pos_image, neg_image)
+
+        # Save as 16-bit single-channel image
+        # Range: 0-65535 where 0 = no birefringence, 65535 = maximum
+        TifWriterUtils.ome_writer(
+            filename=str(output_path),
+            pixel_size_um=pixel_size_um,
+            data=norm_biref_img,
+        )
+
+        if logger:
+            logger.info(f"  Created normalized birefringence: {filename} (16-bit, range: {norm_biref_img.min()}-{norm_biref_img.max()})")
+
+        return norm_biref_img
 
     @staticmethod
     def apply_brightness_correction(image: np.ndarray, correction_factor: float) -> np.ndarray:

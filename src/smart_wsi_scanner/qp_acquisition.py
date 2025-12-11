@@ -1053,9 +1053,10 @@ def _acquisition_workflow(
                     biref_dir = output_path / f"{pos_angle}.biref"
                     tile_config_source = output_path / str(pos_angle) / "TileConfiguration.txt"
 
-                    # Create birefringence image
+                    # Create normalized birefringence image
+                    # Uses [I(+) - I(-)]/[I(+) + I(-)] to suppress H&E staining variations
                     t_biref = time.perf_counter()
-                    TifWriterUtils.create_birefringence_tile(  # biref
+                    TifWriterUtils.create_normalized_birefringence_tile(
                         pos_image=angle_images[pos_angle],
                         neg_image=angle_images[neg_angle],
                         output_dir=biref_dir,
@@ -1064,7 +1065,7 @@ def _acquisition_workflow(
                         tile_config_source=tile_config_source,
                         logger=logger,
                     )
-                    t_biref = log_timing(logger, f"Birefringence calculation and save", t_biref)
+                    t_biref = log_timing(logger, f"Normalized birefringence calculation and save", t_biref)
 
                     # # Create sum image alongside birefringence image
                     # sum_dir = output_path / f"{pos_angle}.sum"
