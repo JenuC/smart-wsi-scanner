@@ -450,8 +450,11 @@ class PycromanagerHardware(MicroscopeHardware):
 
                 if raise_on_invalid_peak:
                     # Return failure dict for manual focus fallback loop
-                    # Stage is left at attempted focus position (new_z)
-                    logger.warning("  Autofocus failed - returning failure dict for retry")
+                    # Move stage to computed best position before returning, so user
+                    # can manually adjust from a reasonable starting point
+                    logger.warning("  Autofocus failed - moving to computed best Z and returning failure dict")
+                    best_pos = Position(current_pos.x, current_pos.y, new_z)
+                    self.move_to_position(best_pos)
                     return {
                         'success': False,
                         'message': validation['message'],
