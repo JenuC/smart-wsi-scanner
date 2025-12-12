@@ -279,10 +279,12 @@ class PycromanagerHardware(MicroscopeHardware):
             )
 
             pixels = debayerx.debayer(pixels)
-            logger.debug(f"Before uint16-uint14 scaling: mean {pixels.mean((0, 1))}")
-            pixels = ((pixels / ((2**14) + 1)) * 255).astype(np.uint8)
-            pixels = np.clip(pixels, 0, 255).astype(np.uint8)
-            logger.debug(f"After uint14-uint8 scaling: mean {pixels.mean((0, 1))}")
+            logger.debug(f"Before uint14->uint16 scaling: mean {pixels.mean((0, 1))}")
+            # Scale 14-bit sensor data to 16-bit range, preserving precision
+            # Old code converted to 8-bit which caused quantization artifacts
+            pixels = ((pixels.astype(np.float32) / ((2**14) - 1)) * 65535).astype(np.uint16)
+            pixels = np.clip(pixels, 0, 65535).astype(np.uint16)
+            logger.debug(f"After uint14->uint16 scaling: mean {pixels.mean((0, 1))}")
             self.core.set_property("MicroPublisher6", "Color", "ON")
 
             return pixels, tags

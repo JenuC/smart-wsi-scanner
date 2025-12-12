@@ -65,6 +65,39 @@ class PPMBirefringenceMaximizationTester:
         90.0: 0.57,
     }
 
+    @staticmethod
+    def rgb_to_gray(img: np.ndarray) -> np.ndarray:
+        """
+        Convert RGB/BGR image to grayscale while preserving input dtype precision.
+
+        Uses standard luminance weights (ITU-R BT.601):
+        Gray = 0.299*R + 0.587*G + 0.114*B
+
+        Unlike cv2.cvtColor which may have issues with 16-bit images,
+        this method explicitly preserves the input data type.
+
+        Args:
+            img: Input image (grayscale, RGB, or BGR with any dtype)
+
+        Returns:
+            Grayscale image with same dtype as input
+        """
+        if len(img.shape) == 2:
+            return img  # Already grayscale
+
+        # OpenCV loads as BGR, so weights are [B, G, R]
+        # Using float32 for intermediate calculation to preserve precision
+        weights = np.array([0.114, 0.587, 0.299], dtype=np.float32)
+        gray = np.dot(img.astype(np.float32), weights)
+
+        # Preserve input dtype
+        if img.dtype == np.uint16:
+            return np.clip(gray, 0, 65535).astype(np.uint16)
+        elif img.dtype == np.uint8:
+            return np.clip(gray, 0, 255).astype(np.uint8)
+        else:
+            return gray.astype(img.dtype)
+
     def __init__(self,
                  config_yaml: str,
                  output_dir: str = None,
@@ -396,8 +429,8 @@ class PPMBirefringenceMaximizationTester:
                     self.logger.warning(f"  Iteration {iteration}: could not load image")
                     break
 
-                if len(img.shape) == 3:
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                # Convert to grayscale preserving bit depth
+                img = self.rgb_to_gray(img)
 
                 # Convert to 8-bit scale for consistent comparison
                 if img.max() > 255:
@@ -573,11 +606,17 @@ class PPMBirefringenceMaximizationTester:
                 self.logger.error(f"Could not load images for angle {angle}")
                 return None, None, None
 
-            # Convert to grayscale if needed
-            if len(pos_img.shape) == 3:
-                pos_img = cv2.cvtColor(pos_img, cv2.COLOR_BGR2GRAY)
-            if len(neg_img.shape) == 3:
-                neg_img = cv2.cvtColor(neg_img, cv2.COLOR_BGR2GRAY)
+            # Log image properties for diagnostic purposes
+            if angle == 0.0:  # Only log once to avoid spam
+                self.logger.info(f"  Image dtype: {pos_img.dtype}, shape: {pos_img.shape}, "
+                               f"range: [{pos_img.min()}, {pos_img.max()}]")
+                if pos_img.dtype == np.uint8:
+                    self.logger.warning("  WARNING: Images are 8-bit. For best results, "
+                                       "configure camera for 16-bit output.")
+
+            # Convert to grayscale preserving bit depth
+            pos_img = self.rgb_to_gray(pos_img)
+            neg_img = self.rgb_to_gray(neg_img)
 
             # Convert to float for calculations
             pos_float = pos_img.astype(np.float32)
@@ -636,15 +675,21 @@ class PPMBirefringenceMaximizationTester:
             return None, None, None
 
     def compute_birefringence_metrics(self, diff_path: Path, angle: float,
-                                       metric_type: str = 'raw') -> Dict:
+                                       metric_type: str = 'raw',
+                                       use_otsu: bool = True) -> Dict:
         """
         Compute metrics for the birefringence signal.
+
+        Computes sample-focused metrics using Otsu thresholding to automatically
+        separate sample from background. This provides meaningful statistics on
+        the actual birefringent sample rather than diluted whole-image averages.
 
         Args:
             diff_path: Path to absolute difference image (raw or normalized)
             angle: The angle value
             metric_type: 'raw' for I(+)-I(-) metrics, 'normalized' for
                         [I(+)-I(-)]/[I(+)+I(-)] metrics
+            use_otsu: If True, use Otsu thresholding; if False, use top 5%
 
         Returns:
             Dictionary of metrics with appropriate prefix
@@ -661,29 +706,81 @@ class PPMBirefringenceMaximizationTester:
             else:
                 img_float = img.astype(np.float32)
 
+            # Compute threshold for sample region using Otsu or percentile
+            if use_otsu:
+                # Convert to 8-bit for Otsu thresholding
+                if metric_type == 'normalized':
+                    # Normalized is 0-1, scale to 0-255
+                    img_8bit = (img_float * 255).astype(np.uint8)
+                else:
+                    # Raw difference - scale based on actual range
+                    img_max = img_float.max()
+                    if img_max > 0:
+                        img_8bit = ((img_float / img_max) * 255).astype(np.uint8)
+                    else:
+                        img_8bit = np.zeros_like(img_float, dtype=np.uint8)
+
+                # Apply Otsu thresholding
+                otsu_thresh, _ = cv2.threshold(img_8bit, 0, 255,
+                                               cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+                # Convert Otsu threshold back to original scale
+                if metric_type == 'normalized':
+                    sample_threshold = otsu_thresh / 255.0
+                else:
+                    sample_threshold = (otsu_thresh / 255.0) * img_max if img_max > 0 else 0
+            else:
+                # Fallback: use top 5% percentile
+                sample_threshold = np.percentile(img_float, 95)
+
+            # Extract sample region (pixels above threshold)
+            sample_mask = img_float >= sample_threshold
+            sample_pixels = img_float[sample_mask]
+
+            # Handle edge case where no pixels are above threshold
+            if len(sample_pixels) == 0:
+                sample_pixels = img_float.flatten()
+                sample_mask = np.ones_like(img_float, dtype=bool)
+
             # Compute statistics
             prefix = 'norm_' if metric_type == 'normalized' else ''
+
+            # Sample-focused metrics (primary metrics for birefringence analysis)
             metrics = {
                 'angle': angle,
-                f'{prefix}mean_signal': float(np.mean(img_float)),
-                f'{prefix}median_signal': float(np.median(img_float)),
+                # PRIMARY: Sample-focused metrics using Otsu threshold
+                f'{prefix}mean_signal': float(np.mean(sample_pixels)),
+                f'{prefix}median_signal': float(np.median(sample_pixels)),
                 f'{prefix}max_signal': float(np.max(img_float)),
-                f'{prefix}std_signal': float(np.std(img_float)),
-                f'{prefix}signal_area': float(np.sum(img_float > np.percentile(img_float, 95))),
+                f'{prefix}std_signal': float(np.std(sample_pixels)),
+                f'{prefix}signal_area': float(np.sum(sample_mask)),
+                f'{prefix}sample_pct': float(100.0 * np.sum(sample_mask) / img_float.size),
+                f'{prefix}threshold': float(sample_threshold),
             }
 
-            # Compute percentiles for robust statistics
-            metrics[f'{prefix}p90_signal'] = float(np.percentile(img_float, 90))
-            metrics[f'{prefix}p95_signal'] = float(np.percentile(img_float, 95))
-            metrics[f'{prefix}p99_signal'] = float(np.percentile(img_float, 99))
+            # Compute percentiles within the sample region for robust statistics
+            metrics[f'{prefix}p90_signal'] = float(np.percentile(sample_pixels, 90))
+            metrics[f'{prefix}p95_signal'] = float(np.percentile(sample_pixels, 95))
+            metrics[f'{prefix}p99_signal'] = float(np.percentile(sample_pixels, 99))
 
-            # Signal-to-background ratio
-            background = np.percentile(img_float, 10)
-            signal_region = np.percentile(img_float, 90)
-            if background > 0:
-                metrics[f'{prefix}signal_to_bg_ratio'] = float(signal_region / background)
+            # Background metrics (pixels below the threshold)
+            bg_mask = ~sample_mask
+            bg_pixels = img_float[bg_mask]
+            if len(bg_pixels) > 0:
+                bg_mean = float(np.mean(bg_pixels))
+                metrics[f'{prefix}bg_mean'] = bg_mean
+                # Signal-to-background ratio based on sample vs background means
+                if bg_mean > 0:
+                    metrics[f'{prefix}signal_to_bg_ratio'] = float(
+                        np.mean(sample_pixels) / bg_mean)
+                else:
+                    metrics[f'{prefix}signal_to_bg_ratio'] = float(np.mean(sample_pixels))
             else:
-                metrics[f'{prefix}signal_to_bg_ratio'] = float(signal_region)
+                metrics[f'{prefix}bg_mean'] = 0.0
+                metrics[f'{prefix}signal_to_bg_ratio'] = float(np.mean(sample_pixels))
+
+            # Also store whole-image mean for reference
+            metrics[f'{prefix}whole_mean'] = float(np.mean(img_float))
 
             return metrics
 
@@ -827,26 +924,26 @@ class PPMBirefringenceMaximizationTester:
 
         # Plot 1: Raw Signal vs Angle I(+) - I(-)
         ax = axes[0, 0]
-        ax.plot(angles, mean_signals, 'b-o', label='Mean Signal', markersize=3, linewidth=1.5)
-        ax.plot(angles, p95_signals, 'r-s', label='P95 Signal', markersize=3, linewidth=1, alpha=0.7)
+        ax.plot(angles, mean_signals, 'b-o', label='Sample Mean', markersize=3, linewidth=1.5)
+        ax.plot(angles, p95_signals, 'r-s', label='Sample P95', markersize=3, linewidth=1, alpha=0.7)
         ax.axvline(x=optimal_angle_raw, color='green', linestyle='--', linewidth=2,
                    label=f'Optimal: {optimal_angle_raw:.2f} deg')
         ax.set_xlabel('Angle (degrees)')
-        ax.set_ylabel('Raw Signal Intensity')
-        ax.set_title('RAW DIFFERENCE: I(+) - I(-)')
+        ax.set_ylabel('Sample Signal Intensity (Otsu)')
+        ax.set_title('RAW DIFFERENCE: I(+) - I(-)\n(Sample region via Otsu threshold)')
         ax.legend(loc='upper right')
         ax.grid(True, alpha=0.3)
 
         # Plot 2: Normalized Signal vs Angle [I(+) - I(-)]/[I(+) + I(-)]
         ax = axes[0, 1]
         if norm_angles and norm_mean_signals:
-            ax.plot(norm_angles, norm_mean_signals, 'b-o', label='Mean (%)', markersize=3, linewidth=1.5)
-            ax.plot(norm_angles, norm_p95_signals, 'r-s', label='P95 (%)', markersize=3, linewidth=1, alpha=0.7)
+            ax.plot(norm_angles, norm_mean_signals, 'b-o', label='Sample Mean (%)', markersize=3, linewidth=1.5)
+            ax.plot(norm_angles, norm_p95_signals, 'r-s', label='Sample P95 (%)', markersize=3, linewidth=1, alpha=0.7)
             ax.axvline(x=optimal_angle_norm, color='purple', linestyle='--', linewidth=2,
                        label=f'Optimal: {optimal_angle_norm:.2f} deg')
         ax.set_xlabel('Angle (degrees)')
-        ax.set_ylabel('Normalized Signal (%)')
-        ax.set_title('NORMALIZED: [I(+)-I(-)]/[I(+)+I(-)]')
+        ax.set_ylabel('Sample Normalized Signal (%)')
+        ax.set_title('NORMALIZED: [I(+)-I(-)]/[I(+)+I(-)]\n(Sample region via Otsu threshold)')
         ax.legend(loc='upper right')
         ax.grid(True, alpha=0.3)
 
