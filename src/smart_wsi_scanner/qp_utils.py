@@ -140,6 +140,10 @@ class AutofocusUtils:
         """
         Determine which tile positions require autofocus.
 
+        For grids with >= 9 tiles, the first autofocus position is moved
+        1 diagonal FOV inward from the starting corner to avoid focusing
+        on areas outside the tissue (e.g., buffer regions).
+
         Args:
             fov: Field of view (x, y) in micrometers
             positions: List of (x, y) tile positions
@@ -154,22 +158,49 @@ class AutofocusUtils:
         # Use average FOV dimension (not diagonal) for consistent spacing
         af_min_distance = ((fov_x + fov_y) / 2) * n_tiles
 
-        # For each tile, if dist is higher, perform autofocus
-        af_positions = []
-        af_xy_pos = positions[0] if positions else None
+        if not positions:
+            return [], af_min_distance
+
+        # Determine the first autofocus position index
+        # For grids with >= 9 tiles, move 1 diagonal FOV inward to avoid edge issues
+        first_af_index = 0
+
+        if len(positions) >= 9:
+            # Calculate direction from start corner toward grid center
+            start_pos = np.array(positions[0])
+            center_pos = np.mean(positions, axis=0)
+            direction = center_pos - start_pos
+
+            # Normalize direction and scale by 1 FOV diagonal
+            if np.linalg.norm(direction) > 0:
+                direction = direction / np.linalg.norm(direction)
+                # Move 1 diagonal FOV inward
+                diagonal_fov = np.sqrt(fov_x**2 + fov_y**2)
+                target_pos = start_pos + direction * diagonal_fov
+
+                # Find the tile closest to the target position
+                distances = cdist([target_pos], positions)[0]
+                first_af_index = int(np.argmin(distances))
+
+                logger.info(
+                    f"Grid has {len(positions)} tiles (>= 9) - "
+                    f"moving first AF from tile 0 to tile {first_af_index} "
+                    f"(1 diagonal FOV inward)"
+                )
+
+        if first_af_index == 0 and len(positions) < 9:
+            logger.debug(f"Grid has {len(positions)} tiles (< 9) - keeping first AF at tile 0")
+
+        # Build autofocus position list starting with the computed first position
+        af_positions = [first_af_index]
+        af_xy_pos = positions[first_af_index]
 
         for ix, pos in enumerate(positions):
-            if ix == 0:
-                # Always autofocus at the first position
-                af_positions.append(0)
-                af_xy_pos = positions[0]
-                dist_to_last_af_xy_pos = 0
-            else:
-                # Calculate distance from last AF position if both points are valid
-                if af_xy_pos is not None and pos is not None:
-                    dist_to_last_af_xy_pos = cdist([af_xy_pos], [pos])[0][0]
-                else:
-                    dist_to_last_af_xy_pos = 0
+            if ix == first_af_index:
+                continue  # Already added as first AF position
+
+            # Calculate distance from last AF position
+            dist_to_last_af_xy_pos = cdist([af_xy_pos], [pos])[0][0]
 
             # If we've moved more than the AF minimum distance, add new AF point
             if dist_to_last_af_xy_pos > af_min_distance:
