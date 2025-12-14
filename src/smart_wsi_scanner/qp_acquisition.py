@@ -96,17 +96,15 @@ def autofocus_with_manual_fallback(
                 logger.info(f"Requesting manual focus from user (retries remaining: {retries_remaining})...")
                 user_choice = request_manual_focus(retries_remaining)  # Pass retries info
 
-                # After manual focus dialog, restore XY position (user may have moved to find tissue)
-                current_pos = hardware.get_current_position()
-                if abs(current_pos.x - original_x) > 1.0 or abs(current_pos.y - original_y) > 1.0:
-                    logger.info(f"Restoring XY position after manual focus: "
-                               f"({current_pos.x:.1f}, {current_pos.y:.1f}) -> ({original_x:.1f}, {original_y:.1f})")
-                    from .hardware import Position
-                    restore_pos = Position(original_x, original_y, current_pos.z)
-                    hardware.move_to_position(restore_pos)
-
                 if user_choice == "skip":
-                    # User chose to use current focus - return attempted Z position
+                    # User chose to use current focus - restore XY and return
+                    current_pos = hardware.get_current_position()
+                    if abs(current_pos.x - original_x) > 1.0 or abs(current_pos.y - original_y) > 1.0:
+                        logger.info(f"Restoring XY position after manual focus: "
+                                   f"({current_pos.x:.1f}, {current_pos.y:.1f}) -> ({original_x:.1f}, {original_y:.1f})")
+                        from .hardware import Position
+                        restore_pos = Position(original_x, original_y, current_pos.z)
+                        hardware.move_to_position(restore_pos)
                     logger.info("User chose to use current focus position")
                     return result['attempted_z']
                 elif user_choice == "cancel":
@@ -115,9 +113,26 @@ def autofocus_with_manual_fallback(
                     raise RuntimeError("Acquisition cancelled by user during manual focus")
                 elif user_choice == "retry":
                     if retries_remaining > 0:
-                        # Continue to retry autofocus
-                        logger.info(f"Manual focus completed, retrying standard autofocus (attempt {attempt + 2}/{max_retries})...")
-                        continue
+                        # IMPORTANT: Run autofocus at CURRENT position (where user found tissue)
+                        # BEFORE restoring XY. This ensures autofocus runs where there's tissue.
+                        logger.info(f"Running autofocus at current position (where user found tissue)...")
+                        retry_result = hardware.autofocus(**autofocus_kwargs)
+
+                        if isinstance(retry_result, float):
+                            # Autofocus succeeded at current position - restore XY with new Z
+                            logger.info(f"Autofocus succeeded at current position: Z={retry_result:.2f} um")
+                            current_pos = hardware.get_current_position()
+                            if abs(current_pos.x - original_x) > 1.0 or abs(current_pos.y - original_y) > 1.0:
+                                logger.info(f"Restoring XY position: "
+                                           f"({current_pos.x:.1f}, {current_pos.y:.1f}) -> ({original_x:.1f}, {original_y:.1f})")
+                                from .hardware import Position
+                                restore_pos = Position(original_x, original_y, retry_result)
+                                hardware.move_to_position(restore_pos)
+                            return retry_result
+                        else:
+                            # Autofocus failed again - continue to next attempt
+                            logger.warning(f"Autofocus retry failed: {retry_result.get('message', 'unknown error')}")
+                            continue
                     else:
                         # No retries left - shouldn't happen since button should be disabled
                         logger.warning("User chose retry but no retries remaining - using current focus")
@@ -713,6 +728,59 @@ def _acquisition_workflow(
             logger.info(f"Moving to predicted Z position before acquisition...")
             hardware.move_to_position(Position(z=hint_z))
             logger.info(f"Moved to predicted Z: {hint_z:.2f} um")
+
+        # CRITICAL: Run autofocus at position 0 BEFORE acquiring any tiles
+        # This ensures the first tiles are acquired at correct focus, even if
+        # the Z-hint prediction was inaccurate. The hint_z serves as a starting
+        # point for the autofocus search, not as the actual acquisition Z.
+        if len(positions) > 0:
+            first_pos, first_filename = positions[0]
+            logger.info(f"=== PRE-ACQUISITION AUTOFOCUS at position 0 ===")
+            logger.info(f"Moving to first tile position for initial autofocus: X={first_pos.x}, Y={first_pos.y}")
+
+            # Move to position 0 XY (keep current Z from hint or default)
+            first_pos.z = hardware.get_current_position().z
+            hardware.move_to_position(first_pos)
+
+            # For PPM, set rotation to 90deg for autofocus
+            if "ppm" in modality.lower():
+                hardware.set_psg_ticks(90.0)
+                logger.info("Set rotation to 90 deg (uncrossed) for initial autofocus")
+                # Set exposure for 90deg
+                exposure_90 = 2.0
+                if 90.0 in params["angles"]:
+                    angle_idx = params["angles"].index(90.0)
+                    if angle_idx < len(params["exposures"]):
+                        exposure_90 = params["exposures"][angle_idx]
+                hardware.set_exposure(exposure_90)
+                logger.info(f"Set exposure to {exposure_90}ms for initial autofocus")
+
+            # Run standard autofocus with manual fallback
+            try:
+                initial_z = autofocus_with_manual_fallback(
+                    hardware=hardware,
+                    request_manual_focus=request_manual_focus,
+                    max_retries=3,
+                    n_steps=af_n_steps,
+                    search_range=af_search_range,
+                    score_metric=af_score_metric,
+                    output_folder=str(output_path),
+                    logger=logger,
+                )
+                logger.info(f"Initial autofocus completed: Z={initial_z:.2f} um")
+                first_tissue_autofocus_done = True
+
+                # Remove position 0 from dynamic_af_positions since we already did it
+                dynamic_af_positions.discard(0)
+
+            except RuntimeError as e:
+                logger.error(f"Initial autofocus failed: {e}")
+                # Continue anyway - user may have chosen to skip or acquisition was cancelled
+                if "cancelled" in str(e).lower():
+                    set_state("CANCELLED")
+                    return
+
+            logger.info(f"=== Starting main acquisition loop ===")
 
         # Main acquisition loop
         for pos_idx, (pos, filename) in enumerate(positions):
