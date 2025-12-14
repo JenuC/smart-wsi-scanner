@@ -53,6 +53,9 @@ def autofocus_with_manual_fallback(
     If autofocus fails (returns failure dict), prompts user for manual focus
     and retries. Shows dialog even on last attempt with retry button disabled.
 
+    After manual focus completes, the stage XY position is restored to the
+    original tile position (user may have moved XY to find tissue for focusing).
+
     Args:
         hardware: PycromanagerHardware instance
         logger: Logger instance
@@ -69,6 +72,11 @@ def autofocus_with_manual_fallback(
     Raises:
         RuntimeError: If user cancels acquisition or no callback provided
     """
+    # Capture original XY position before any autofocus attempts
+    # User may move XY during manual focus dialog to find tissue
+    original_pos = hardware.get_current_position()
+    original_x, original_y = original_pos.x, original_pos.y
+
     for attempt in range(max_retries):
         result = hardware.autofocus(**autofocus_kwargs)
 
@@ -87,6 +95,15 @@ def autofocus_with_manual_fallback(
                 retries_remaining = max_retries - attempt - 1
                 logger.info(f"Requesting manual focus from user (retries remaining: {retries_remaining})...")
                 user_choice = request_manual_focus(retries_remaining)  # Pass retries info
+
+                # After manual focus dialog, restore XY position (user may have moved to find tissue)
+                current_pos = hardware.get_current_position()
+                if abs(current_pos.x - original_x) > 1.0 or abs(current_pos.y - original_y) > 1.0:
+                    logger.info(f"Restoring XY position after manual focus: "
+                               f"({current_pos.x:.1f}, {current_pos.y:.1f}) -> ({original_x:.1f}, {original_y:.1f})")
+                    from .hardware import Position
+                    restore_pos = Position(original_x, original_y, current_pos.z)
+                    hardware.move_to_position(restore_pos)
 
                 if user_choice == "skip":
                     # User chose to use current focus - return attempted Z position
