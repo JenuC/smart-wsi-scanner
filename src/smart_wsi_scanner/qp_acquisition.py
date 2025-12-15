@@ -729,25 +729,22 @@ def _acquisition_workflow(
             hardware.move_to_position(Position(z=hint_z))
             logger.info(f"Moved to predicted Z: {hint_z:.2f} um")
 
-        # CRITICAL: Run autofocus at position 0 BEFORE acquiring any tiles
-        # This ensures the first tiles are acquired at correct focus, even if
-        # the Z-hint prediction was inaccurate. The hint_z serves as a starting
-        # point for the autofocus search, not as the actual acquisition Z.
-        if len(positions) > 0:
-            first_pos, first_filename = positions[0]
-            logger.info(f"=== PRE-ACQUISITION AUTOFOCUS at position 0 ===")
-            logger.info(f"Moving to first tile position for initial autofocus: X={first_pos.x}, Y={first_pos.y}")
+        # CRITICAL: Run autofocus BEFORE acquiring any tiles
+        # Use the diagonal position (af_positions[0]) which is 1 FOV inward from the
+        # corner to avoid focusing on buffer regions outside tissue.
+        # The hint_z serves as a starting point for the autofocus search.
+        if len(positions) > 0 and len(af_positions) > 0:
+            # Get the first autofocus position (diagonal offset for large grids)
+            first_af_idx = af_positions[0]
+            first_af_pos, first_af_filename = positions[first_af_idx]
+            logger.info(f"=== PRE-ACQUISITION AUTOFOCUS at position {first_af_idx} ===")
+            logger.info(f"Using diagonal autofocus position: X={first_af_pos.x}, Y={first_af_pos.y}")
 
-            # Move to position 0 XY (keep current Z from hint or default)
-            first_pos.z = hardware.get_current_position().z
-            hardware.move_to_position(first_pos)
-
-            # For PPM, set rotation to 90deg for autofocus
+            # For PPM, set rotation to 90deg for autofocus and tissue detection
+            exposure_90 = 2.0  # Default
             if "ppm" in modality.lower():
                 hardware.set_psg_ticks(90.0)
                 logger.info("Set rotation to 90 deg (uncrossed) for initial autofocus")
-                # Set exposure for 90deg
-                exposure_90 = 2.0
                 if 90.0 in params["angles"]:
                     angle_idx = params["angles"].index(90.0)
                     if angle_idx < len(params["exposures"]):
@@ -755,23 +752,99 @@ def _acquisition_workflow(
                 hardware.set_exposure(exposure_90)
                 logger.info(f"Set exposure to {exposure_90}ms for initial autofocus")
 
-            # Run standard autofocus with manual fallback
-            try:
-                initial_z = autofocus_with_manual_fallback(
-                    hardware=hardware,
-                    request_manual_focus=request_manual_focus,
-                    max_retries=3,
-                    n_steps=af_n_steps,
-                    search_range=af_search_range,
-                    score_metric=af_score_metric,
-                    output_folder=str(output_path),
+            # Calculate direction toward center for tissue search loop
+            start_pos = np.array([first_af_pos.x, first_af_pos.y])
+            center_pos = np.mean(xy_positions, axis=0)
+            direction = center_pos - start_pos
+            if np.linalg.norm(direction) > 0:
+                direction = direction / np.linalg.norm(direction)
+
+            # Tissue detection loop: try current position, then move 1 FOV toward center
+            # After 3 attempts with no tissue, show manual dialog
+            max_tissue_search_attempts = 3
+            tissue_found = False
+            search_pos = Position(first_af_pos.x, first_af_pos.y, hardware.get_current_position().z)
+            fov_diagonal = np.sqrt(fov[0]**2 + fov[1]**2)
+
+            for attempt in range(max_tissue_search_attempts):
+                # Move to search position
+                hardware.move_to_position(search_pos)
+                logger.info(f"Tissue search attempt {attempt + 1}/{max_tissue_search_attempts}: "
+                            f"X={search_pos.x:.1f}, Y={search_pos.y:.1f}")
+
+                # Take test image for tissue detection
+                test_img, _ = hardware.snap_image()
+
+                # Ensure consistent format for tissue detection
+                if test_img.dtype in [np.float32, np.float64]:
+                    if test_img.max() <= 1.0 and test_img.min() >= 0.0:
+                        test_img = (test_img * 255).astype(np.uint8)
+                    else:
+                        test_img = np.clip(test_img, 0, 255).astype(np.uint8)
+
+                # Check for tissue
+                has_tissue, tissue_stats = AutofocusUtils.has_sufficient_tissue(
+                    test_img,
+                    texture_threshold=af_texture_threshold,
+                    tissue_area_threshold=af_tissue_area_threshold,
+                    modality=modality,
                     logger=logger,
+                    return_stats=True,
+                    rgb_brightness_threshold=af_rgb_brightness_threshold,
                 )
+
+                if has_tissue:
+                    logger.info(f"Tissue found at attempt {attempt + 1}")
+                    tissue_found = True
+                    break
+                else:
+                    reason = "blank tile (RGB)" if tissue_stats.get('brightness_rejected') else "insufficient texture/area"
+                    logger.warning(f"No tissue at attempt {attempt + 1} ({reason}) - "
+                                   f"texture={tissue_stats['texture']:.4f}, area={tissue_stats['area']:.3f}")
+
+                    if attempt < max_tissue_search_attempts - 1:
+                        # Move one FOV diagonal toward center for next attempt
+                        new_xy = np.array([search_pos.x, search_pos.y]) + direction * fov_diagonal
+                        search_pos = Position(new_xy[0], new_xy[1], search_pos.z)
+                        logger.info(f"Moving 1 FOV diagonal toward center for next attempt")
+
+            # Run autofocus (with manual fallback if no tissue found)
+            try:
+                if tissue_found:
+                    # Standard autofocus with manual fallback - tissue was found
+                    logger.info("Tissue found - running autofocus with manual fallback")
+                    initial_z = autofocus_with_manual_fallback(
+                        hardware=hardware,
+                        request_manual_focus=request_manual_focus,
+                        max_retries=3,
+                        n_steps=af_n_steps,
+                        search_range=af_search_range,
+                        score_metric=af_score_metric,
+                        output_folder=str(output_path),
+                        logger=logger,
+                    )
+                else:
+                    # No tissue found after all search attempts - try autofocus anyway
+                    # but with max_retries=0 so it goes immediately to manual dialog
+                    # if autofocus fails (which it likely will on blank area)
+                    logger.warning(f"No tissue found after {max_tissue_search_attempts} search attempts")
+                    logger.warning("Attempting autofocus anyway - will go to manual dialog if it fails")
+                    initial_z = autofocus_with_manual_fallback(
+                        hardware=hardware,
+                        request_manual_focus=request_manual_focus,
+                        max_retries=0,  # No retries - go straight to manual if AF fails
+                        n_steps=af_n_steps,
+                        search_range=af_search_range,
+                        score_metric=af_score_metric,
+                        output_folder=str(output_path),
+                        logger=logger,
+                    )
+
                 logger.info(f"Initial autofocus completed: Z={initial_z:.2f} um")
                 first_tissue_autofocus_done = True
 
-                # Remove position 0 from dynamic_af_positions since we already did it
-                dynamic_af_positions.discard(0)
+                # Remove this position from dynamic_af_positions since we already did it
+                dynamic_af_positions.discard(first_af_idx)
 
             except RuntimeError as e:
                 logger.error(f"Initial autofocus failed: {e}")
