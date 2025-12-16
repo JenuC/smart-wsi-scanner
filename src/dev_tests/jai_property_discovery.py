@@ -34,17 +34,20 @@ def discover_device_properties(core, device_name: str) -> dict:
     Enumerate all properties for a device.
 
     Args:
-        core: Pycromanager Core instance
+        core: Pycromanager Core instance (wraps MMCore Java object)
         device_name: Name of the device to query
 
     Returns:
         dict: Property details including value, type, limits, allowed values
+
+    Note:
+        MMCore uses camelCase Java method names, not snake_case.
     """
     properties = {}
-    n_props = core.get_number_of_device_properties(device_name)
+    n_props = core.getNumberOfDeviceProperties(device_name)
 
     for i in range(n_props):
-        prop_name = core.get_device_property_name(device_name, i)
+        prop_name = core.getDevicePropertyNames(device_name)[i]
 
         prop_info = {
             'current_value': None,
@@ -58,19 +61,19 @@ def discover_device_properties(core, device_name: str) -> dict:
 
         try:
             # Get current value
-            prop_info['current_value'] = core.get_property(device_name, prop_name)
+            prop_info['current_value'] = core.getProperty(device_name, prop_name)
 
             # Check if read-only
-            prop_info['is_read_only'] = core.is_property_read_only(device_name, prop_name)
+            prop_info['is_read_only'] = core.isPropertyReadOnly(device_name, prop_name)
 
             # Check for limits (numeric properties)
-            prop_info['has_limits'] = core.has_property_limits(device_name, prop_name)
+            prop_info['has_limits'] = core.hasPropertyLimits(device_name, prop_name)
             if prop_info['has_limits']:
-                prop_info['lower_limit'] = core.get_property_lower_limit(device_name, prop_name)
-                prop_info['upper_limit'] = core.get_property_upper_limit(device_name, prop_name)
+                prop_info['lower_limit'] = core.getPropertyLowerLimit(device_name, prop_name)
+                prop_info['upper_limit'] = core.getPropertyUpperLimit(device_name, prop_name)
 
             # Get allowed values (enum properties)
-            allowed = core.get_allowed_property_values(device_name, prop_name)
+            allowed = core.getAllowedPropertyValues(device_name, prop_name)
             if allowed:
                 prop_info['allowed_values'] = list(allowed)
 
@@ -102,7 +105,7 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
     4. Check frame rate behavior with individual exposures
 
     Args:
-        core: Pycromanager Core instance
+        core: Pycromanager Core instance (wraps MMCore Java object)
         device_name: Camera device name
 
     Returns:
@@ -119,23 +122,23 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
 
     try:
         # Test 1: Toggle ExposureIsIndividual
-        original_mode = core.get_property(device_name, "ExposureIsIndividual")
+        original_mode = core.getProperty(device_name, "ExposureIsIndividual")
         results['exposure_individual_toggle'] = original_mode
 
         # Enable individual mode
-        core.set_property(device_name, "ExposureIsIndividual", "On")
-        core.wait_for_device(device_name)
+        core.setProperty(device_name, "ExposureIsIndividual", "On")
+        core.waitForDevice(device_name)
         results['notes'].append("Successfully enabled ExposureIsIndividual")
 
         # Test 2: Read per-channel exposures
         channels = ['Exposure_Red', 'Exposure_Green', 'Exposure_Blue']
         for channel in channels:
             try:
-                value = float(core.get_property(device_name, channel))
+                value = float(core.getProperty(device_name, channel))
                 results['exposure_limits'][channel] = {
                     'current': value,
-                    'min': core.get_property_lower_limit(device_name, channel),
-                    'max': core.get_property_upper_limit(device_name, channel)
+                    'min': core.getPropertyLowerLimit(device_name, channel),
+                    'max': core.getPropertyUpperLimit(device_name, channel)
                 }
             except Exception as e:
                 results['notes'].append(f"Failed to read {channel}: {e}")
@@ -145,14 +148,14 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
             # Set different values for each channel
             test_values = {'Exposure_Red': 50.0, 'Exposure_Green': 75.0, 'Exposure_Blue': 100.0}
             for channel, value in test_values.items():
-                core.set_property(device_name, channel, value)
+                core.setProperty(device_name, channel, str(value))
 
-            core.wait_for_device(device_name)
+            core.waitForDevice(device_name)
 
             # Read back and verify
             readback = {}
             for channel in channels:
-                readback[channel] = float(core.get_property(device_name, channel))
+                readback[channel] = float(core.getProperty(device_name, channel))
 
             results['channel_exposures_independent'] = (
                 abs(readback['Exposure_Red'] - 50.0) < 0.1 and
@@ -162,11 +165,11 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
             results['per_channel_exposure_works'] = True
 
         # Test 4: Frame rate behavior
-        frame_rate_before = core.get_property(device_name, "FrameRateHz")
+        frame_rate_before = core.getProperty(device_name, "FrameRateHz")
         # Set a long exposure on one channel
-        core.set_property(device_name, "Exposure_Blue", 500.0)
-        core.wait_for_device(device_name)
-        frame_rate_after = core.get_property(device_name, "FrameRateHz")
+        core.setProperty(device_name, "Exposure_Blue", "500.0")
+        core.waitForDevice(device_name)
+        frame_rate_after = core.getProperty(device_name, "FrameRateHz")
 
         results['frame_rate_behavior'] = {
             'before': frame_rate_before,
@@ -175,7 +178,7 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
         }
 
         # Restore original mode
-        core.set_property(device_name, "ExposureIsIndividual", original_mode)
+        core.setProperty(device_name, "ExposureIsIndividual", original_mode)
 
     except Exception as e:
         results['notes'].append(f"Test failed: {e}")
@@ -194,7 +197,7 @@ def test_individual_gain_mode(core, device_name: str = "JAICamera") -> dict:
     4. Verify gain ranges
 
     Args:
-        core: Pycromanager Core instance
+        core: Pycromanager Core instance (wraps MMCore Java object)
         device_name: Camera device name
 
     Returns:
@@ -209,20 +212,20 @@ def test_individual_gain_mode(core, device_name: str = "JAICamera") -> dict:
 
     try:
         # Test 1: Toggle GainIsIndividual
-        original_mode = core.get_property(device_name, "GainIsIndividual")
+        original_mode = core.getProperty(device_name, "GainIsIndividual")
         results['gain_individual_toggle'] = original_mode
 
-        core.set_property(device_name, "GainIsIndividual", "On")
-        core.wait_for_device(device_name)
+        core.setProperty(device_name, "GainIsIndividual", "On")
+        core.waitForDevice(device_name)
 
         # Test 2: Analog gains
         analog_channels = ['Gain_AnalogRed', 'Gain_AnalogGreen', 'Gain_AnalogBlue']
         for channel in analog_channels:
             try:
                 results['analog_gain_ranges'][channel] = {
-                    'current': float(core.get_property(device_name, channel)),
-                    'min': core.get_property_lower_limit(device_name, channel),
-                    'max': core.get_property_upper_limit(device_name, channel)
+                    'current': float(core.getProperty(device_name, channel)),
+                    'min': core.getPropertyLowerLimit(device_name, channel),
+                    'max': core.getPropertyUpperLimit(device_name, channel)
                 }
             except Exception as e:
                 results['notes'].append(f"Failed to read {channel}: {e}")
@@ -232,15 +235,15 @@ def test_individual_gain_mode(core, device_name: str = "JAICamera") -> dict:
         for channel in digital_channels:
             try:
                 results['digital_gain_ranges'][channel] = {
-                    'current': float(core.get_property(device_name, channel)),
-                    'min': core.get_property_lower_limit(device_name, channel),
-                    'max': core.get_property_upper_limit(device_name, channel)
+                    'current': float(core.getProperty(device_name, channel)),
+                    'min': core.getPropertyLowerLimit(device_name, channel),
+                    'max': core.getPropertyUpperLimit(device_name, channel)
                 }
             except Exception as e:
                 results['notes'].append(f"Digital gain {channel} not available: {e}")
 
         # Restore original mode
-        core.set_property(device_name, "GainIsIndividual", original_mode)
+        core.setProperty(device_name, "GainIsIndividual", original_mode)
 
     except Exception as e:
         results['notes'].append(f"Test failed: {e}")
@@ -253,7 +256,7 @@ def test_black_level_properties(core, device_name: str = "JAICamera") -> dict:
     Test black level properties.
 
     Args:
-        core: Pycromanager Core instance
+        core: Pycromanager Core instance (wraps MMCore Java object)
         device_name: Camera device name
 
     Returns:
@@ -269,9 +272,9 @@ def test_black_level_properties(core, device_name: str = "JAICamera") -> dict:
     for prop in black_level_props:
         try:
             results['black_level_ranges'][prop] = {
-                'current': float(core.get_property(device_name, prop)),
-                'min': core.get_property_lower_limit(device_name, prop),
-                'max': core.get_property_upper_limit(device_name, prop)
+                'current': float(core.getProperty(device_name, prop)),
+                'min': core.getPropertyLowerLimit(device_name, prop),
+                'max': core.getPropertyUpperLimit(device_name, prop)
             }
         except Exception as e:
             results['notes'].append(f"Black level {prop} not available: {e}")
@@ -286,7 +289,7 @@ def test_image_capture_with_individual_exposure(core, device_name: str = "JAICam
     This verifies that per-channel exposures actually affect the captured image.
 
     Args:
-        core: Pycromanager Core instance
+        core: Pycromanager Core instance (wraps MMCore Java object)
         device_name: Camera device name
 
     Returns:
@@ -303,23 +306,23 @@ def test_image_capture_with_individual_exposure(core, device_name: str = "JAICam
 
     try:
         # Enable individual exposure mode
-        core.set_property(device_name, "ExposureIsIndividual", "On")
-        core.wait_for_device(device_name)
+        core.setProperty(device_name, "ExposureIsIndividual", "On")
+        core.waitForDevice(device_name)
 
         # Set known different exposures
-        core.set_property(device_name, "Exposure_Red", 30.0)
-        core.set_property(device_name, "Exposure_Green", 50.0)
-        core.set_property(device_name, "Exposure_Blue", 80.0)
-        core.wait_for_device(device_name)
+        core.setProperty(device_name, "Exposure_Red", "30.0")
+        core.setProperty(device_name, "Exposure_Green", "50.0")
+        core.setProperty(device_name, "Exposure_Blue", "80.0")
+        core.waitForDevice(device_name)
 
         # Capture image
-        core.snap_image()
-        img = core.get_image()
+        core.snapImage()
+        img = core.getImage()
 
         # Get image dimensions
-        width = core.get_image_width()
-        height = core.get_image_height()
-        bytes_per_pixel = core.get_bytes_per_pixel()
+        width = core.getImageWidth()
+        height = core.getImageHeight()
+        bytes_per_pixel = core.getBytesPerPixel()
 
         results['image_shape'] = {
             'width': width,
@@ -348,7 +351,7 @@ def test_image_capture_with_individual_exposure(core, device_name: str = "JAICam
         results['capture_successful'] = True
 
         # Restore unified exposure mode
-        core.set_property(device_name, "ExposureIsIndividual", "Off")
+        core.setProperty(device_name, "ExposureIsIndividual", "Off")
 
     except Exception as e:
         results['notes'].append(f"Capture test failed: {e}")
@@ -479,7 +482,7 @@ def main():
     device_name = "JAICamera"
 
     # Verify JAI camera is active
-    active_camera = core.get_property("Core", "Camera")
+    active_camera = core.getProperty("Core", "Camera")
     if active_camera != device_name:
         logger.error(f"JAICamera not active. Current camera: {active_camera}")
         logger.info("Please set JAICamera as the active camera in Micro-Manager and try again.")
