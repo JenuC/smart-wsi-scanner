@@ -414,6 +414,19 @@ def print_summary(all_properties: dict, test_results: dict) -> None:
     print("=" * 70)
     print(f"Total properties discovered: {len(all_properties)}")
 
+    # Print all discovered properties
+    print("\n--- All Discovered Properties ---")
+    for prop_name, prop_info in sorted(all_properties.items()):
+        value = prop_info.get('current_value', 'N/A')
+        prop_type = prop_info.get('property_type', 'unknown')
+        if prop_info.get('has_limits'):
+            limits = f" [{prop_info.get('lower_limit')} - {prop_info.get('upper_limit')}]"
+        elif prop_info.get('allowed_values'):
+            limits = f" {prop_info.get('allowed_values')}"
+        else:
+            limits = ""
+        print(f"  {prop_name}: {value} ({prop_type}){limits}")
+
     print("\n--- Exposure Individual Mode ---")
     print(f"  Toggle works: {exposure_results.get('exposure_individual_toggle') is not None}")
     print(f"  Per-channel works: {exposure_results.get('per_channel_exposure_works')}")
