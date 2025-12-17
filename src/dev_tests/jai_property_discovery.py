@@ -42,11 +42,13 @@ def discover_device_properties(core, device_name: str) -> dict:
 
     Note:
         Pycromanager uses snake_case method names wrapping MMCore.
+        Java vectors need to be converted to Python lists.
     """
     properties = {}
 
-    # Get all property names - pycromanager returns a tuple/list directly
-    prop_names = core.get_device_property_names(device_name)
+    # Get all property names - convert Java StrVector to Python list
+    prop_names_vector = core.get_device_property_names(device_name)
+    prop_names = [prop_names_vector.get(i) for i in range(prop_names_vector.size())]
 
     for prop_name in prop_names:
         prop_info = {
@@ -72,10 +74,10 @@ def discover_device_properties(core, device_name: str) -> dict:
                 prop_info['lower_limit'] = core.get_property_lower_limit(device_name, prop_name)
                 prop_info['upper_limit'] = core.get_property_upper_limit(device_name, prop_name)
 
-            # Get allowed values (enum properties)
-            allowed = core.get_allowed_property_values(device_name, prop_name)
-            if allowed:
-                prop_info['allowed_values'] = list(allowed)
+            # Get allowed values (enum properties) - convert Java StrVector
+            allowed_vector = core.get_allowed_property_values(device_name, prop_name)
+            if allowed_vector and allowed_vector.size() > 0:
+                prop_info['allowed_values'] = [allowed_vector.get(i) for i in range(allowed_vector.size())]
 
             # Determine property type
             if prop_info['allowed_values']:
