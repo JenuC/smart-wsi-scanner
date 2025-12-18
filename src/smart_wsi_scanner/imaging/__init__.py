@@ -11,8 +11,8 @@ Modules:
     debayering: Bayer pattern demosaicing (existing subpackage)
 """
 
-from .writer import TifWriterUtils
-from .background import BackgroundCorrectionUtils
-from .tissue_detection import EmptyRegionDetector
+from smart_wsi_scanner.imaging.writer import TifWriterUtils
+from smart_wsi_scanner.imaging.background import BackgroundCorrectionUtils
+from smart_wsi_scanner.imaging.tissue_detection import EmptyRegionDetector
 
 __all__ = ["TifWriterUtils", "BackgroundCorrectionUtils", "EmptyRegionDetector"]

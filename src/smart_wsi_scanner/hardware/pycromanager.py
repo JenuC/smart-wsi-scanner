@@ -6,15 +6,15 @@ from typing import Dict, Any, Optional, Tuple, List
 import logging
 import time
 from pycromanager import Core, Studio
-from .base import MicroscopeHardware, is_mm_running, is_coordinate_in_range, Position
-from ..autofocus.core import AutofocusUtils
+from smart_wsi_scanner.hardware.base import MicroscopeHardware, is_mm_running, is_coordinate_in_range, Position
+from smart_wsi_scanner.autofocus.core import AutofocusUtils
 
 import numpy as np
 import skimage.color
 import skimage.filters
 import scipy.interpolate
 import matplotlib.pyplot as plt
-from .debayering import CPUDebayer
+from smart_wsi_scanner.debayering import CPUDebayer
 
 logger = logging.getLogger(__name__)
 

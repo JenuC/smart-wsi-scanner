@@ -16,7 +16,7 @@ in a future release.
 """
 
 # Re-export from new location
-from .autofocus.benchmark import (
+from smart_wsi_scanner.autofocus.benchmark import (
     AutofocusBenchmark,
     BenchmarkResult,
     BenchmarkConfig,

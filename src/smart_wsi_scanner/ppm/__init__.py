@@ -12,25 +12,25 @@ Modules:
     birefringence_test: Birefringence optimization (PPMBirefringenceMaximizationTester)
 """
 
-from .calibration import PolarizerCalibrationUtils
+from smart_wsi_scanner.ppm.calibration import PolarizerCalibrationUtils
 
 __all__ = ["PolarizerCalibrationUtils"]
 
 # Optional imports for PPM testing tools (may have additional dependencies)
 try:
-    from .sensitivity_test import PPMRotationSensitivityTester
+    from smart_wsi_scanner.ppm.sensitivity_test import PPMRotationSensitivityTester
     __all__.append("PPMRotationSensitivityTester")
 except ImportError:
     pass
 
 try:
-    from .sensitivity_analysis import PPMRotationAnalyzer
+    from smart_wsi_scanner.ppm.sensitivity_analysis import PPMRotationAnalyzer
     __all__.append("PPMRotationAnalyzer")
 except ImportError:
     pass
 
 try:
-    from .birefringence_test import PPMBirefringenceMaximizationTester
+    from smart_wsi_scanner.ppm.birefringence_test import PPMBirefringenceMaximizationTester
     __all__.append("PPMBirefringenceMaximizationTester")
 except ImportError:
     pass

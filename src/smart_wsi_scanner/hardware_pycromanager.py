@@ -18,7 +18,7 @@ in a future release.
 """
 
 # Re-export from new location
-from .hardware.pycromanager import (
+from smart_wsi_scanner.hardware.pycromanager import (
     PycromanagerHardware,
     init_pycromanager,
     ppm_psgticks_to_thor,

@@ -11,6 +11,6 @@ in a future release.
 """
 
 # Re-export from new location
-from .config.manager import ConfigManager
+from smart_wsi_scanner.config.manager import ConfigManager
 
 __all__ = ["ConfigManager"]

@@ -11,7 +11,7 @@ Modules:
     pipeline: Text-based image processing pipeline
 """
 
-from .tiles import TileConfigUtils
-from .project import QuPathProject
+from smart_wsi_scanner.acquisition.tiles import TileConfigUtils
+from smart_wsi_scanner.acquisition.project import QuPathProject
 
 __all__ = ["TileConfigUtils", "QuPathProject"]

@@ -24,18 +24,18 @@ logger = logging.getLogger(__name__)
 # Re-export all classes from their new locations for backward compatibility
 
 # Acquisition package
-from .acquisition.tiles import TileConfigUtils
-from .acquisition.project import QuPathProject
+from smart_wsi_scanner.acquisition.tiles import TileConfigUtils
+from smart_wsi_scanner.acquisition.project import QuPathProject
 
 # Autofocus package
-from .autofocus.core import AutofocusUtils
+from smart_wsi_scanner.autofocus.core import AutofocusUtils
 
 # Imaging package
-from .imaging.writer import TifWriterUtils
-from .imaging.background import BackgroundCorrectionUtils
+from smart_wsi_scanner.imaging.writer import TifWriterUtils
+from smart_wsi_scanner.imaging.background import BackgroundCorrectionUtils
 
 # PPM package
-from .ppm.calibration import PolarizerCalibrationUtils
+from smart_wsi_scanner.ppm.calibration import PolarizerCalibrationUtils
 
 # Define what gets exported with "from qp_utils import *"
 __all__ = [

@@ -11,9 +11,9 @@ in a future release.
 """
 
 # Re-export from new location
-from .acquisition.workflow import *
+from smart_wsi_scanner.acquisition.workflow import *
 
 # Explicitly export key functions used by qp_server
-from .acquisition.workflow import _acquisition_workflow
+from smart_wsi_scanner.acquisition.workflow import _acquisition_workflow
 
 __all__ = ["_acquisition_workflow"]

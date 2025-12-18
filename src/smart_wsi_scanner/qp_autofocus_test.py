@@ -15,7 +15,7 @@ in a future release.
 """
 
 # Re-export from new location
-from .autofocus.test import (
+from smart_wsi_scanner.autofocus.test import (
     test_standard_autofocus_at_current_position,
     test_adaptive_autofocus_at_current_position,
     test_autofocus_at_current_position,

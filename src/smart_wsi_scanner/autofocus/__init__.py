@@ -11,7 +11,7 @@ Modules:
     test: Interactive autofocus testing utilities
 """
 
-from .core import AutofocusUtils
-from .metrics import AutofocusMetrics
+from smart_wsi_scanner.autofocus.core import AutofocusUtils
+from smart_wsi_scanner.autofocus.metrics import AutofocusMetrics
 
 __all__ = ["AutofocusUtils", "AutofocusMetrics"]

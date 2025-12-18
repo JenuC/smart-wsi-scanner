@@ -14,9 +14,9 @@ To run the server, use:
 """
 
 # Re-export from new location
-from .server.qp_server import *
+from smart_wsi_scanner.server.qp_server import *
 
 # Also re-export the main function if module is run directly
 if __name__ == "__main__":
-    from .server.qp_server import main
+    from smart_wsi_scanner.server.qp_server import main
     main()

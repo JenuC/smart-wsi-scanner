@@ -10,6 +10,6 @@ Modules:
     client: Test client utilities
 """
 
-from .protocol import Command, ExtendedCommand, TCP_PORT, END_MARKER
+from smart_wsi_scanner.server.protocol import Command, ExtendedCommand, TCP_PORT, END_MARKER
 
 __all__ = ["Command", "ExtendedCommand", "TCP_PORT", "END_MARKER"]

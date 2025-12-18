@@ -1,3 +1,3 @@
-from .src.main_cpu import CPUDebayer
+from smart_wsi_scanner.debayering.src.main_cpu import CPUDebayer
 
-__all__ = ["CPUDebeyer"]
+__all__ = ["CPUDebayer"]

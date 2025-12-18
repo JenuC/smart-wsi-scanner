@@ -11,7 +11,7 @@ from typing import List, Tuple, Optional
 import numpy as np
 import logging
 
-from ..hardware import Position
+from smart_wsi_scanner.hardware import Position
 
 logger = logging.getLogger(__name__)
 

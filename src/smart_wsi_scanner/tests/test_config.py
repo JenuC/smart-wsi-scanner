@@ -2,9 +2,9 @@
 
 import pytest
 from pathlib import Path
-from ..config import (
-    sp_position, 
-    ConfigManager, 
+from smart_wsi_scanner.config import (
+    sp_position,
+    ConfigManager,
     sp_microscope_settings,
     sp_stage_settings,
     sp_objective_lens,

@@ -12,6 +12,6 @@ in a future release.
 """
 
 # Re-export from new location
-from .imaging.tissue_detection import EmptyRegionDetector
+from smart_wsi_scanner.imaging.tissue_detection import EmptyRegionDetector
 
 __all__ = ["EmptyRegionDetector"]

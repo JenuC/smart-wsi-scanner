@@ -37,12 +37,12 @@ The following imports still work for backward compatibility:
 __version__ = "0.1.0"
 
 # Core imports that don't require external dependencies
-from .hardware import MicroscopeHardware, Position
+from smart_wsi_scanner.hardware import MicroscopeHardware, Position
 
 # Optional imports - only available if scipy/numpy/etc. are installed
 # These are wrapped to allow basic package usage without all dependencies
 try:
-    from .qp_utils import TifWriterUtils, TileConfigUtils, AutofocusUtils, QuPathProject
+    from smart_wsi_scanner.qp_utils import TifWriterUtils, TileConfigUtils, AutofocusUtils, QuPathProject
     _UTILS_AVAILABLE = True
 except ImportError:
     TifWriterUtils = None
@@ -53,7 +53,7 @@ except ImportError:
 
 # Optional pycromanager imports - only available if pycromanager is installed
 try:
-    from .hardware_pycromanager import (
+    from smart_wsi_scanner.hardware_pycromanager import (
         PycromanagerHardware,
         init_pycromanager,
     )
@@ -65,7 +65,7 @@ except ImportError:
 
 # Optional config import - may have dependencies
 try:
-    from .config import ConfigManager
+    from smart_wsi_scanner.config import ConfigManager
     _CONFIG_AVAILABLE = True
 except ImportError:
     ConfigManager = None

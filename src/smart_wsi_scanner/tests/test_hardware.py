@@ -3,9 +3,9 @@
 import pytest
 import numpy as np
 from unittest.mock import MagicMock, patch
-from ..hardware import MicroscopeHardware, is_mm_running, is_coordinate_in_range
-from ..hardware_pycromanager import PycromanagerHardware, init_pycromanager, obj_2_list
-from ..config import sp_position, sp_microscope_settings, sp_imaging_mode, _limits, sp_stage_settings, sp_microscope
+from smart_wsi_scanner.hardware import MicroscopeHardware, is_mm_running, is_coordinate_in_range
+from smart_wsi_scanner.hardware_pycromanager import PycromanagerHardware, init_pycromanager, obj_2_list
+from smart_wsi_scanner.config import sp_position, sp_microscope_settings, sp_imaging_mode, _limits, sp_stage_settings, sp_microscope
 
 
 @pytest.fixture

@@ -12,6 +12,6 @@ in a future release.
 """
 
 # Re-export from new location
-from .autofocus.metrics import AutofocusMetrics
+from smart_wsi_scanner.autofocus.metrics import AutofocusMetrics
 
 __all__ = ["AutofocusMetrics"]

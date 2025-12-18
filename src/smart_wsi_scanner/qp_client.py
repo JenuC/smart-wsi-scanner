@@ -11,7 +11,7 @@ in a future release.
 """
 
 # Re-export from new location
-from .server.client import (
+from smart_wsi_scanner.server.client import (
     get_stageXY,
     get_stageZ,
     move_stageZ,

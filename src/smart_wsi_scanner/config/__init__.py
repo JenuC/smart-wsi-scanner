@@ -8,6 +8,6 @@ Modules:
     manager: ConfigManager for YAML configuration handling
 """
 
-from .manager import ConfigManager
+from smart_wsi_scanner.config.manager import ConfigManager
 
 __all__ = ["ConfigManager"]

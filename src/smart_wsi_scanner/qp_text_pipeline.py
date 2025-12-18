@@ -11,4 +11,4 @@ in a future release.
 """
 
 # Re-export from new location
-from .acquisition.pipeline import *
+from smart_wsi_scanner.acquisition.pipeline import *

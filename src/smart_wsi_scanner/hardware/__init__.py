@@ -9,7 +9,7 @@ Modules:
     pycromanager: Pycromanager-based hardware implementation
 """
 
-from .base import (
+from smart_wsi_scanner.hardware.base import (
     Position,
     MicroscopeHardware,
     is_mm_running,
@@ -25,7 +25,7 @@ __all__ = [
 
 # Optional: Export PycromanagerHardware if pycromanager is installed
 try:
-    from .pycromanager import PycromanagerHardware, init_pycromanager
+    from smart_wsi_scanner.hardware.pycromanager import PycromanagerHardware, init_pycromanager
     __all__.extend(["PycromanagerHardware", "init_pycromanager"])
 except ImportError:
     # pycromanager not installed, skip these exports
