@@ -92,10 +92,12 @@ logger.info("Loading configuration...")
 config_manager = ConfigManager()
 
 ## DEFAULT CONFIG loaded for exploratory XYZ movements
+# Note: configurations folder is at smart_wsi_scanner/configurations/, not server/configurations/
+package_dir = pathlib.Path(__file__).parent.parent  # smart_wsi_scanner/
 
-config_path = pathlib.Path(__file__).parent / "configurations" / "config_PPM.yml"
+config_path = package_dir / "configurations" / "config_PPM.yml"
 loci_rsc_file = (
-    pathlib.Path(__file__).parent / "configurations" / "resources" / "resources_LOCI.yml"
+    package_dir / "configurations" / "resources" / "resources_LOCI.yml"
 )
 # Try to load default PPM configuration
 ppm_settings = config_manager.get_config("config_PPM")

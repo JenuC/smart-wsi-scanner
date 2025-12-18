@@ -29,7 +29,8 @@ class ConfigManager:
                        subdirectory relative to this file.
         """
         if config_dir is None:
-            package_dir = Path(__file__).parent
+            # configurations folder is at smart_wsi_scanner/configurations/, not config/configurations/
+            package_dir = Path(__file__).parent.parent  # smart_wsi_scanner/
             self.config_dir = package_dir / "configurations"
         else:
             self.config_dir = Path(config_dir)
