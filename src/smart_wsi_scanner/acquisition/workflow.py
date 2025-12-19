@@ -820,7 +820,7 @@ def _acquisition_workflow(
                         n_steps=af_n_steps,
                         search_range=af_search_range,
                         score_metric=af_score_metric,
-                        output_folder=str(output_path),
+                        diagnostic_output_path=str(output_path),
                         logger=logger,
                     )
                 else:
@@ -836,7 +836,7 @@ def _acquisition_workflow(
                         n_steps=af_n_steps,
                         search_range=af_search_range,
                         score_metric=af_score_metric,
-                        output_folder=str(output_path),
+                        diagnostic_output_path=str(output_path),
                         logger=logger,
                     )
 
