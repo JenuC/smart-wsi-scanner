@@ -108,3 +108,34 @@ class TileConfigUtils:
                         f"{file_id}.tif; ; ({x / pixel_size:.3f}, {y / pixel_size:.3f})",
                         file=text_file,
                     )
+
+    @staticmethod
+    def write_tileconfig_stage(
+        output_path: pathlib.Path,
+        tile_positions: List[Tuple[str, float, float, float]],
+        filename: str = "TileConfiguration_Stage.txt",
+    ):
+        """
+        Write a TileConfiguration file with actual stage coordinates including Z.
+
+        This preserves the stage XYZ positions used during acquisition for
+        later reference and analysis. The Z position is particularly useful
+        for understanding focus variation across the sample.
+
+        Args:
+            output_path: Directory to write the file
+            tile_positions: List of (filename, x, y, z) tuples with stage positions in micrometers
+            filename: Name of output file (default: TileConfiguration_Stage.txt)
+        """
+        tileconfig_path = output_path / filename
+
+        with open(tileconfig_path, "w") as f:
+            # Use dim=3 to indicate 3D coordinates
+            f.write("dim = 3\n")
+            f.write("# Stage coordinates in micrometers (X, Y, Z)\n")
+
+            for tile_filename, x, y, z in tile_positions:
+                # Format: filename; ; (x, y, z)
+                f.write(f"{tile_filename}; ; ({x:.3f}, {y:.3f}, {z:.3f})\n")
+
+        logger.info(f"Wrote stage TileConfiguration with {len(tile_positions)} positions to {tileconfig_path}")

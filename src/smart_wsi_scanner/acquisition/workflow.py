@@ -572,6 +572,10 @@ def _acquisition_workflow(
 
         image_count = 0
 
+        # Collect stage positions for TileConfiguration_Stage.txt
+        # Format: list of (filename, x, y, z) tuples
+        stage_positions_collected = []
+
         # Find autofocus positions
         fov = hardware.get_fov()
 
@@ -1041,6 +1045,16 @@ def _acquisition_workflow(
                     else:
                         logger.warning(f"Could not find suitable position to defer autofocus to")
 
+            # Collect stage position for this tile (after autofocus, before acquiring angles)
+            # This captures the actual XYZ used for acquisition
+            current_stage_pos = hardware.get_current_position()
+            stage_positions_collected.append((
+                filename,
+                current_stage_pos.x,
+                current_stage_pos.y,
+                current_stage_pos.z
+            ))
+
             if params["angles"]:
                 # Storage for birefringence image calculation
                 angle_images = {}
@@ -1271,6 +1285,10 @@ def _acquisition_workflow(
             from pprint import pprint as dict_printer
 
             dict_printer(current_props, stream=fid)
+
+        # Write TileConfiguration with stage coordinates including Z
+        if stage_positions_collected:
+            TileConfigUtils.write_tileconfig_stage(output_path, stage_positions_collected)
 
         # Get final Z position for tilt correction model
         final_z = hardware.get_current_position().z
