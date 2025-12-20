@@ -1582,6 +1582,16 @@ def handle_client(conn, addr):
                                 conn.sendall(ack_response)
                                 logger.info("Sent STARTED acknowledgment for PPM birefringence test")
 
+                                # Create progress callback to send updates through socket
+                                def send_progress(current: int, total: int):
+                                    """Send progress update through socket."""
+                                    try:
+                                        progress_msg = f"PROGRESS:{current}:{total}".encode()
+                                        conn.sendall(progress_msg)
+                                        logger.debug(f"Sent progress: {current}/{total}")
+                                    except Exception as e:
+                                        logger.warning(f"Failed to send progress: {e}")
+
                                 # Run PPM birefringence test using programmatic interface
                                 from smart_wsi_scanner.ppm.birefringence_test import run_birefringence_maximization_test
 
@@ -1596,6 +1606,7 @@ def handle_client(conn, addr):
                                     fixed_exposure_ms=params.get("fixed_exposure_ms"),
                                     keep_images=True,
                                     target_intensity=params["target_intensity"],
+                                    progress_callback=send_progress,
                                 )
 
                                 if result_dir:

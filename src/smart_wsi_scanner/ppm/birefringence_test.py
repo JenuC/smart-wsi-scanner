@@ -28,7 +28,7 @@ import time
 import json
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Callable, Dict, List, Tuple, Optional
 from datetime import datetime
 import logging
 import cv2
@@ -107,7 +107,8 @@ class PPMBirefringenceMaximizationTester:
                  fixed_exposure_ms: float = None,
                  keep_images: bool = True,
                  calibration_exposures: Dict[float, float] = None,
-                 target_intensity: int = 128):
+                 target_intensity: int = 128,
+                 progress_callback: Optional[Callable[[int, int], None]] = None):
         """
         Initialize the birefringence maximization tester.
 
@@ -126,6 +127,7 @@ class PPMBirefringenceMaximizationTester:
             keep_images: If True, keep .tif files after analysis
             calibration_exposures: Optional dict to override default exposures
             target_intensity: Target median intensity for background calibration (0-255, default 128)
+            progress_callback: Optional callback function(current, total) called after each angle pair
         """
         self.config_yaml = Path(config_yaml)
         self.angle_range = angle_range
@@ -134,6 +136,7 @@ class PPMBirefringenceMaximizationTester:
         self.fixed_exposure_ms = fixed_exposure_ms
         self.keep_images = keep_images
         self.target_intensity = target_intensity
+        self.progress_callback = progress_callback
 
         # Validate fixed mode
         if exposure_mode == "fixed" and fixed_exposure_ms is None:
@@ -859,6 +862,13 @@ class PPMBirefringenceMaximizationTester:
             else:
                 self.logger.warning(f"  Failed to acquire image pair")
 
+            # Send progress update after each angle
+            if self.progress_callback:
+                try:
+                    self.progress_callback(i + 1, len(self.test_angles))
+                except Exception as e:
+                    self.logger.warning(f"Progress callback failed: {e}")
+
         return all_metrics
 
     def find_optimal_angle(self, use_normalized: bool = False) -> Tuple[float, Dict]:
@@ -1340,7 +1350,8 @@ def run_birefringence_maximization_test(
     fixed_exposure_ms: float = None,
     keep_images: bool = True,
     calibration_exposures: Dict[float, float] = None,
-    target_intensity: int = 128
+    target_intensity: int = 128,
+    progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> Optional[Path]:
     """
     Run birefringence maximization test programmatically.
@@ -1359,6 +1370,7 @@ def run_birefringence_maximization_test(
         keep_images: If False, delete .tif files after analysis
         calibration_exposures: Optional override for calibration exposures
         target_intensity: Target median intensity for background calibration (0-255, default 128)
+        progress_callback: Optional callback function(current, total) for progress updates
 
     Returns:
         Path to output directory on success, None on failure
@@ -1374,7 +1386,8 @@ def run_birefringence_maximization_test(
         fixed_exposure_ms=fixed_exposure_ms,
         keep_images=keep_images,
         calibration_exposures=calibration_exposures,
-        target_intensity=target_intensity
+        target_intensity=target_intensity,
+        progress_callback=progress_callback
     )
 
     return tester.run_test()
