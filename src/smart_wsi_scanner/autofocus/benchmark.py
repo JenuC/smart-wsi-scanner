@@ -73,6 +73,10 @@ OBJECTIVE_SAFETY_LIMITS_UM: Dict[str, float] = {
 # This accounts for autofocus overshoot during search
 AUTOFOCUS_OVERSHOOT_MARGIN_UM: float = 30.0
 
+# Maximum acceptable Z error (um) for a trial to be considered successful
+# If autofocus returns a position further than this from the reference, it's a failure
+MAX_ACCEPTABLE_Z_ERROR_UM: float = 5.0
+
 
 class ZSafetyError(Exception):
     """Raised when a Z movement would violate safety limits."""
@@ -718,12 +722,30 @@ class AutofocusBenchmark:
                     message=result_z.get('message', 'Autofocus failed'),
                 )
 
-            # Success case
+            # Success case - but validate that we actually found the true focus
             final_z = float(result_z)
             z_error = abs(final_z - reference_z)
 
             # Get current position to verify
             actual_pos = self.hardware.get_current_position()
+
+            # Determine if this is a TRUE success (close to reference)
+            # vs autofocus found a local peak but not the true focus
+            is_accurate = z_error <= MAX_ACCEPTABLE_Z_ERROR_UM
+
+            # Check if the search range was even sufficient to reach the reference
+            search_half = search_range / 2
+            target_reachable = abs(start_z - reference_z) <= search_half
+
+            if not target_reachable:
+                message = (f"WARNING: Reference Z not reachable! Start={start_z:.2f}, "
+                          f"Reference={reference_z:.2f}, Search range=+/-{search_half:.1f}um. "
+                          f"Found local peak at Z={final_z:.2f}um, error={z_error:.2f}um")
+            elif is_accurate:
+                message = f"Focus found at Z={final_z:.2f}um, error={z_error:.2f}um"
+            else:
+                message = (f"Peak found but inaccurate: Z={final_z:.2f}um, "
+                          f"error={z_error:.2f}um > {MAX_ACCEPTABLE_Z_ERROR_UM}um threshold")
 
             return BenchmarkResult(
                 start_z=start_z,
@@ -735,15 +757,15 @@ class AutofocusBenchmark:
                 interp_kind=interp_kind,
                 score_metric_name=metric_name,
                 autofocus_method='standard',
-                success=True,
+                success=is_accurate,  # Only true if within error threshold
                 final_z=final_z,
                 z_error=z_error,
                 duration_ms=duration_ms,
                 peak_valid=True,
-                quality_score=1.0,  # Assumed good if no failure dict
+                quality_score=1.0 if is_accurate else 0.5,
                 peak_prominence=1.0,
                 symmetry_score=1.0,
-                message=f"Focus found at Z={final_z:.2f}um, error={z_error:.2f}um",
+                message=message,
             )
 
         except Exception as e:
@@ -839,6 +861,15 @@ class AutofocusBenchmark:
             final_z = float(result_z)
             z_error = abs(final_z - reference_z)
 
+            # Determine if this is a TRUE success (close to reference)
+            is_accurate = z_error <= MAX_ACCEPTABLE_Z_ERROR_UM
+
+            if is_accurate:
+                message = f"Adaptive focus at Z={final_z:.2f}um, error={z_error:.2f}um"
+            else:
+                message = (f"Adaptive found peak but inaccurate: Z={final_z:.2f}um, "
+                          f"error={z_error:.2f}um > {MAX_ACCEPTABLE_Z_ERROR_UM}um threshold")
+
             return BenchmarkResult(
                 start_z=start_z,
                 reference_z=reference_z,
@@ -849,15 +880,15 @@ class AutofocusBenchmark:
                 interp_kind='quadratic',  # Adaptive uses quadratic
                 score_metric_name=metric_name,
                 autofocus_method='adaptive',
-                success=True,
+                success=is_accurate,  # Only true if within error threshold
                 final_z=final_z,
                 z_error=z_error,
                 duration_ms=duration_ms,
                 peak_valid=True,
-                quality_score=1.0,
+                quality_score=1.0 if is_accurate else 0.5,
                 peak_prominence=1.0,
                 symmetry_score=1.0,
-                message=f"Adaptive focus at Z={final_z:.2f}um, error={z_error:.2f}um",
+                message=message,
             )
 
         except Exception as e:
