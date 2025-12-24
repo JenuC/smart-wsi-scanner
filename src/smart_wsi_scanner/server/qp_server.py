@@ -1149,7 +1149,18 @@ def handle_client(conn, addr):
                                 conn.sendall(ack_response)
                                 logger.info("Sent STARTED acknowledgment for autofocus benchmark")
 
-                                # Execute benchmark
+                                # Create progress callback that sends socket updates
+                                # This keeps the connection alive during long benchmarks
+                                # Format: PROGRESS:current:total:message (consistent with PPMBIREF)
+                                def send_progress(current: int, total: int, status_msg: str):
+                                    """Send progress update to keep connection alive."""
+                                    try:
+                                        progress_msg = f"PROGRESS:{current}:{total}:{status_msg}"
+                                        conn.sendall(progress_msg.encode())
+                                    except Exception as e:
+                                        logger.warning(f"Failed to send progress update: {e}")
+
+                                # Execute benchmark with progress callback
                                 from smart_wsi_scanner.qp_autofocus_benchmark import (
                                     run_autofocus_benchmark_from_server,
                                 )
@@ -1163,6 +1174,7 @@ def handle_client(conn, addr):
                                     quick_mode=params.get("quick_mode", False),
                                     objective=params.get("objective"),
                                     logger=logger,
+                                    progress_callback=send_progress,
                                 )
 
                                 # Check for safety violation

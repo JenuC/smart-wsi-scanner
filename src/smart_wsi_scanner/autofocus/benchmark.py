@@ -336,6 +336,7 @@ class AutofocusBenchmark:
         config: Optional[BenchmarkConfig] = None,
         output_path: Optional[str] = None,
         objective: Optional[str] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> Dict[str, Any]:
         """
         Run complete autofocus benchmark.
@@ -345,6 +346,9 @@ class AutofocusBenchmark:
             config: BenchmarkConfig with parameters to test (uses defaults if None)
             output_path: Directory to save results (creates timestamped subdir)
             objective: Objective identifier for logging and safety limits
+            progress_callback: Optional callback function(current_trial, total_trials, status_message)
+                              Called after each trial to report progress. Useful for socket
+                              communication to keep connections alive during long benchmarks.
 
         Returns:
             Dict with summary statistics and path to detailed results
@@ -424,14 +428,16 @@ class AutofocusBenchmark:
             if config.test_standard:
                 trial_count = self._run_standard_af_grid(
                     reference_z, start_z, distance, direction,
-                    xy_pos, config, trial_count, total_trials
+                    xy_pos, config, trial_count, total_trials,
+                    progress_callback
                 )
 
             # Test adaptive autofocus if enabled
             if config.test_adaptive:
                 trial_count = self._run_adaptive_af_grid(
                     reference_z, start_z, distance, direction,
-                    xy_pos, config, trial_count, total_trials
+                    xy_pos, config, trial_count, total_trials,
+                    progress_callback
                 )
 
         # Return to reference Z (with safety check)
@@ -514,23 +520,31 @@ class AutofocusBenchmark:
         return self.run_benchmark(reference_z, distance_config, output_path)
 
     def _calculate_total_trials(self, config: BenchmarkConfig) -> int:
-        """Calculate total number of trials for the benchmark."""
+        """Calculate total number of trials for the benchmark.
+
+        Accounts for skipped impossible combinations where search_range < distance.
+        """
         directions = 2 if config.test_both_directions else 1
-        n_positions = len(config.test_distances) * directions
 
         standard_trials = 0
         if config.test_standard:
-            standard_trials = (
-                len(config.n_steps_values) *
-                len(config.search_range_values) *
-                len(config.interp_kind_values) *
-                len(config.score_metric_names) *
-                n_positions *
-                config.repetitions
-            )
+            # Count trials per distance, only including valid range/distance combinations
+            for distance in config.test_distances:
+                valid_ranges = [r for r in config.search_range_values if r >= distance]
+                trials_for_distance = (
+                    len(config.n_steps_values) *
+                    len(valid_ranges) *
+                    len(config.interp_kind_values) *
+                    len(config.score_metric_names) *
+                    directions *
+                    config.repetitions
+                )
+                standard_trials += trials_for_distance
 
         adaptive_trials = 0
         if config.test_adaptive:
+            # Adaptive doesn't have the same range/distance constraint
+            n_positions = len(config.test_distances) * directions
             adaptive_trials = (
                 len(config.adaptive_initial_step_values) *
                 len(config.adaptive_min_step_values) *
@@ -569,11 +583,24 @@ class AutofocusBenchmark:
         config: BenchmarkConfig,
         trial_count: int,
         total_trials: int,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> int:
-        """Run grid search for standard autofocus parameters."""
+        """Run grid search for standard autofocus parameters.
+
+        Note: Skips combinations where search_range < distance, as these
+        cannot possibly find the true focus position.
+        """
 
         for n_steps in config.n_steps_values:
             for search_range in config.search_range_values:
+                # Skip impossible combinations: if search range is smaller than
+                # distance from focus, autofocus cannot reach the true focus
+                if search_range < distance:
+                    self.logger.debug(
+                        f"Skipping: range={search_range}um < distance={distance}um (impossible)"
+                    )
+                    continue
+
                 for interp_kind in config.interp_kind_values:
                     for metric_name in config.score_metric_names:
                         for rep in range(config.repetitions):
@@ -594,6 +621,15 @@ class AutofocusBenchmark:
                             self.results.append(result)
                             self._log_trial_result(result)
 
+                            # Send progress update to keep connection alive
+                            if progress_callback:
+                                status = "OK" if result.success else "FAIL"
+                                msg = f"Trial {trial_count}/{total_trials} [{status}] error={result.z_error:.1f}um"
+                                try:
+                                    progress_callback(trial_count, total_trials, msg)
+                                except Exception as e:
+                                    self.logger.warning(f"Progress callback failed: {e}")
+
         return trial_count
 
     def _run_adaptive_af_grid(
@@ -606,6 +642,7 @@ class AutofocusBenchmark:
         config: BenchmarkConfig,
         trial_count: int,
         total_trials: int,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> int:
         """Run grid search for adaptive autofocus parameters."""
 
@@ -628,6 +665,15 @@ class AutofocusBenchmark:
 
                         self.results.append(result)
                         self._log_trial_result(result)
+
+                        # Send progress update to keep connection alive
+                        if progress_callback:
+                            status = "OK" if result.success else "FAIL"
+                            msg = f"Trial {trial_count}/{total_trials} [{status}] error={result.z_error:.1f}um"
+                            try:
+                                progress_callback(trial_count, total_trials, msg)
+                            except Exception as e:
+                                self.logger.warning(f"Progress callback failed: {e}")
 
         return trial_count
 
@@ -1030,7 +1076,115 @@ class AutofocusBenchmark:
                     "mean_z_error_um": np.mean([r.z_error for r in metric_results]),
                 }
 
+        # =====================================================================
+        # COMPARATIVE ANALYSIS - Compare parameter values across all other settings
+        # =====================================================================
+        # These sections isolate each parameter's effect by averaging across
+        # all other parameter combinations.
+
+        summary["comparative_analysis"] = {}
+
+        # Standard autofocus comparisons
+        standard_results = [r for r in successful if r.autofocus_method == 'standard']
+        if standard_results:
+            # Compare n_steps values
+            summary["comparative_analysis"]["by_n_steps"] = {}
+            for n_steps in set(r.n_steps for r in standard_results):
+                n_step_results = [r for r in standard_results if r.n_steps == n_steps]
+                all_n_step = [r for r in self.results if r.autofocus_method == 'standard' and r.n_steps == n_steps]
+                if n_step_results:
+                    summary["comparative_analysis"]["by_n_steps"][str(n_steps)] = {
+                        "trials": len(all_n_step),
+                        "success_rate": len(n_step_results) / len(all_n_step) if all_n_step else 0,
+                        "mean_duration_ms": float(np.mean([r.duration_ms for r in n_step_results])),
+                        "std_duration_ms": float(np.std([r.duration_ms for r in n_step_results])),
+                        "mean_z_error_um": float(np.mean([r.z_error for r in n_step_results])),
+                        "std_z_error_um": float(np.std([r.z_error for r in n_step_results])),
+                    }
+
+            # Compare search_range values
+            summary["comparative_analysis"]["by_search_range"] = {}
+            for search_range in set(r.search_range_um for r in standard_results):
+                range_results = [r for r in standard_results if r.search_range_um == search_range]
+                all_range = [r for r in self.results if r.autofocus_method == 'standard' and r.search_range_um == search_range]
+                if range_results:
+                    summary["comparative_analysis"]["by_search_range"][f"{search_range:.1f}um"] = {
+                        "trials": len(all_range),
+                        "success_rate": len(range_results) / len(all_range) if all_range else 0,
+                        "mean_duration_ms": float(np.mean([r.duration_ms for r in range_results])),
+                        "std_duration_ms": float(np.std([r.duration_ms for r in range_results])),
+                        "mean_z_error_um": float(np.mean([r.z_error for r in range_results])),
+                        "std_z_error_um": float(np.std([r.z_error for r in range_results])),
+                    }
+
+            # Compare interp_kind values
+            summary["comparative_analysis"]["by_interp_kind"] = {}
+            for interp_kind in set(r.interp_kind for r in standard_results):
+                interp_results = [r for r in standard_results if r.interp_kind == interp_kind]
+                all_interp = [r for r in self.results if r.autofocus_method == 'standard' and r.interp_kind == interp_kind]
+                if interp_results:
+                    summary["comparative_analysis"]["by_interp_kind"][interp_kind] = {
+                        "trials": len(all_interp),
+                        "success_rate": len(interp_results) / len(all_interp) if all_interp else 0,
+                        "mean_duration_ms": float(np.mean([r.duration_ms for r in interp_results])),
+                        "std_duration_ms": float(np.std([r.duration_ms for r in interp_results])),
+                        "mean_z_error_um": float(np.mean([r.z_error for r in interp_results])),
+                        "std_z_error_um": float(np.std([r.z_error for r in interp_results])),
+                    }
+
+        # Adaptive autofocus comparisons
+        adaptive_results = [r for r in successful if r.autofocus_method == 'adaptive']
+        if adaptive_results:
+            # Compare initial_step values (stored as search_range_um / 2)
+            summary["comparative_analysis"]["by_initial_step"] = {}
+            initial_steps = set(r.search_range_um / 2 for r in adaptive_results)
+            for initial_step in initial_steps:
+                step_results = [r for r in adaptive_results if abs(r.search_range_um / 2 - initial_step) < 0.1]
+                all_step = [r for r in self.results if r.autofocus_method == 'adaptive' and abs(r.search_range_um / 2 - initial_step) < 0.1]
+                if step_results:
+                    summary["comparative_analysis"]["by_initial_step"][f"{initial_step:.1f}um"] = {
+                        "trials": len(all_step),
+                        "success_rate": len(step_results) / len(all_step) if all_step else 0,
+                        "mean_duration_ms": float(np.mean([r.duration_ms for r in step_results])),
+                        "std_duration_ms": float(np.std([r.duration_ms for r in step_results])),
+                        "mean_z_error_um": float(np.mean([r.z_error for r in step_results])),
+                        "std_z_error_um": float(np.std([r.z_error for r in step_results])),
+                    }
+
+        # Generate rankings for quick reference
+        if standard_results:
+            summary["rankings"] = {
+                "fastest_metric": self._rank_by_field(summary["by_metric"], "mean_duration_ms", ascending=True),
+                "most_accurate_metric": self._rank_by_field(summary["by_metric"], "mean_z_error_um", ascending=True),
+                "fastest_n_steps": self._rank_by_field(
+                    summary["comparative_analysis"].get("by_n_steps", {}), "mean_duration_ms", ascending=True
+                ),
+                "most_accurate_n_steps": self._rank_by_field(
+                    summary["comparative_analysis"].get("by_n_steps", {}), "mean_z_error_um", ascending=True
+                ),
+                "fastest_interp": self._rank_by_field(
+                    summary["comparative_analysis"].get("by_interp_kind", {}), "mean_duration_ms", ascending=True
+                ),
+                "most_accurate_interp": self._rank_by_field(
+                    summary["comparative_analysis"].get("by_interp_kind", {}), "mean_z_error_um", ascending=True
+                ),
+            }
+
         return summary
+
+    def _rank_by_field(
+        self,
+        data: Dict[str, Dict[str, Any]],
+        field: str,
+        ascending: bool = True
+    ) -> List[str]:
+        """Rank keys in data dict by a specific field value."""
+        if not data:
+            return []
+
+        items = [(key, vals.get(field, float('inf'))) for key, vals in data.items()]
+        items.sort(key=lambda x: x[1], reverse=not ascending)
+        return [item[0] for item in items]
 
     def _save_results(
         self,
@@ -1112,6 +1266,7 @@ def run_autofocus_benchmark_from_server(
     quick_mode: bool = False,
     objective: Optional[str] = None,
     logger: Optional[logging.Logger] = None,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> Dict[str, Any]:
     """
     Entry point for running benchmark from socket server.
@@ -1125,6 +1280,8 @@ def run_autofocus_benchmark_from_server(
         quick_mode: If True, run reduced parameter space
         objective: Objective identifier for safety limits (e.g., "20X", "40X")
         logger: Optional logger
+        progress_callback: Optional callback function(current_trial, total_trials, status_message)
+                          Called after each trial. Used for socket progress updates.
 
     Returns:
         Dict with benchmark summary. On safety error, returns dict with
@@ -1134,13 +1291,34 @@ def run_autofocus_benchmark_from_server(
 
     try:
         if quick_mode:
-            return benchmark.run_quick_benchmark(reference_z, output_folder)
+            # Quick benchmark also supports progress callback
+            quick_config = BenchmarkConfig(
+                n_steps_values=[15, 25],
+                search_range_values=[25.0, 50.0],
+                interp_kind_values=['quadratic'],
+                score_metric_names=['laplacian_variance', 'brenner_gradient'],
+                adaptive_initial_step_values=[10.0],
+                adaptive_min_step_values=[2.0],
+                test_distances=[10.0, 30.0],
+                test_both_directions=False,
+                repetitions=1,
+            )
+            return benchmark.run_benchmark(
+                reference_z, quick_config, output_folder,
+                progress_callback=progress_callback
+            )
 
         if test_distances:
             config = BenchmarkConfig(test_distances=test_distances)
-            return benchmark.run_benchmark(reference_z, config, output_folder, objective)
+            return benchmark.run_benchmark(
+                reference_z, config, output_folder, objective,
+                progress_callback=progress_callback
+            )
 
-        return benchmark.run_benchmark(reference_z, output_path=output_folder, objective=objective)
+        return benchmark.run_benchmark(
+            reference_z, output_path=output_folder, objective=objective,
+            progress_callback=progress_callback
+        )
 
     except ZSafetyError as e:
         return {
