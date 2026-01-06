@@ -561,37 +561,42 @@ class PolarizerCalibrationUtils:
 
         # Get hardware conversion factor from first run
         hw_per_deg = all_results[0]['hw_per_deg']
-        full_rotation_counts = 360.0 * hw_per_deg  # e.g., 360000 for PI stage
+        half_rotation_counts = 180.0 * hw_per_deg  # e.g., 180000 for PI stage
 
-        # Normalize offsets to a single 360-degree range
-        # The stage may have rotated multiple full turns between runs
-        normalized_offsets = all_offsets % full_rotation_counts
+        # Normalize offsets to a single 180-degree range
+        # IMPORTANT: Crossed polarizers have TWO equivalent minima per 360 degrees
+        # (at 0 deg and 180 deg), so we normalize to 180 deg, not 360 deg.
+        # This ensures we compare equivalent positions correctly.
+        normalized_offsets = all_offsets % half_rotation_counts
 
         # Calculate statistics on normalized offsets
-        mean_offset = np.mean(all_offsets)  # Keep original mean for recommended offset
-        normalized_mean = np.mean(normalized_offsets)
-        std_offset = np.std(normalized_offsets)  # Use normalized for std
-        range_offset = np.max(normalized_offsets) - np.min(normalized_offsets)  # Use normalized for range
+        std_offset = np.std(normalized_offsets)
+        range_offset = np.max(normalized_offsets) - np.min(normalized_offsets)
+
+        # For the recommended offset, use the first run's value normalized to 0-360 deg
+        # (user expects a value in the standard range)
+        full_rotation_counts = 360.0 * hw_per_deg
+        recommended_offset = all_offsets[0] % full_rotation_counts
 
         logger_instance.info(f"\n{'='*70}")
         logger_instance.info("STABILITY ANALYSIS")
         logger_instance.info(f"{'='*70}")
         logger_instance.info(f"Raw offsets from {num_runs} runs: {all_offsets}")
-        logger_instance.info(f"Normalized offsets (within 0-360 deg): {normalized_offsets}")
-        logger_instance.info(f"Mean offset (for config): {mean_offset:.1f}")
-        logger_instance.info(f"Normalized mean: {normalized_mean:.1f}")
-        logger_instance.info(f"Std deviation: {std_offset:.2f} counts ({std_offset/1000:.4f} deg)")
-        logger_instance.info(f"Range (max-min): {range_offset:.1f} counts ({range_offset/1000:.4f} deg)")
+        logger_instance.info(f"Normalized offsets (mod 180 deg for equivalence): {normalized_offsets}")
+        logger_instance.info(f"Note: Crossed polarizers repeat every 180 deg, so 0 deg = 180 deg")
+        logger_instance.info(f"Recommended offset (from run 1): {recommended_offset:.1f}")
+        logger_instance.info(f"Std deviation: {std_offset:.2f} counts ({std_offset/hw_per_deg:.4f} deg)")
+        logger_instance.info(f"Range (max-min): {range_offset:.1f} counts ({range_offset/hw_per_deg:.4f} deg)")
 
         is_stable = range_offset <= stability_threshold_counts
 
         if is_stable:
-            logger_instance.info(f"RESULT: STABLE - Variation {range_offset:.1f} counts within threshold {stability_threshold_counts:.1f}")
+            logger_instance.info(f"RESULT: STABLE - Variation {range_offset:.1f} counts ({range_offset/hw_per_deg:.4f} deg) within threshold")
         else:
             warning_msg = (
                 f"WARNING: OPTICAL INSTABILITY DETECTED!\n"
-                f"  Variation: {range_offset:.1f} counts ({range_offset/1000:.3f} deg)\n"
-                f"  Threshold: {stability_threshold_counts:.1f} counts ({stability_threshold_counts/1000:.3f} deg)\n"
+                f"  Variation: {range_offset:.1f} counts ({range_offset/hw_per_deg:.3f} deg)\n"
+                f"  Threshold: {stability_threshold_counts:.1f} counts ({stability_threshold_counts/hw_per_deg:.3f} deg)\n"
                 f"  Possible causes:\n"
                 f"    - Loose polarizer/analyzer mounts\n"
                 f"    - Thermal drift in optical components\n"
@@ -603,13 +608,13 @@ class PolarizerCalibrationUtils:
 
         return {
             'all_runs': all_results,
-            'recommended_offset': float(normalized_mean),  # Use normalized mean for recommended offset
+            'recommended_offset': float(recommended_offset),
             'offset_std': float(std_offset),
             'offset_range': float(range_offset),
             'is_stable': is_stable,
             'stability_warning': None if is_stable else warning_msg,
             'individual_offsets': all_offsets.tolist(),
-            'normalized_offsets': normalized_offsets.tolist(),  # Add normalized offsets
+            'normalized_offsets': normalized_offsets.tolist(),
             'rotation_device': all_results[0]['rotation_device'],
             'hw_per_deg': all_results[0]['hw_per_deg']
         }

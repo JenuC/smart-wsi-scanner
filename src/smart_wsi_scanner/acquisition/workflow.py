@@ -2192,159 +2192,109 @@ def polarizer_calibration_workflow(
         report_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(report_path, "w") as f:
-            f.write("=" * 80 + "\n")
-            f.write("HARDWARE OFFSET CALIBRATION REPORT (TWO-STAGE)\n")
-            f.write("=" * 80 + "\n\n")
-
-            f.write(f"Calibration Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Configuration File: {yaml_file_path}\n")
-            f.write(
-                f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n"
-            )
-            f.write(f"Rotation Device: {result['rotation_device']}\n\n")
-
-            f.write("CALIBRATION METHOD:\n")
-            f.write("  Stage 1: Coarse sweep to locate approximate minima\n")
-            f.write("  Stage 2: Fine sweep around each minimum for exact position\n\n")
-
-            f.write("CALIBRATION PARAMETERS:\n")
-            f.write(f"  Coarse Range: 360.0 deg\n")
-            f.write(f"  Coarse Step Size: {step_size} deg\n")
-            f.write(f"  Fine Range: +/-10.0 deg around each minimum\n")
-            f.write(f"  Fine Step Size: 0.1 deg\n")
-            f.write(f"  Exposure: {exposure_ms} ms\n")
-            f.write(f"  Channel: Green (1)\n")
-            f.write(f"  Stability runs: {len(result.get('all_runs', [result]))}\n\n")
-
-            f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
+            # Get the first run's results for displaying exact positions
             primary_result = result.get('all_runs', [result])[0] if 'all_runs' in result else result
-            coarse_intensities = primary_result["coarse_intensities"]
-            f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
-            f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
-            f.write(
-                f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n"
-            )
+            hw_per_deg = result.get('hw_per_deg', primary_result.get('hw_per_deg', 1000.0))
 
             f.write("=" * 80 + "\n")
-            f.write("STABILITY CHECK RESULTS\n")
+            f.write("PPM POLARIZER CALIBRATION RESULTS\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write(f"Number of calibration runs: {len(result.get('all_runs', [result]))}\n")
-            if 'offset_std' in result:
-                f.write(f"Recommended offset (normalized average): {result['recommended_offset']:.1f} counts\n")
-                f.write(f"Individual offsets (raw): {result['individual_offsets']}\n")
-                if 'normalized_offsets' in result:
-                    f.write(f"Individual offsets (normalized to 0-360 deg): {result['normalized_offsets']}\n")
-                    f.write(f"Note: Raw offsets differ by full rotations due to continuous stage rotation.\n")
-                    f.write(f"      Normalized offsets show true repeatability within a single 360 deg range.\n")
-                f.write(f"Standard deviation: {result['offset_std']:.2f} counts ({result['offset_std']/1000:.4f} deg)\n")
-                f.write(f"Range (max-min): {result['offset_range']:.1f} counts ({result['offset_range']/1000:.4f} deg)\n")
-                f.write(f"Stability: {'PASS' if result['is_stable'] else 'FAIL'}\n")
-                if not result['is_stable']:
-                    f.write(f"\nWARNING: Optical instability detected!\n")
-                    f.write(f"Variation of {result['offset_range']:.1f} counts exceeds threshold of 50.0 counts.\n")
-                    f.write(f"Check polarizer/analyzer mounts and rotation stage for mechanical issues.\n")
-                f.write("\n")
-            else:
-                f.write("Single run calibration (no stability check)\n\n")
+            # ===== RESULTS FIRST - THE KEY VALUES =====
+            f.write("CROSSED POLARIZER POSITIONS (use these values in config_PPM.yml):\n\n")
 
-            f.write("=" * 80 + "\n")
-            f.write("CALIBRATION RESULTS\n")
-            f.write("=" * 80 + "\n\n")
+            f.write(f"  >>> ppm_pizstage_offset: {result['recommended_offset']:.1f} <<<\n\n")
 
-            # Get the first run's results (or single result if no stability check)
-            primary_result = result.get('all_runs', [result])[0] if 'all_runs' in result else result
-
-            f.write(f"Found {len(primary_result['exact_minima'])} crossed polarizer positions:\n\n")
+            f.write(f"  Found {len(primary_result['exact_minima'])} crossed polarizer positions:\n\n")
 
             for i, (hw_pos, opt_angle) in enumerate(
                 zip(primary_result["exact_minima"], primary_result["optical_angles"])
             ):
-                f.write(f"  Minimum {i+1}:\n")
-                f.write(f"    Hardware Position: {hw_pos:.1f} encoder counts\n")
-                f.write(
-                    f"    Optical Angle: {opt_angle:.2f} deg (relative to recommended offset)\n"
-                )
-
-                # Find corresponding fine sweep result
+                # Find corresponding intensity
+                intensity_str = ""
                 for fine_result in primary_result["fine_results"]:
                     if abs(fine_result["exact_position"] - hw_pos) < 0.1:
-                        f.write(f"    Intensity: {fine_result['exact_intensity']:.1f}\n")
+                        intensity_str = f", intensity={fine_result['exact_intensity']:.1f}"
                         break
-                f.write("\n")
+                f.write(f"    Position {i+1}: {hw_pos:.1f} counts ({opt_angle:.1f} deg optical){intensity_str}\n")
 
-            # Calculate separation between minima
+            f.write("\n")
+
+            # Separation check
             if len(primary_result["exact_minima"]) >= 2:
                 separation = abs(primary_result["exact_minima"][1] - primary_result["exact_minima"][0])
-                separation_deg = separation / primary_result["hw_per_deg"]
-                f.write(
-                    f"Separation between minima: {separation:.1f} counts ({separation_deg:.1f} deg)\n"
-                )
-                f.write(f"Expected: {180.0 * primary_result['hw_per_deg']:.1f} counts (180.0 deg)\n\n")
+                separation_deg = separation / hw_per_deg
+                f.write(f"  Separation: {separation_deg:.1f} deg (expected: 180.0 deg)\n")
 
-            f.write("\n" + "=" * 80 + "\n")
-            f.write("CONFIG_PPM.YML UPDATE RECOMMENDATIONS\n")
+            # Stability summary
+            if 'offset_std' in result:
+                stability_deg = result['offset_range'] / hw_per_deg
+                f.write(f"  Stability: {'PASS' if result['is_stable'] else 'FAIL'} ")
+                f.write(f"(variation: {stability_deg:.4f} deg across {len(result.get('all_runs', [result]))} runs)\n")
+
+            f.write("\n")
+
+            # ===== CONFIG RECOMMENDATIONS =====
+            f.write("=" * 80 + "\n")
+            f.write("CONFIG_PPM.YML UPDATE\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write("CRITICAL: Update ppm_pizstage_offset to the recommended value below.\n")
-            f.write("This sets the hardware reference position for optical angle 0 deg.\n\n")
-
+            f.write("Update your config_PPM.yml with:\n\n")
             f.write(f"ppm_pizstage_offset: {result['recommended_offset']:.1f}\n\n")
 
-            f.write("After updating the offset, you can use the following optical angles:\n\n")
             f.write("rotation_angles:\n")
             f.write("  - name: 'crossed'\n")
-            f.write(
-                "    tick: 0   # Reference position (hardware: {:.1f})\n".format(
-                    result["recommended_offset"]
-                )
-            )
+            f.write(f"    tick: 0   # Reference position (hardware: {result['recommended_offset']:.1f})\n")
 
-            # If there's a second minimum, suggest it as the other crossed position
-            # Use primary_result (first run) for exact_minima, not the top-level result
             if len(primary_result["exact_minima"]) >= 2:
                 other_angle = primary_result["optical_angles"][1]
                 other_hw = primary_result["exact_minima"][1]
-                f.write(
-                    "    # OR tick: {:.0f}   # Alternate crossed (hardware: {:.1f})\n".format(
-                        other_angle, other_hw
-                    )
-                )
+                f.write(f"    # OR tick: {other_angle:.0f}   # Alternate crossed (hardware: {other_hw:.1f})\n")
 
             f.write("  - name: 'uncrossed'\n")
             f.write("    tick: 90  # 90 deg from crossed (perpendicular)\n\n")
 
-            f.write("Note: The 'tick' values use simplified angle convention.\n")
-            f.write("Hardware automatically applies offset: hw_pos = (tick * 1000) + offset\n\n")
-
-            # ===== METADATA AND PARAMETERS - REFERENCE INFORMATION =====
+            # ===== CALIBRATION DETAILS =====
             f.write("=" * 80 + "\n")
-            f.write("CALIBRATION METADATA\n")
+            f.write("CALIBRATION DETAILS\n")
             f.write("=" * 80 + "\n\n")
 
-            f.write(f"Calibration Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Configuration File: {yaml_file_path}\n")
-            f.write(f"Microscope Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n")
+            f.write(f"Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Configuration: {yaml_file_path}\n")
+            f.write(f"Position: X={current_pos.x:.1f}, Y={current_pos.y:.1f}, Z={current_pos.z:.1f}\n")
             f.write(f"Rotation Device: {result['rotation_device']}\n\n")
 
-            f.write("CALIBRATION METHOD:\n")
-            f.write("  Stage 1: Coarse sweep to locate approximate minima\n")
-            f.write("  Stage 2: Fine sweep around each minimum for exact position\n\n")
+            f.write("Parameters:\n")
+            f.write(f"  Coarse: 0-360 deg in {step_size} deg steps\n")
+            f.write(f"  Fine: +/-10 deg in 0.1 deg steps around each minimum\n")
+            f.write(f"  Exposure: {exposure_ms} ms, Channel: Green\n")
+            f.write(f"  Stability runs: {len(result.get('all_runs', [result]))}\n\n")
 
-            f.write("CALIBRATION PARAMETERS:\n")
-            f.write(f"  Coarse Range: 360.0 deg\n")
-            f.write(f"  Coarse Step Size: {step_size} deg\n")
-            f.write(f"  Fine Range: +/-10.0 deg around each minimum\n")
-            f.write(f"  Fine Step Size: 0.1 deg\n")
-            f.write(f"  Exposure: {exposure_ms} ms\n")
-            f.write(f"  Channel: Green (1)\n\n")
+            coarse_intensities = primary_result["coarse_intensities"]
+            f.write("Intensity Statistics:\n")
+            f.write(f"  Range: {coarse_intensities.min():.1f} to {coarse_intensities.max():.1f}\n")
+            f.write(f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.1f}x\n\n")
 
-            f.write("INTENSITY STATISTICS (COARSE SWEEP):\n")
-            coarse_intensities = primary_result['coarse_intensities']
-            f.write(f"  Minimum Intensity: {coarse_intensities.min():.1f}\n")
-            f.write(f"  Maximum Intensity: {coarse_intensities.max():.1f}\n")
-            f.write(f"  Dynamic Range: {coarse_intensities.max() / coarse_intensities.min():.2f}x\n\n")
+            # ===== STABILITY CHECK DETAILS =====
+            if 'offset_std' in result:
+                f.write("=" * 80 + "\n")
+                f.write("STABILITY CHECK\n")
+                f.write("=" * 80 + "\n\n")
 
+                f.write(f"Runs: {len(result.get('all_runs', [result]))}\n")
+                f.write(f"Raw offsets: {result['individual_offsets']}\n")
+                f.write(f"Normalized (mod 180 deg): {result['normalized_offsets']}\n")
+                f.write(f"  Note: Crossed polarizers repeat every 180 deg, so positions\n")
+                f.write(f"        differing by 180 deg are equivalent.\n\n")
+                f.write(f"Std deviation: {result['offset_std']:.2f} counts ({result['offset_std']/hw_per_deg:.4f} deg)\n")
+                f.write(f"Range: {result['offset_range']:.1f} counts ({result['offset_range']/hw_per_deg:.4f} deg)\n")
+                f.write(f"Threshold: 50.0 counts (0.05 deg)\n")
+                f.write(f"Result: {'PASS - Stable' if result['is_stable'] else 'FAIL - Unstable'}\n")
+                if not result['is_stable']:
+                    f.write(f"\nWARNING: Check polarizer/analyzer mounts for mechanical issues.\n")
+                f.write("\n")
+
+            # ===== RAW DATA =====
             f.write("=" * 80 + "\n")
             f.write("RAW DATA - COARSE SWEEP (RUN 1)\n")
             f.write("=" * 80 + "\n\n")
