@@ -25,6 +25,47 @@ import logging
 from datetime import datetime
 
 from smart_wsi_scanner.config import ConfigManager
+
+
+def check_for_existing_server(host: str, port: int, timeout: float = 2.0) -> bool:
+    """
+    Check if a server is already running on the specified host and port.
+
+    Attempts to connect to the port and send a simple query command.
+    If successful, another server instance is already running.
+
+    Args:
+        host: The host to check (typically 127.0.0.1 for localhost)
+        port: The port to check
+        timeout: Connection timeout in seconds
+
+    Returns:
+        True if a server is already running, False otherwise
+    """
+    try:
+        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        test_socket.settimeout(timeout)
+        test_socket.connect((host, port))
+
+        # Try to send a simple command to verify it's our server
+        # GETXY command is safe and quick
+        test_socket.sendall(b"getxy___")
+
+        # If we get here without exception, a server is responding
+        test_socket.close()
+        return True
+
+    except (ConnectionRefusedError, socket.timeout, OSError):
+        # Connection refused or timeout means no server is running
+        return False
+    except Exception:
+        # Any other error - assume no server running
+        return False
+    finally:
+        try:
+            test_socket.close()
+        except Exception:
+            pass
 from smart_wsi_scanner.hardware import Position
 from smart_wsi_scanner.hardware_pycromanager import PycromanagerHardware, init_pycromanager
 from smart_wsi_scanner.server.protocol import ExtendedCommand, TCP_PORT, END_MARKER
@@ -1707,6 +1748,28 @@ def main():
     logger.info("=" * 60)
     logger.info("QuPath Microscope Server - Enhanced Version")
     logger.info("=" * 60)
+
+    # Check for existing server instance BEFORE attempting to bind
+    logger.info("Checking for existing server instance...")
+    if check_for_existing_server("127.0.0.1", PORT):
+        logger.error("=" * 60)
+        logger.error("ANOTHER SERVER INSTANCE IS ALREADY RUNNING!")
+        logger.error("=" * 60)
+        logger.error(f"A server is already listening on port {PORT}.")
+        logger.error("Please close the existing server before starting a new one.")
+        logger.error("")
+        logger.error("To find the existing server:")
+        logger.error("  Windows: Use Task Manager to find python.exe processes")
+        logger.error("  Linux: Run 'lsof -i :5000' or 'netstat -tlnp | grep 5000'")
+        logger.error("=" * 60)
+        print("\n" + "=" * 60)
+        print("ERROR: Another server instance is already running on port {}!".format(PORT))
+        print("Please close the existing server before starting a new one.")
+        print("=" * 60 + "\n")
+        sys.exit(1)
+
+    logger.info("No existing server instance found. Proceeding with startup...")
+
     logger.info(f"Server configuration:")
     logger.info(f"  Host: {HOST}")
     logger.info(f"  Port: {PORT}")
@@ -1723,6 +1786,7 @@ def main():
     logger.info("  - Progress tracking")
     logger.info("  - Cancellation support")
     logger.info("  - Enhanced logging")
+    logger.info("  - Multi-instance detection")
     logger.info("=" * 60)
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
