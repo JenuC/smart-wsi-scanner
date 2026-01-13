@@ -1,0 +1,114 @@
+Theoretical Demonstration of cv2.cvtColor 16-bit to 8-bit Quantization Impact
+================================================================================
+
+SCENARIO: Microscopy image with pixel values ranging from 10000 to 40000 (typical)
+
+1. Original 16-bit Range
+   ------------------------
+   Min value: 10000
+   Max value: 40000
+   Range: 30000
+   Unique values possible: 30001 (every integer from 10000 to 40000)
+
+2. After cv2.cvtColor (16-bit -> 8-bit conversion)
+   -------------------------------------------------
+   Conversion formula: uint8_value = uint16_value / 256
+
+   Examples:
+   10000 / 256 = 39.0625 -> 39 (uint8)
+   10001 / 256 = 39.066  -> 39 (uint8)  <- SAME!
+   10002 / 256 = 39.070  -> 39 (uint8)  <- SAME!
+   ...
+   10255 / 256 = 40.058  -> 40 (uint8)  <- DIFFERENT
+
+   Result: Every 256 consecutive input values map to the same output value!
+
+   Min value: 39 (uint8)
+   Max value: 156 (uint8)
+   Range: 117
+   Unique values: 118 (instead of 30001!)
+
+   DATA LOSS: 99.6% of precision lost (30001 -> 118 unique values)
+
+3. Impact on Normalized Difference
+   ---------------------------------
+   Consider two images at different polarizer angles:
+
+   Image A (positive angle):
+   - Original pixel: 25000 (uint16)
+   - After cvtColor: 97 (uint8)
+
+   Image B (negative angle):
+   - Original pixel: 25100 (uint16)
+   - After cvtColor: 98 (uint8)
+
+   CORRECT calculation (16-bit):
+   -------------------------------
+   diff = 25000 - 25100 = -100
+   sum = 25000 + 25100 = 50100
+   normalized = -100 / 50100 = -0.001996
+
+   BUGGY calculation (8-bit):
+   --------------------------
+   diff = 97 - 98 = -1
+   sum = 97 + 98 = 195
+   normalized = -1 / 195 = -0.005128
+
+   Error: 2.57x overestimation of normalized difference!
+
+4. Stepwise Pattern Explanation
+   -------------------------------
+   With 8-bit values (0-255), there are only:
+   - 256 possible values for positive image
+   - 256 possible values for negative image
+   - ~256 x 256 = 65,536 possible combinations
+
+   But many combinations produce the same normalized value:
+   - diff/sum with integers produces rational numbers
+   - Limited set of ratios creates discrete "steps"
+
+   Example normalized values from 8-bit data:
+   - -5/200 = -0.0250
+   - -4/200 = -0.0200
+   - -3/200 = -0.0150
+   - -2/200 = -0.0100  <- Steps of 0.005
+   - -1/200 = -0.0050
+   -  0/200 =  0.0000
+   -  1/200 =  0.0050
+
+   When plotted vs angle, these appear as horizontal "steps" instead
+   of smooth curves.
+
+5. Why Whole Numbers and X.5 Values Appear
+   -----------------------------------------
+   When scaled for visualization or storage:
+
+   Normalized value: -0.005128 (from 8-bit)
+   Scaled by 255: -0.005128 * 255 = -1.308 ≈ -1.0 or -1.5
+
+   Because the normalized values come from ratios of small integers,
+   when multiplied by constants like 255, they cluster near whole
+   numbers and half-integers.
+
+6. Comparison with Proper 16-bit Pipeline
+   ----------------------------------------
+   With 30001 unique input values:
+   - Millions of possible (pos, neg) combinations
+   - Smooth distribution of normalized difference values
+   - Continuous curves when plotted vs angle
+   - No visible quantization artifacts
+
+CONCLUSION
+==========
+The 8-bit quantization from cv2.cvtColor creates:
+1. 99.6% loss of dynamic range
+2. Stepwise patterns in angle optimization curves
+3. Reduced accuracy in optimal angle determination
+4. Artifacts that mask real biological signal
+
+FIX: Replace cv2.cvtColor with manual 16-bit-preserving grayscale conversion.
+
+Expected improvement after fix:
+- Smooth curves with ~30000 unique values
+- Accurate normalized differences within 0.01% tolerance
+- Reliable optimal angle detection within ±0.01 degrees

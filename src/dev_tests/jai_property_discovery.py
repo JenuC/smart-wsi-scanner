@@ -174,25 +174,13 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
             )
             results['per_channel_exposure_works'] = True
 
-        # Test 4: Frame rate behavior
-        # Test if we can achieve longer exposure by lowering frame rate first
-        frame_rate_before = core.get_property(device_name, "FrameRateHz")
-
-        # Lower frame rate to allow 100ms exposure
-        core.set_property(device_name, "FrameRateHz", "5.0")  # Allows ~200ms
-        core.wait_for_device(device_name)
-
-        # Set a longer exposure on one channel
-        core.set_property(device_name, "Exposure_Blue", "100.0")
-        core.wait_for_device(device_name)
-        frame_rate_after = core.get_property(device_name, "FrameRateHz")
-        blue_exp_after = core.get_property(device_name, "Exposure_Blue")
-
+        # Test 4: Verify per-channel exposure max limit
+        # Note: Per-channel exposure is FIXED at 25.85ms max regardless of frame rate
+        # This is different from unified "Exposure" property which can go higher
         results['frame_rate_behavior'] = {
-            'before': frame_rate_before,
-            'after_long_exposure': frame_rate_after,
-            'blue_exposure_achieved': blue_exp_after,
-            'long_exposure_works': abs(float(blue_exp_after) - 100.0) < 1.0
+            'note': 'Per-channel exposure max is fixed at 25.85ms (hardware limit)',
+            'per_channel_max_ms': 25.85,
+            'unified_exposure_max_ms': 26.089
         }
 
         # Restore original mode
@@ -327,11 +315,7 @@ def test_image_capture_with_individual_exposure(core, device_name: str = "JAICam
         core.set_property(device_name, "ExposureIsIndividual", "On")
         core.wait_for_device(device_name)
 
-        # Lower frame rate to allow longer exposures (max 20ms at current frame rate)
-        core.set_property(device_name, "FrameRateHz", "10.0")  # Allows ~100ms
-        core.wait_for_device(device_name)
-
-        # Set known different exposures (within hardware limits)
+        # Set different exposures per channel (within 25.85ms hardware limit)
         core.set_property(device_name, "Exposure_Red", "8.0")
         core.set_property(device_name, "Exposure_Green", "12.0")
         core.set_property(device_name, "Exposure_Blue", "18.0")
@@ -352,21 +336,42 @@ def test_image_capture_with_individual_exposure(core, device_name: str = "JAICam
             'bytes_per_pixel': bytes_per_pixel
         }
 
-        # Reshape based on format (assuming RGB interleaved)
+        # Reshape based on format
         if bytes_per_pixel == 3:
+            # 24-bit RGB
             img_array = np.frombuffer(img, dtype=np.uint8).reshape((height, width, 3))
             results['per_channel_means'] = {
                 'red': float(img_array[:, :, 0].mean()),
                 'green': float(img_array[:, :, 1].mean()),
                 'blue': float(img_array[:, :, 2].mean())
             }
+        elif bytes_per_pixel == 4:
+            # 32-bit RGB (BGRA format from JAI camera)
+            img_array = np.frombuffer(img, dtype=np.uint8).reshape((height, width, 4))
+            # JAI returns BGRA, so B=0, G=1, R=2, A=3
+            results['per_channel_means'] = {
+                'red': float(img_array[:, :, 2].mean()),
+                'green': float(img_array[:, :, 1].mean()),
+                'blue': float(img_array[:, :, 0].mean())
+            }
+            results['notes'].append("Image format: 32bitRGB (BGRA)")
         elif bytes_per_pixel == 6:
+            # 48-bit RGB (16-bit per channel)
             img_array = np.frombuffer(img, dtype=np.uint16).reshape((height, width, 3))
             results['per_channel_means'] = {
                 'red': float(img_array[:, :, 0].mean()),
                 'green': float(img_array[:, :, 1].mean()),
                 'blue': float(img_array[:, :, 2].mean())
             }
+        elif bytes_per_pixel == 8:
+            # 64-bit RGB (16-bit per channel + alpha, or 10/12-bit modes)
+            img_array = np.frombuffer(img, dtype=np.uint16).reshape((height, width, 4))
+            results['per_channel_means'] = {
+                'red': float(img_array[:, :, 2].mean()),
+                'green': float(img_array[:, :, 1].mean()),
+                'blue': float(img_array[:, :, 0].mean())
+            }
+            results['notes'].append("Image format: 64bitRGB")
         else:
             results['notes'].append(f"Unexpected bytes_per_pixel: {bytes_per_pixel}")
 
@@ -453,8 +458,8 @@ def print_summary(all_properties: dict, test_results: dict) -> None:
     print(f"  Channels independent: {exposure_results.get('channel_exposures_independent')}")
     if exposure_results.get('frame_rate_behavior'):
         fr = exposure_results['frame_rate_behavior']
-        print(f"  Frame rate auto-adjusts: {fr.get('auto_adjusted')}")
-        print(f"    Before: {fr.get('before')}, After long exp: {fr.get('after_long_exposure')}")
+        print(f"  Per-channel exposure limit: {fr.get('per_channel_max_ms')}ms (fixed)")
+        print(f"  Unified exposure limit: {fr.get('unified_exposure_max_ms')}ms")
 
     if exposure_results.get('exposure_limits'):
         print("  Per-channel exposure limits:")
