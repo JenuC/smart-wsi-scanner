@@ -174,13 +174,33 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
             )
             results['per_channel_exposure_works'] = True
 
-        # Test 4: Verify per-channel exposure max limit
-        # Note: Per-channel exposure is FIXED at 25.85ms max regardless of frame rate
-        # This is different from unified "Exposure" property which can go higher
+        # Test 4: Frame rate vs exposure relationship
+        # Per-channel exposure max depends on frame rate (lower = longer exposure allowed)
+        frame_rate_before = core.get_property(device_name, "FrameRateHz")
+
+        # Lower frame rate to allow longer per-channel exposure
+        core.set_property(device_name, "FrameRateHz", "5.0")  # Should allow ~200ms
+        core.wait_for_device(device_name)
+
+        # Try setting a longer exposure (100ms)
+        try:
+            core.set_property(device_name, "Exposure_Blue", "100.0")
+            core.wait_for_device(device_name)
+            blue_exp_after = float(core.get_property(device_name, "Exposure_Blue"))
+            long_exposure_works = abs(blue_exp_after - 100.0) < 1.0
+        except Exception as e:
+            blue_exp_after = None
+            long_exposure_works = False
+            results['notes'].append(f"Long exposure test: {e}")
+
+        frame_rate_after = core.get_property(device_name, "FrameRateHz")
+
         results['frame_rate_behavior'] = {
-            'note': 'Per-channel exposure max is fixed at 25.85ms (hardware limit)',
-            'per_channel_max_ms': 25.85,
-            'unified_exposure_max_ms': 26.089
+            'frame_rate_before': frame_rate_before,
+            'frame_rate_after': frame_rate_after,
+            'blue_exposure_achieved': blue_exp_after,
+            'long_exposure_works': long_exposure_works,
+            'note': 'Lower frame rate enables longer per-channel exposure'
         }
 
         # Restore original mode
@@ -458,8 +478,10 @@ def print_summary(all_properties: dict, test_results: dict) -> None:
     print(f"  Channels independent: {exposure_results.get('channel_exposures_independent')}")
     if exposure_results.get('frame_rate_behavior'):
         fr = exposure_results['frame_rate_behavior']
-        print(f"  Per-channel exposure limit: {fr.get('per_channel_max_ms')}ms (fixed)")
-        print(f"  Unified exposure limit: {fr.get('unified_exposure_max_ms')}ms")
+        print(f"  Long exposure (100ms) works: {fr.get('long_exposure_works')}")
+        if fr.get('blue_exposure_achieved'):
+            print(f"    Blue exposure achieved: {fr.get('blue_exposure_achieved')}ms")
+        print(f"    Frame rate: {fr.get('frame_rate_before')} -> {fr.get('frame_rate_after')} Hz")
 
     if exposure_results.get('exposure_limits'):
         print("  Per-channel exposure limits:")
