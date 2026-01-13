@@ -148,7 +148,15 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
         # Test 3: Verify independence
         if results['exposure_limits']:
             # Set different values for each channel
-            test_values = {'Exposure_Red': 50.0, 'Exposure_Green': 75.0, 'Exposure_Blue': 100.0}
+            # Note: Must adjust frame rate first to allow longer exposures
+            test_values = {'Exposure_Red': 10.0, 'Exposure_Green': 15.0, 'Exposure_Blue': 20.0}
+            max_exp = max(test_values.values())
+            # Calculate required frame rate: 1000 / (exposure_ms * 1.01)
+            required_frame_rate = 1000.0 / (max_exp * 1.01)
+            required_frame_rate = min(38.0, max(0.125, required_frame_rate))
+            core.set_property(device_name, "FrameRateHz", str(required_frame_rate))
+            core.wait_for_device(device_name)
+
             for channel, value in test_values.items():
                 core.set_property(device_name, channel, str(value))
 
@@ -160,23 +168,31 @@ def test_individual_exposure_mode(core, device_name: str = "JAICamera") -> dict:
                 readback[channel] = float(core.get_property(device_name, channel))
 
             results['channel_exposures_independent'] = (
-                abs(readback['Exposure_Red'] - 50.0) < 0.1 and
-                abs(readback['Exposure_Green'] - 75.0) < 0.1 and
-                abs(readback['Exposure_Blue'] - 100.0) < 0.1
+                abs(readback['Exposure_Red'] - 10.0) < 0.1 and
+                abs(readback['Exposure_Green'] - 15.0) < 0.1 and
+                abs(readback['Exposure_Blue'] - 20.0) < 0.1
             )
             results['per_channel_exposure_works'] = True
 
         # Test 4: Frame rate behavior
+        # Test if we can achieve longer exposure by lowering frame rate first
         frame_rate_before = core.get_property(device_name, "FrameRateHz")
-        # Set a long exposure on one channel
-        core.set_property(device_name, "Exposure_Blue", "500.0")
+
+        # Lower frame rate to allow 100ms exposure
+        core.set_property(device_name, "FrameRateHz", "5.0")  # Allows ~200ms
+        core.wait_for_device(device_name)
+
+        # Set a longer exposure on one channel
+        core.set_property(device_name, "Exposure_Blue", "100.0")
         core.wait_for_device(device_name)
         frame_rate_after = core.get_property(device_name, "FrameRateHz")
+        blue_exp_after = core.get_property(device_name, "Exposure_Blue")
 
         results['frame_rate_behavior'] = {
             'before': frame_rate_before,
             'after_long_exposure': frame_rate_after,
-            'auto_adjusted': frame_rate_before != frame_rate_after
+            'blue_exposure_achieved': blue_exp_after,
+            'long_exposure_works': abs(float(blue_exp_after) - 100.0) < 1.0
         }
 
         # Restore original mode
@@ -311,10 +327,14 @@ def test_image_capture_with_individual_exposure(core, device_name: str = "JAICam
         core.set_property(device_name, "ExposureIsIndividual", "On")
         core.wait_for_device(device_name)
 
-        # Set known different exposures
-        core.set_property(device_name, "Exposure_Red", "30.0")
-        core.set_property(device_name, "Exposure_Green", "50.0")
-        core.set_property(device_name, "Exposure_Blue", "80.0")
+        # Lower frame rate to allow longer exposures (max 20ms at current frame rate)
+        core.set_property(device_name, "FrameRateHz", "10.0")  # Allows ~100ms
+        core.wait_for_device(device_name)
+
+        # Set known different exposures (within hardware limits)
+        core.set_property(device_name, "Exposure_Red", "8.0")
+        core.set_property(device_name, "Exposure_Green", "12.0")
+        core.set_property(device_name, "Exposure_Blue", "18.0")
         core.wait_for_device(device_name)
 
         # Capture image
@@ -466,9 +486,9 @@ def print_summary(all_properties: dict, test_results: dict) -> None:
     if capture_results.get('per_channel_means'):
         means = capture_results['per_channel_means']
         print(f"  Per-channel means (with different exposures):")
-        print(f"    Red (30ms): {means.get('red', 'N/A'):.1f}")
-        print(f"    Green (50ms): {means.get('green', 'N/A'):.1f}")
-        print(f"    Blue (80ms): {means.get('blue', 'N/A'):.1f}")
+        print(f"    Red (8ms): {means.get('red', 'N/A'):.1f}")
+        print(f"    Green (12ms): {means.get('green', 'N/A'):.1f}")
+        print(f"    Blue (18ms): {means.get('blue', 'N/A'):.1f}")
 
     # Notes and warnings
     all_notes = []
